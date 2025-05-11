@@ -1,1 +1,78 @@
-jai balayaa
+import static org.junit.Assert.*;
+import org.junit.Before;
+import org.junit.Test;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+
+public class DateEventTest {
+
+    private SimpleDateFormat pgmDateFormat;
+    private String errorMessage;
+
+    @Before
+    public void setup() {
+        // Assuming the date format pattern, e.g. "yyyy-MM-dd"
+        pgmDateFormat = new SimpleDateFormat("yyyy-MM-dd");
+        pgmDateFormat.setLenient(false);
+        errorMessage = "";
+    }
+
+    @Test
+    public void testValidDateParsing() {
+        String[] args = {"programName", "2025-05-11"};
+        String dateEvent = args[1];
+        try {
+            pgmDateFormat.parse(dateEvent);
+        } catch (ParseException e) {
+            errorMessage += "One program pas ";
+        }
+        assertEquals("", errorMessage);
+    }
+
+    @Test
+    public void testInvalidDateParsing() {
+        String[] args = {"programName", "11-05-2025"}; // wrong format
+        String dateEvent = args[1];
+        try {
+            pgmDateFormat.parse(dateEvent);
+        } catch (ParseException e) {
+            errorMessage += "One program pas ";
+        }
+        assertEquals("One program pas ", errorMessage);
+    }
+
+    @Test
+    public void testWithOptionalThirdParameter() {
+        String[] args = {"programName", "2025-05-11", "G123"};
+        String dateEvent = args[1];
+        String guaranteeTypeCode = null;
+        try {
+            pgmDateFormat.parse(dateEvent);
+        } catch (ParseException e) {
+            errorMessage += "One program pas ";
+        }
+        if (args.length == 3) {
+            guaranteeTypeCode = args[2];
+        }
+        assertEquals("", errorMessage);
+        assertEquals("G123", guaranteeTypeCode);
+    }
+
+    @Test
+    public void testWithoutOptionalThirdParameter() {
+        String[] args = {"programName", "2025-05-11"};
+        String dateEvent = args[1];
+        String guaranteeTypeCode = null;
+        try {
+            pgmDateFormat.parse(dateEvent);
+        } catch (ParseException e) {
+            errorMessage += "One program pas ";
+        }
+        if (args.length == 3) {
+            guaranteeTypeCode = args[2];
+        }
+        assertEquals("", errorMessage);
+        assertNull(guaranteeTypeCode);
+    }
+}
+
