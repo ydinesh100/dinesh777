@@ -1,77 +1,53 @@
+import static org.mockito.Mockito.*;
 import static org.junit.Assert.*;
+
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.junit.Before;
 import org.junit.Test;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
+import org.mockito.*;
 
-public class DateEventParserTest {
+public class YourClassTest {
 
-    private SimpleDateFormat pgmDateFormat;
-    private String errorMessage;
+    @InjectMocks
+    private YourClass yourClass;  // Replace with your actual class name
+
+    @Mock
+    private CreGuaranteeFacilityLevel2Service creGuaranteeFacilityLevel2Service;
 
     @Before
     public void setUp() {
-        // Define the expected date format, e.g. "dd/MM/yyyy HH:mm:ss"
-        pgmDateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
-        pgmDateFormat.setLenient(false); // strict parsing to catch invalid dates
-        errorMessage = "";
+        MockitoAnnotations.initMocks(this);
     }
 
     @Test
-    public void testValidDateParsing() {
-        String[] args = {"program", "04/04/2012 16:30:00"};
-        String dateEvent = args[1];
-        try {
-            pgmDateFormat.parse(dateEvent);
-        } catch (ParseException e) {
-            errorMessage += "One program pas ";
-        }
-        assertEquals("", errorMessage);
-    }
+    public void testExtractParametersAndExecuteBusinessService() throws Exception {
+        // Arrange
+        String[] args = {"CODE123", "BR001", "2025-05-11"};
+        Map<String, Long> ti = new HashMap<>();
+        ti.put("key1", 100L);
 
-    @Test
-    public void testInvalidDateParsing() {
-        String[] args = {"program", "2012-04-04 16:30:00"}; // wrong format
-        String dateEvent = args[1];
-        try {
-            pgmDateFormat.parse(dateEvent);
-        } catch (ParseException e) {
-            errorMessage += "One program pas ";
-        }
-        assertEquals("One program pas ", errorMessage);
-    }
+        // Spy yourClass to mock internal helper methods
+        YourClass spyClass = Mockito.spy(yourClass);
 
-    @Test
-    public void testWithOptionalGuaranteeType() {
-        String[] args = {"program", "04/04/2012 16:30:00", "COLLAT"};
-        String dateEvent = args[1];
-        String guaranteeTypeCode = null;
-        try {
-            pgmDateFormat.parse(dateEvent);
-        } catch (ParseException e) {
-            errorMessage += "One program pas ";
-        }
-        if (args.length == 3) {
-            guaranteeTypeCode = args[2];
-        }
-        assertEquals("", errorMessage);
-        assertEquals("COLLAT", guaranteeTypeCode);
-    }
+        // Mock extractArgumentAsString and extractArgumentAsDate
+        doReturn("BR001").when(spyClass).extractArgumentAsString("BR001");
+        Date mockDate = new Date();
+        doReturn(mockDate).when(spyClass).extractArgumentAsDate("2025-05-11");
 
-    @Test
-    public void testWithoutOptionalGuaranteeType() {
-        String[] args = {"program", "04/04/2012 16:30:00"};
-        String dateEvent = args[1];
-        String guaranteeTypeCode = null;
-        try {
-            pgmDateFormat.parse(dateEvent);
-        } catch (ParseException e) {
-            errorMessage += "One program pas ";
-        }
-        if (args.length == 3) {
-            guaranteeTypeCode = args[2];
-        }
-        assertEquals("", errorMessage);
-        assertNull(guaranteeTypeCode);
+        // Mock static method valueOfByCode - since it's static, you need PowerMockito or wrap it.
+        // For simplicity, assume it returns a valid enum instance:
+        P06_IACC_01_GuaranteeCre2Code creCode = P06_IACC_01_GuaranteeCre2Code.valueOfByCode("CODE123");
+
+        // Act
+        Boolean result = spyClass.extractParametersAndExecuteBusinessService(args, ti);
+
+        // Assert
+        verify(creGuaranteeFacilityLevel2Service, times(1))
+            .produceCreGuaranteeFacilityLevel2(eq(creCode), eq("BR001"), eq(mockDate), eq(ti));
+        assertFalse(result);
     }
 }
+
