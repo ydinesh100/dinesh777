@@ -4,22 +4,22 @@ import org.junit.Test;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 
-public class DateEventTest {
+public class DateEventParserTest {
 
     private SimpleDateFormat pgmDateFormat;
     private String errorMessage;
 
     @Before
-    public void setup() {
-        // Assuming the date format pattern, e.g. "yyyy-MM-dd"
-        pgmDateFormat = new SimpleDateFormat("yyyy-MM-dd");
-        pgmDateFormat.setLenient(false);
+    public void setUp() {
+        // Define the expected date format, e.g. "dd/MM/yyyy HH:mm:ss"
+        pgmDateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+        pgmDateFormat.setLenient(false); // strict parsing to catch invalid dates
         errorMessage = "";
     }
 
     @Test
     public void testValidDateParsing() {
-        String[] args = {"programName", "2025-05-11"};
+        String[] args = {"program", "04/04/2012 16:30:00"};
         String dateEvent = args[1];
         try {
             pgmDateFormat.parse(dateEvent);
@@ -31,7 +31,7 @@ public class DateEventTest {
 
     @Test
     public void testInvalidDateParsing() {
-        String[] args = {"programName", "11-05-2025"}; // wrong format
+        String[] args = {"program", "2012-04-04 16:30:00"}; // wrong format
         String dateEvent = args[1];
         try {
             pgmDateFormat.parse(dateEvent);
@@ -42,8 +42,8 @@ public class DateEventTest {
     }
 
     @Test
-    public void testWithOptionalThirdParameter() {
-        String[] args = {"programName", "2025-05-11", "G123"};
+    public void testWithOptionalGuaranteeType() {
+        String[] args = {"program", "04/04/2012 16:30:00", "COLLAT"};
         String dateEvent = args[1];
         String guaranteeTypeCode = null;
         try {
@@ -55,12 +55,12 @@ public class DateEventTest {
             guaranteeTypeCode = args[2];
         }
         assertEquals("", errorMessage);
-        assertEquals("G123", guaranteeTypeCode);
+        assertEquals("COLLAT", guaranteeTypeCode);
     }
 
     @Test
-    public void testWithoutOptionalThirdParameter() {
-        String[] args = {"programName", "2025-05-11"};
+    public void testWithoutOptionalGuaranteeType() {
+        String[] args = {"program", "04/04/2012 16:30:00"};
         String dateEvent = args[1];
         String guaranteeTypeCode = null;
         try {
@@ -75,4 +75,3 @@ public class DateEventTest {
         assertNull(guaranteeTypeCode);
     }
 }
-
