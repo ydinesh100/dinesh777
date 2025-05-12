@@ -1,53 +1,110 @@
-import static org.mockito.Mockito.*;
 import static org.junit.Assert.*;
 
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.*;
 
-public class YourClassTest {
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
-    @InjectMocks
-    private YourClass yourClass;  // Replace with your actual class name
+public class TimeStatisticsTest {
 
-    @Mock
-    private CreGuaranteeFacilityLevel2Service creGuaranteeFacilityLevel2Service;
+    private TimeStatistics timeStatistics;
+    private ListAppender<ILoggingEvent> listAppender;
+    private Logger logger;
 
     @Before
-    public void setUp() {
-        MockitoAnnotations.initMocks(this);
+    public void setup() {
+        timeStatistics = new TimeStatistics();
+
+        // Get Logback logger of the class under test
+        logger = (Logger) org.slf4j.LoggerFactory.getLogger(TimeStatistics.class);
+
+        // Create and start a ListAppender to capture logs
+        listAppender = new ListAppender<>();
+        listAppender.start();
+
+        // Add the appender to the logger
+        logger.addAppender(listAppender);
+    }
+
+    @After
+    public void teardown() {
+        // Remove the appender after test
+        logger.detachAppender(listAppender);
     }
 
     @Test
-    public void testExtractParametersAndExecuteBusinessService() throws Exception {
-        // Arrange
-        String[] args = {"CODE123", "BR001", "2025-05-11"};
-        Map<String, Long> ti = new HashMap<>();
-        ti.put("key1", 100L);
+    public void testDisplayTimeStatisticsInformations_NullMap() {
+        timeStatistics.displayTimeStatisticsInformations(null, true);
 
-        // Spy yourClass to mock internal helper methods
-        YourClass spyClass = Mockito.spy(yourClass);
+        // Check that info log about no data is present
+        boolean found = listAppender.list.stream()
+            .anyMatch(event -> event.getLevel() == Level.INFO && event.getFormattedMessage().contains("No time statistics to display"));
+        assertTrue(found);
+    }
 
-        // Mock extractArgumentAsString and extractArgumentAsDate
-        doReturn("BR001").when(spyClass).extractArgumentAsString("BR001");
-        Date mockDate = new Date();
-        doReturn(mockDate).when(spyClass).extractArgumentAsDate("2025-05-11");
+    @Test
+    public void testDisplayTimeStatisticsInformations_EmptyMap() {
+        timeStatistics.displayTimeStatisticsInformations(new HashMap<>(), false);
 
-        // Mock static method valueOfByCode - since it's static, you need PowerMockito or wrap it.
-        // For simplicity, assume it returns a valid enum instance:
-        P06_IACC_01_GuaranteeCre2Code creCode = P06_IACC_01_GuaranteeCre2Code.valueOfByCode("CODE123");
+        // Check that info log about no data is present
+        boolean found = listAppender.list.stream()
+            .anyMatch(event -> event.getLevel() == Level.INFO && event.getFormattedMessage().contains("No time statistics to display"));
+        assertTrue(found);
+    }
 
-        // Act
-        Boolean result = spyClass.extractParametersAndExecuteBusinessService(args, ti);
+    @Test
+    public void testDisplayTimeStatisticsInformations_DisplayWithoutPercentage() {
+        Map<String, Long> map = new HashMap<>();
+        map.put("Task1", 100L);
+        map.put("Task2", 200L);
 
-        // Assert
-        verify(creGuaranteeFacilityLevel2Service, times(1))
-            .produceCreGuaranteeFacilityLevel2(eq(creCode), eq("BR001"), eq(mockDate), eq(ti));
-        assertFalse(result);
+        timeStatistics.displayTimeStatisticsInformations(map, false);
+
+        // Check debug log for "Time statistics"
+        boolean debugFound = listAppender.list.stream()
+            .anyMatch(event -> event.getLevel() == Level.DEBUG && event.getFormattedMessage().contains("Time statistics"));
+        assertTrue(debugFound);
+
+        // Check info logs for correct output without percentage
+        boolean task1Found = listAppender.list.stream()
+            .anyMatch(event -> event.getLevel() == Level.INFO && event.getFormattedMessage().contains("Task1 spent 100ms"));
+        boolean task2Found = listAppender.list.stream()
+            .anyMatch(event -> event.getLevel() == Level.INFO && event.getFormattedMessage().contains("Task2 spent 200ms"));
+        assertTrue(task1Found);
+        assertTrue(task2Found);
+
+        // Ensure no percentage shown
+        boolean percentFound = listAppender.list.stream()
+            .anyMatch(event -> event.getFormattedMessage().contains("%"));
+        assertFalse(percentFound);
+    }
+
+    @Test
+    public void testDisplayTimeStatisticsInformations_DisplayWithPercentage() {
+        Map<String, Long> map = new HashMap<>();
+        map.put("Task1", 100L);
+        map.put("Task2", 300L);
+
+        timeStatistics.displayTimeStatisticsInformations(map, true);
+
+        // Check debug log for "Time statistics"
+        boolean debugFound = listAppender.list.stream()
+            .anyMatch(event -> event.getLevel() == Level.DEBUG && event.getFormattedMessage().contains("Time statistics"));
+        assertTrue(debugFound);
+
+        // Check info logs for correct output with percentage
+        boolean task1Found = listAppender.list.stream()
+            .anyMatch(event -> event.getLevel() == Level.INFO && event.getFormattedMessage().contains("Task1 spent 100ms (25%)"));
+        boolean task2Found = listAppender.list.stream()
+            .anyMatch(event -> event.getLevel() == Level.INFO && event.getFormattedMessage().contains("Task2 spent 300ms (75%)"));
+        assertTrue(task1Found);
+        assertTrue(task2Found);
     }
 }
-
