@@ -1,41 +1,51 @@
-import static org.junit.Assert.assertEquals;
-import java.util.Arrays;
-import java.util.Collection;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.*;
+import java.io.*;
 
-@RunWith(Parameterized.class)
-public class PrimeNumberCheckerTest {
+public class P06_IACC_01_CreGuaranteeFacilityLevel2MainTest {
 
-    private Integer inputNumber;
-    private Boolean expectedResult;
-    private PrimeNumberChecker primeNumberChecker;
+    private final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
+    private final PrintStream originalOut = System.out;
 
-    public PrimeNumberCheckerTest(Integer inputNumber, Boolean expectedResult) {
-        this.inputNumber = inputNumber;
-        this.expectedResult = expectedResult;
-    }
+    private P06_IACC_01_CreGuaranteeFacilityLevel2Main mainProgram;
 
     @Before
-    public void initialize() {
-        primeNumberChecker = new PrimeNumberChecker();
+    public void setUp() {
+        System.setOut(new PrintStream(outContent));
+        mainProgram = new P06_IACC_01_CreGuaranteeFacilityLevel2Main();
     }
 
-    @Parameterized.Parameters(name = "{index}: validate({0})={1}")
-    public static Collection<Object[]> primeNumbers() {
-        return Arrays.asList(new Object[][] {
-            { 2, true },
-            { 6, false },
-            { 19, true },
-            { 22, false },
-            { 23, true }
-        });
+    @After
+    public void tearDown() {
+        System.setOut(originalOut);
     }
 
     @Test
-    public void testPrimeNumberChecker() {
-        assertEquals(expectedResult, primeNumberChecker.validate(inputNumber));
+    public void testExecuteMain_withValidArgs() {
+        String[] args = {"arg1", "arg2"};
+        mainProgram.executeMain(args);
+        String output = outContent.toString();
+        // Assert expected output or behavior here, e.g.:
+        Assert.assertTrue(output.contains("Expected output or log message"));
+    }
+
+    @Test
+    public void testExecuteMain_withNoArgs() {
+        String[] args = {};
+        mainProgram.executeMain(args);
+        String output = outContent.toString();
+        // Assert expected output or error message here
+        Assert.assertTrue(output.contains("Expected error or usage message"));
+    }
+
+    @Test
+    public void testMainMethod_invokesExecuteMain() {
+        String[] args = {"arg1", "arg2"};
+
+        // Call main method directly
+        P06_IACC_01_CreGuaranteeFacilityLevel2Main.main(args);
+
+        String output = outContent.toString();
+        // Assert expected output or behavior after main runs
+        Assert.assertTrue(output.contains("Expected output or log message"));
     }
 }
