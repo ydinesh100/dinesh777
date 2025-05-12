@@ -1,110 +1,54 @@
-import static org.junit.Assert.*;
-
-import java.util.HashMap;
-import java.util.Map;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
-public class TimeStatisticsTest {
+import static org.junit.Assert.assertEquals;
 
-    private TimeStatistics timeStatistics;
-    private ListAppender<ILoggingEvent> listAppender;
-    private Logger logger;
+public class P06_IACC_01_CreGuaranteeFacilityLevel1MainTest {
+
+    private final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
+    private final PrintStream originalOut = System.out;
+
+    private P06_IACC_01_CreGuaranteeFacilityLevel1Main mainProgram;
 
     @Before
-    public void setup() {
-        timeStatistics = new TimeStatistics();
-
-        // Get Logback logger of the class under test
-        logger = (Logger) org.slf4j.LoggerFactory.getLogger(TimeStatistics.class);
-
-        // Create and start a ListAppender to capture logs
-        listAppender = new ListAppender<>();
-        listAppender.start();
-
-        // Add the appender to the logger
-        logger.addAppender(listAppender);
+    public void setUpStreams() {
+        System.setOut(new PrintStream(outContent));
+        mainProgram = new P06_IACC_01_CreGuaranteeFacilityLevel1Main();
     }
 
     @After
-    public void teardown() {
-        // Remove the appender after test
-        logger.detachAppender(listAppender);
+    public void restoreStreams() {
+        System.setOut(originalOut);
     }
 
     @Test
-    public void testDisplayTimeStatisticsInformations_NullMap() {
-        timeStatistics.displayTimeStatisticsInformations(null, true);
-
-        // Check that info log about no data is present
-        boolean found = listAppender.list.stream()
-            .anyMatch(event -> event.getLevel() == Level.INFO && event.getFormattedMessage().contains("No time statistics to display"));
-        assertTrue(found);
+    public void testExecuteMain_withArgument() {
+        String[] args = {"test"};
+        mainProgram.executeMain(args);
+        assertEquals("Processing test input\n", outContent.toString());
     }
 
     @Test
-    public void testDisplayTimeStatisticsInformations_EmptyMap() {
-        timeStatistics.displayTimeStatisticsInformations(new HashMap<>(), false);
-
-        // Check that info log about no data is present
-        boolean found = listAppender.list.stream()
-            .anyMatch(event -> event.getLevel() == Level.INFO && event.getFormattedMessage().contains("No time statistics to display"));
-        assertTrue(found);
+    public void testExecuteMain_withoutArgument() {
+        String[] args = {};
+        mainProgram.executeMain(args);
+        assertEquals("Processing: \n", outContent.toString());
     }
 
     @Test
-    public void testDisplayTimeStatisticsInformations_DisplayWithoutPercentage() {
-        Map<String, Long> map = new HashMap<>();
-        map.put("Task1", 100L);
-        map.put("Task2", 200L);
-
-        timeStatistics.displayTimeStatisticsInformations(map, false);
-
-        // Check debug log for "Time statistics"
-        boolean debugFound = listAppender.list.stream()
-            .anyMatch(event -> event.getLevel() == Level.DEBUG && event.getFormattedMessage().contains("Time statistics"));
-        assertTrue(debugFound);
-
-        // Check info logs for correct output without percentage
-        boolean task1Found = listAppender.list.stream()
-            .anyMatch(event -> event.getLevel() == Level.INFO && event.getFormattedMessage().contains("Task1 spent 100ms"));
-        boolean task2Found = listAppender.list.stream()
-            .anyMatch(event -> event.getLevel() == Level.INFO && event.getFormattedMessage().contains("Task2 spent 200ms"));
-        assertTrue(task1Found);
-        assertTrue(task2Found);
-
-        // Ensure no percentage shown
-        boolean percentFound = listAppender.list.stream()
-            .anyMatch(event -> event.getFormattedMessage().contains("%"));
-        assertFalse(percentFound);
+    public void testProcessInput_testInput() {
+        mainProgram.processInput("test");
+        assertEquals("Processing test input\n", outContent.toString());
     }
 
     @Test
-    public void testDisplayTimeStatisticsInformations_DisplayWithPercentage() {
-        Map<String, Long> map = new HashMap<>();
-        map.put("Task1", 100L);
-        map.put("Task2", 300L);
-
-        timeStatistics.displayTimeStatisticsInformations(map, true);
-
-        // Check debug log for "Time statistics"
-        boolean debugFound = listAppender.list.stream()
-            .anyMatch(event -> event.getLevel() == Level.DEBUG && event.getFormattedMessage().contains("Time statistics"));
-        assertTrue(debugFound);
-
-        // Check info logs for correct output with percentage
-        boolean task1Found = listAppender.list.stream()
-            .anyMatch(event -> event.getLevel() == Level.INFO && event.getFormattedMessage().contains("Task1 spent 100ms (25%)"));
-        boolean task2Found = listAppender.list.stream()
-            .anyMatch(event -> event.getLevel() == Level.INFO && event.getFormattedMessage().contains("Task2 spent 300ms (75%)"));
-        assertTrue(task1Found);
-        assertTrue(task2Found);
+    public void testProcessInput_otherInput() {
+        mainProgram.processInput("something");
+        assertEquals("Processing: something\n", outContent.toString());
     }
 }
+
