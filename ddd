@@ -1,51 +1,25 @@
-import org.junit.*;
-import java.io.*;
+import static org.junit.Assert.*;
+import org.junit.Test;
 
-public class P06_IACC_01_CreGuaranteeFacilityLevel2MainTest {
+public class GuaranteeCreCodeValidatorTest {
 
-    private final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-    private final PrintStream originalOut = System.out;
+    private final YourClassUnderTest validator = new YourClassUnderTest();
 
-    private P06_IACC_01_CreGuaranteeFacilityLevel2Main mainProgram;
-
-    @Before
-    public void setUp() {
-        System.setOut(new PrintStream(outContent));
-        mainProgram = new P06_IACC_01_CreGuaranteeFacilityLevel2Main();
-    }
-
-    @After
-    public void tearDown() {
-        System.setOut(originalOut);
+    @Test
+    public void testValidateCreCode_withValidCode() {
+        String[] args = {"VALID_CODE"}; // Replace with an actual valid code from your enum
+        String error = validator.validateCreCode(args);
+        assertEquals("", error); // No error expected
     }
 
     @Test
-    public void testExecuteMain_withValidArgs() {
-        String[] args = {"arg1", "arg2"};
-        mainProgram.executeMain(args);
-        String output = outContent.toString();
-        // Assert expected output or behavior here, e.g.:
-        Assert.assertTrue(output.contains("Expected output or log message"));
-    }
+    public void testValidateCreCode_withInvalidCode() {
+        String invalidCode = "INVALID_CODE";
+        String[] args = {invalidCode};
 
-    @Test
-    public void testExecuteMain_withNoArgs() {
-        String[] args = {};
-        mainProgram.executeMain(args);
-        String output = outContent.toString();
-        // Assert expected output or error message here
-        Assert.assertTrue(output.contains("Expected error or usage message"));
-    }
+        String error = validator.validateCreCode(args);
 
-    @Test
-    public void testMainMethod_invokesExecuteMain() {
-        String[] args = {"arg1", "arg2"};
-
-        // Call main method directly
-        P06_IACC_01_CreGuaranteeFacilityLevel2Main.main(args);
-
-        String output = outContent.toString();
-        // Assert expected output or behavior after main runs
-        Assert.assertTrue(output.contains("Expected output or log message"));
+        assertTrue(error.contains("Cre code parameter must be set with one of the following values:"));
+        assertTrue(error.contains("but actual is \"" + invalidCode + "\""));
     }
 }
