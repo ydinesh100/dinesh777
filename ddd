@@ -1,71 +1,125 @@
-
-import static org.mockito.Mockito.*;
+import org.junit.*;
 import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
-import java.sql.*;
-import java.util.Date;
-
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.*;
+import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Map;
 
 public class FacilityServiceTest {
-
-    @Mock
-    private Connection mockConnection;
-    @Mock
-    private PreparedStatement mockPreparedStatement;
-    @Mock
-    private ResultSet mockResultSet;
 
     private FacilityService facilityService;
 
     @Before
-    public void setUp() throws Exception {
-        MockitoAnnotations.initMocks(this);
+    public void setUp() {
         facilityService = spy(new FacilityService());
-
-        // Mock the connection to return our mock PreparedStatement
-        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-        // Mock the preparedStatement to return our mock ResultSet
-        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
-
-        // Stub buildFacilityDataList to do nothing (or you can verify its call)
-        doNothing().when(facilityService).buildFacilityDataList(any(ResultSet.class), anyString(), any(Connection.class));
     }
 
     @Test
-    public void testExecuteQuery_setsParametersAndExecutes() throws Exception {
-        String request = "SELECT * FROM table WHERE branch=? AND date=? AND flag=?";
-        String branchCode = "BR123";
-        Date dateEvent = new Date();
-        String givenReceiveFlag = "G";
-        String customerId = "CUST01";
+    public void testGetAuxId_ReturnsCorrectValue_WhenAuxMapIsNull() throws SQLException {
+        // Arrange
+        String facilityId = "FAC1";
+        String entityId = "ENT1";
+        String customerId = "CUST1";
+        String expectedKey = facilityId + "-" + entityId;
+        String expectedAuxId = "AUX123";
 
-        facilityService.executeQuery(request, branchCode, dateEvent, givenReceiveFlag, customerId, mockConnection);
+        Map<String, String> fakeMap = new HashMap<>();
+        fakeMap.put(expectedKey, expectedAuxId);
 
-        // Verify correct SQL and parameters are set
-        verify(mockConnection).prepareStatement(request);
-        verify(mockPreparedStatement).setString(1, branchCode);
-        verify(mockPreparedStatement).setTimestamp(2, new Timestamp(dateEvent.getTime()));
-        verify(mockPreparedStatement).setString(3, givenReceiveFlag);
+        doReturn(fakeMap).when(facilityService).buildAuxMap(customerId);
 
-        // Verify query is executed
-        verify(mockPreparedStatement).executeQuery();
+        // Act
+        String result = facilityService.getAuxId(facilityId, entityId, customerId);
 
-        // Verify buildFacilityDataList is called
-        verify(facilityService).buildFacilityDataList(mockResultSet, customerId, mockConnection);
+        // Assert
+        assertEquals(expectedAuxId, result);
+        verify(facilityService).buildAuxMap(customerId);
+    }
 
-        // Verify resources are closed
-        verify(mockPreparedStatement).close();
-        verify(mockResultSet).close();
+    @Test
+    public void testGetAuxId_ReturnsNull_WhenKeyNotFound() throws SQLException {
+        String facilityId = "FAC2";
+        String entityId = "ENT2";
+        String customerId = "CUST2";
+
+        Map<String, String> fakeMap = new HashMap<>();
+        doReturn(fakeMap).when(facilityService).buildAuxMap(customerId);
+
+        String result = facilityService.getAuxId(facilityId, entityId, customerId);
+
+        assertNull(result);
+    }
+
+    @Test
+    public void testGetAuxId_UsesExistingAuxMap_IfNotNull() throws SQLException {
+        String facilityId = "FAC3";
+        String entityId = "ENT3";
+        String customerId = "CUST3";
+        String expectedKey = facilityId + "-" + entityId;
+        String expectedAuxId = "AUX789";
+
+        Map<String, String> presetMap = new HashMap<>();
+        presetMap.put(expectedKey, expectedAuxId);
+
+        // Set auxMap directly (simulate already built)
+        facilityService.auxMap = presetMap;
+
+        String result = facilityService.getAuxId(facilityId, entityId, customerId);
+
+        assertEquals(expectedAuxId, result);
+        // buildAuxMap should NOT be called
+        verify(facilityService, never()).buildAuxMap(anyString());
     }
 
     @Test(expected = SQLException.class)
-    public void testExecuteQuery_throwsSQLException() throws Exception {
-        when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB error"));
+    public void testGetAuxId_ThrowsSQLException_WhenBuildAuxMapFails() throws SQLException {
+        String facilityId = "FAC4";
+        String entityId = "ENT4";
+        String customerId = "CUST4";
 
-        facilityService.executeQuery("SELECT ...", "BR", new Date(), "F", "CUST", mockConnection);
+        doThrow(new SQLException("DB error")).when(facilityService).buildAuxMap(customerId);
+
+        facilityService.auxMap = null; // Ensure auxMap is null
+
+        facilityService.getAuxId(facilityId, entityId, customerId);
     }
 }
+
+
+
+
+
+import org.junit.Before;
+import org.junit.Test;
+import java.sql.Connection;
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
+
+public class MyDbClassTest {
+
+    private Connection mockConnection;
+    private MyDbClass myDbClass;
+
+    @Before
+    public void setUp() {
+        mockConnection = mock(Connection.class);
+        myDbClass = new MyDbClass(mockConnection);
+    }
+
+    @Test
+    public void testGetConnection_ReturnsInjectedConnection() {
+        Connection result = myDbClass.getConnection();
+        assertNotNull(result);
+        assertEquals(mockConnection, result);
+    }
+
+    @Test
+    public void testGetConnection
+_ReturnsNullIfNotInitialized() {
+        MyDbClass dbClassWithNull = new MyDbClass(null);
+        assertNull(dbClassWithNull.getConnection());
+    }
+}
+
 
