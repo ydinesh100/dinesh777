@@ -1,25 +1,71 @@
+
+import static org.mockito.Mockito.*;
 import static org.junit.Assert.*;
+
+import java.sql.*;
+import java.util.Date;
+
+import org.junit.Before;
 import org.junit.Test;
+import org.mockito.*;
 
-public class GuaranteeCreCodeValidatorTest {
+public class FacilityServiceTest {
 
-    private final YourClassUnderTest validator = new YourClassUnderTest();
+    @Mock
+    private Connection mockConnection;
+    @Mock
+    private PreparedStatement mockPreparedStatement;
+    @Mock
+    private ResultSet mockResultSet;
 
-    @Test
-    public void testValidateCreCode_withValidCode() {
-        String[] args = {"VALID_CODE"}; // Replace with an actual valid code from your enum
-        String error = validator.validateCreCode(args);
-        assertEquals("", error); // No error expected
+    private FacilityService facilityService;
+
+    @Before
+    public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+        facilityService = spy(new FacilityService());
+
+        // Mock the connection to return our mock PreparedStatement
+        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+        // Mock the preparedStatement to return our mock ResultSet
+        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+        // Stub buildFacilityDataList to do nothing (or you can verify its call)
+        doNothing().when(facilityService).buildFacilityDataList(any(ResultSet.class), anyString(), any(Connection.class));
     }
 
     @Test
-    public void testValidateCreCode_withInvalidCode() {
-        String invalidCode = "INVALID_CODE";
-        String[] args = {invalidCode};
+    public void testExecuteQuery_setsParametersAndExecutes() throws Exception {
+        String request = "SELECT * FROM table WHERE branch=? AND date=? AND flag=?";
+        String branchCode = "BR123";
+        Date dateEvent = new Date();
+        String givenReceiveFlag = "G";
+        String customerId = "CUST01";
 
-        String error = validator.validateCreCode(args);
+        facilityService.executeQuery(request, branchCode, dateEvent, givenReceiveFlag, customerId, mockConnection);
 
-        assertTrue(error.contains("Cre code parameter must be set with one of the following values:"));
-        assertTrue(error.contains("but actual is \"" + invalidCode + "\""));
+        // Verify correct SQL and parameters are set
+        verify(mockConnection).prepareStatement(request);
+        verify(mockPreparedStatement).setString(1, branchCode);
+        verify(mockPreparedStatement).setTimestamp(2, new Timestamp(dateEvent.getTime()));
+        verify(mockPreparedStatement).setString(3, givenReceiveFlag);
+
+        // Verify query is executed
+        verify(mockPreparedStatement).executeQuery();
+
+        // Verify buildFacilityDataList is called
+        verify(facilityService).buildFacilityDataList(mockResultSet, customerId, mockConnection);
+
+        // Verify resources are closed
+        verify(mockPreparedStatement).close();
+        verify(mockResultSet).close();
+    }
+
+    @Test(expected = SQLException.class)
+    public void testExecuteQuery_throwsSQLException() throws Exception {
+        when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB error"));
+
+        facilityService.executeQuery("SELECT ...", "BR", new Date(), "F", "CUST", mockConnection);
     }
 }
+
