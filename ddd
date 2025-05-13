@@ -2,22 +2,24 @@ import org.junit.*;
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 
-public class FacilityServiceTest {
+public class AuxServiceTest {
 
-    private FacilityService facilityService;
+    private AuxService auxService;
+    private Connection mockConnection;
 
     @Before
     public void setUp() {
-        facilityService = spy(new FacilityService());
+        mockConnection = mock(Connection.class);
+        auxService = spy(new AuxService(mockConnection));
     }
 
     @Test
     public void testGetAuxId_ReturnsCorrectValue_WhenAuxMapIsNull() throws SQLException {
-        // Arrange
         String facilityId = "FAC1";
         String entityId = "ENT1";
         String customerId = "CUST1";
@@ -27,14 +29,12 @@ public class FacilityServiceTest {
         Map<String, String> fakeMap = new HashMap<>();
         fakeMap.put(expectedKey, expectedAuxId);
 
-        doReturn(fakeMap).when(facilityService).buildAuxMap(customerId);
+        doReturn(fakeMap).when(auxService).buildAuxMap(customerId);
 
-        // Act
-        String result = facilityService.getAuxId(facilityId, entityId, customerId);
+        String result = auxService.getAuxId(facilityId, entityId, customerId);
 
-        // Assert
         assertEquals(expectedAuxId, result);
-        verify(facilityService).buildAuxMap(customerId);
+        verify(auxService).buildAuxMap(customerId);
     }
 
     @Test
@@ -44,9 +44,9 @@ public class FacilityServiceTest {
         String customerId = "CUST2";
 
         Map<String, String> fakeMap = new HashMap<>();
-        doReturn(fakeMap).when(facilityService).buildAuxMap(customerId);
+        doReturn(fakeMap).when(auxService).buildAuxMap(customerId);
 
-        String result = facilityService.getAuxId(facilityId, entityId, customerId);
+        String result = auxService.getAuxId(facilityId, entityId, customerId);
 
         assertNull(result);
     }
@@ -62,14 +62,12 @@ public class FacilityServiceTest {
         Map<String, String> presetMap = new HashMap<>();
         presetMap.put(expectedKey, expectedAuxId);
 
-        // Set auxMap directly (simulate already built)
-        facilityService.auxMap = presetMap;
+        auxService.auxMap = presetMap;
 
-        String result = facilityService.getAuxId(facilityId, entityId, customerId);
+        String result = auxService.getAuxId(facilityId, entityId, customerId);
 
         assertEquals(expectedAuxId, result);
-        // buildAuxMap should NOT be called
-        verify(facilityService, never()).buildAuxMap(anyString());
+        verify(auxService, never()).buildAuxMap(anyString());
     }
 
     @Test(expected = SQLException.class)
@@ -78,48 +76,10 @@ public class FacilityServiceTest {
         String entityId = "ENT4";
         String customerId = "CUST4";
 
-        doThrow(new SQLException("DB error")).when(facilityService).buildAuxMap(customerId);
+        doThrow(new SQLException("DB error")).when(auxService).buildAuxMap(customerId);
 
-        facilityService.auxMap = null; // Ensure auxMap is null
+        auxService.auxMap = null;
 
-        facilityService.getAuxId(facilityId, entityId, customerId);
+        auxService.getAuxId(facilityId, entityId, customerId);
     }
 }
-
-
-
-
-
-import org.junit.Before;
-import org.junit.Test;
-import java.sql.Connection;
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
-
-public class MyDbClassTest {
-
-    private Connection mockConnection;
-    private MyDbClass myDbClass;
-
-    @Before
-    public void setUp() {
-        mockConnection = mock(Connection.class);
-        myDbClass = new MyDbClass(mockConnection);
-    }
-
-    @Test
-    public void testGetConnection_ReturnsInjectedConnection() {
-        Connection result = myDbClass.getConnection();
-        assertNotNull(result);
-        assertEquals(mockConnection, result);
-    }
-
-    @Test
-    public void testGetConnection
-_ReturnsNullIfNotInitialized() {
-        MyDbClass dbClassWithNull = new MyDbClass(null);
-        assertNull(dbClassWithNull.getConnection());
-    }
-}
-
-
