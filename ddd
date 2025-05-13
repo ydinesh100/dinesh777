@@ -1,85 +1,27 @@
-import org.junit.*;
+import org.junit.Before;
+import org.junit.Test;
 import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
 
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.HashMap;
-import java.util.Map;
+public class CollateralServiceImplTest {
 
-public class AuxServiceTest {
-
-    private AuxService auxService;
-    private Connection mockConnection;
+    private CollateralServiceImpl service;
 
     @Before
     public void setUp() {
-        mockConnection = mock(Connection.class);
-        auxService = spy(new AuxService(mockConnection));
+        service = new CollateralServiceImpl();
     }
 
     @Test
-    public void testGetAuxId_ReturnsCorrectValue_WhenAuxMapIsNull() throws SQLException {
-        String facilityId = "FAC1";
-        String entityId = "ENT1";
-        String customerId = "CUST1";
-        String expectedKey = facilityId + "-" + entityId;
-        String expectedAuxId = "AUX123";
-
-        Map<String, String> fakeMap = new HashMap<>();
-        fakeMap.put(expectedKey, expectedAuxId);
-
-        doReturn(fakeMap).when(auxService).buildAuxMap(customerId);
-
-        String result = auxService.getAuxId(facilityId, entityId, customerId);
-
-        assertEquals(expectedAuxId, result);
-        verify(auxService).buildAuxMap(customerId);
+    public void testGetPopulationAndMainDataRequest_ReturnsConstant() {
+        String expected = CollateralServiceImpl.COLLATERAL_POPULATION_AND_MAIN_DATA_REQUEST;
+        String actual = service.getPopulationAndMainDataRequest();
+        assertEquals(expected, actual);
     }
 
     @Test
-    public void testGetAuxId_ReturnsNull_WhenKeyNotFound() throws SQLException {
-        String facilityId = "FAC2";
-        String entityId = "ENT2";
-        String customerId = "CUST2";
-
-        Map<String, String> fakeMap = new HashMap<>();
-        doReturn(fakeMap).when(auxService).buildAuxMap(customerId);
-
-        String result = auxService.getAuxId(facilityId, entityId, customerId);
-
-        assertNull(result);
-    }
-
-    @Test
-    public void testGetAuxId_UsesExistingAuxMap_IfNotNull() throws SQLException {
-        String facilityId = "FAC3";
-        String entityId = "ENT3";
-        String customerId = "CUST3";
-        String expectedKey = facilityId + "-" + entityId;
-        String expectedAuxId = "AUX789";
-
-        Map<String, String> presetMap = new HashMap<>();
-        presetMap.put(expectedKey, expectedAuxId);
-
-        auxService.auxMap = presetMap;
-
-        String result = auxService.getAuxId(facilityId, entityId, customerId);
-
-        assertEquals(expectedAuxId, result);
-        verify(auxService, never()).buildAuxMap(anyString());
-    }
-
-    @Test(expected = SQLException.class)
-    public void testGetAuxId_ThrowsSQLException_WhenBuildAuxMapFails() throws SQLException {
-        String facilityId = "FAC4";
-        String entityId = "ENT4";
-        String customerId = "CUST4";
-
-        doThrow(new SQLException("DB error")).when(auxService).buildAuxMap(customerId);
-
-        auxService.auxMap = null;
-
-        auxService.getAuxId(facilityId, entityId, customerId);
+    public void testGetBasicPopulationRequest_ReturnsConstant() {
+        String expected = CollateralServiceImpl.COLLATERAL_BASIC_POPULATION_REQUEST;
+        String actual = service.getBasicPopulationRequest();
+        assertEquals(expected, actual);
     }
 }
