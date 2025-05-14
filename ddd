@@ -1,1 +1,44 @@
-lokesh anna
+import static org.junit.Assert.assertTrue;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.slf4j.LoggerFactory;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+
+public class ParameterDisplayerTest {
+
+    private ListAppender<ILoggingEvent> listAppender;
+    private ParameterDisplayer displayer;
+
+    @Before
+    public void setUp() {
+        // Get Logback Logger
+        Logger logger = (Logger) LoggerFactory.getLogger(ParameterDisplayer.class);
+
+        // Create and start a ListAppender
+        listAppender = new ListAppender<>();
+        listAppender.start();
+
+        // Add the appender to the logger
+        logger.addAppender(listAppender);
+
+        displayer = new ParameterDisplayer();
+    }
+
+    @After
+    public void tearDown() {
+        listAppender.stop();
+    }
+
+    @Test
+    public void testDisplayExpectedParameters_LogsCorrectMessage() {
+        displayer.displayExpectedParameters();
+
+        // Check that the log contains the expected message
+        boolean found = listAppender.list.stream()
+            .anyMatch(event -> event.getFormattedMessage().contains("Expected parameters are: ARG 0 => Branch Code ex: BEFOR, ARG 1 => Event Date ex: \"84/04/2012 16:30:00\", ARG 2 => Gurantee Type (Optional) ex: COLLAT"));
+        assertTrue("Expected log message was not found", found);
+    }
+}
