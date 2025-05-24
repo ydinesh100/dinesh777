@@ -1,52 +1,225 @@
 import org.junit.Before;
 import org.junit.Test;
-import java.text.SimpleDateFormat;
-import java.text.DecimalFormat;
+import org.junit.runner.RunWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.Collections;
+import java.util.List;
+
+import static org.mockito.Mockito.*;
 import static org.junit.Assert.*;
 
-public class P06_IACC_01_BoprStringBufferTest {
-    
-    private P06_IACC_01_BoprStringBuffer instance;
+@RunWith(MockitoJUnitRunner.class)
+public class DatabaseProcessorTest {
+
+    private static final Logger LOG = LoggerFactory.getLogger(DatabaseProcessorTest.class);
+
+    @Mock
+    private Connection dbConnection;
+
+    @Mock
+    private DataBaseTransaction dataBaseTransaction;
+
+    @Mock
+    private List<RecordBean> recordBeansList;
+
+    @InjectMocks
+    private DatabaseProcessor databaseProcessor;
 
     @Before
-    public void setUp() throws Exception {
-        // Instantiate the class before each test
-        instance = new P06_IACC_01_BoprStringBuffer();
+    public void setUp() {
+        // Initialize mocks
+        databaseProcessor.initializeDataBaseTransaction(dbConnection);
+        when(databaseProcessor.getDataBaseTransaction()).thenReturn(dataBaseTransaction);
     }
 
     @Test
-    public void testStringBufferInitialization() {
-        // Test that g_o_sb is not null and is an instance of StringBuffer
-        assertNotNull("StringBuffer should be initialized", getField("g_o_sb"));
-        assertTrue("g_o_sb should be a StringBuffer", getField("g_o_sb") instanceof StringBuffer);
-        assertEquals("StringBuffer should be empty", 0, ((StringBuffer) getField("g_o_sb")).length());
+    public void testExecute_SuccessfulExecution() throws Exception {
+        // Arrange
+        when(GlobalAtlentic.getLoanIQConnection()).thenReturn(dbConnection);
+        when(dbConnection.getAutoCommit()).thenReturn(false);
+        when(dataBaseTransaction.getRecordsBeansList()).thenReturn(Collections.emptyList());
+
+        // Act
+        databaseProcessor.execute();
+
+        // Assert
+        verify(dbConnection).setAutoCommit(false);
+        verify(dataBaseTransaction).getRecordsBeansList();
+        verify(dbConnection).commit();
+        verify(dbConnection, never()).rollback();
+        verify(databaseProcessor).innerExecute();
+        verify(databaseProcessor).applyCommit();
     }
 
     @Test
-    public void testDateFormatInitialization() {
-        // Test that dateFormat is not null and has the correct pattern
-        assertNotNull("SimpleDateFormat should be initialized", getField("dateFormat"));
-        assertTrue("dateFormat should be a SimpleDateFormat", getField("dateFormat") instanceof SimpleDateFormat);
-        assertEquals("Date format pattern should be ddMMyyyy", "ddMMyyyy", ((SimpleDateFormat) getField("dateFormat")).toPattern());
-    }
+    public void testExecute_IOException_ThrowsExitApplicationException() throws Exception {
+        // Arrange
+        IOException ioException = new IOException("Connection failed");
+        when(GlobalAtlentic.getLoanIQConnection()).thenThrow(ioException);
 
-    @Test
-    public void testDecimalFormatInitialization() {
-        // Test that decimalFormat is not null and has the correct pattern
-        assertNotNull("DecimalFormat should be initialized", getField("decimalFormat"));
-        assertTrue("decimalFormat should be a DecimalFormat", getField("decimalFormat") instanceof DecimalFormat);
-        assertEquals("Decimal format pattern should be 000000000000000.000", "000000000000000.000", ((DecimalFormat) getField("decimalFormat")).toPattern());
-    }
-
-    // Helper method to access private fields using reflection
-    private Object getField(String fieldName) {
+        // Act & Assert
         try {
-            java.lang.reflect.Field field = P06_IACC_01_BoprStringBuffer.class.getDeclaredField(fieldName);
-            field.setAccessible(true);
-            return field.get(instance);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            fail("Failed to access field: " + fieldName + " - " + e.getMessage());
-            return null;
+            databaseProcessor.execute();
+            fail("Expected P06_TACC_01_ExitApplicationException");
+        } catch (P06_TACC_01_ExitApplicationException e) {
+            assertEquals("Connection failed", e.getMessage());
+            assertEquals(ioException, e.getCause());
         }
+        verify(dbConnection, never()).rollback();
+        verify(dbConnection, never()).commit();
+        verify(databaseProcessor, never()).innerExecute();
+    }
+
+    @Test
+    public void testExecute_SQLException_ThrowsExitApplicationException() throws Exception {
+        // Arrange
+        SQLException sqlException = new SQLException("Database error");
+        when(GlobalAtlentic.getLoanIQConnection()).thenReturn(dbConnection);
+        when(dataBaseTransaction.getRecordsBeansList()).thenThrow(sqlException);
+
+        // Act & Assert
+        try {
+            databaseProcessor.execute();
+            fail("Expected P06_TACC_01_ExitApplicationException");
+        } catch (P06_TACC_01_ExitApplicationException e) {
+            assertEquals("Database error", e.getMessage());
+            assertEquals(sqlException, e.getCause());
+        }
+        verify(dbConnection).setAutoCommit(false);
+        verify(dbConnection).rollback();
+        verify(dbConnection, never()).commit();
+        verify(databaseProcessor, never()).innerExecute();
+    }
+
+    @Test
+    public void testExecute_CustomSQLException_ThrowsExitApplicationException() throws Exception {
+        // Arrange
+        P06_IACC_01_SQLException customException = new P06_IACC_01_SQLException("Custom SQL error");
+        when(GlobalAtlentic.getLoanIQConnection()).thenReturn(dbConnection);
+        when(dataBaseTransaction.getRecordsBeansList()).thenThrow(customException);
+
+        // Act & Assert
+        try {
+            databaseProcessor.execute();
+            fail("Expected P06_TACC_01_ExitApplicationException");
+        } catch (P06_TACC_01_ExitApplicationException e) {
+            assertEquals("Custom SQL error", e.getMessage());
+            assertEquals(customException, e.getCause());
+        }
+        verify(dbConnection).setAutoCommit(false);
+        verify(dbConnection).rollback();
+        verify(dbConnection, never()).commit();
+        verify(databaseProcessor, never()).innerExecute();
+    }
+
+    @Test
+    public void testExecute_RollbackFails_StillThrowsOriginalException() throws Exception {
+        // Arrange
+        SQLException sqlException = new SQLException("Database error");
+        SQLException rollbackException = new SQLException("Rollback failed");
+        when(GlobalAtlentic.getLoanIQConnection()).thenReturn(dbConnection);
+        when(dataBaseTransaction.getRecordsBeansList()).thenThrow(sqlException);
+        doThrow(rollbackException).when(dbConnection).rollback();
+
+        // Act & Assert
+        try {
+            databaseProcessor.execute();
+            fail("Expected P06_TACC_01_ExitApplicationException");
+        } catch (P06_TACC_01_ExitApplicationException e) {
+            assertEquals("Database error", e.getMessage());
+            assertEquals(sqlException, e.getCause());
+            // Rollback exception is caught and not propagated
+        }
+        verify(dbConnection).setAutoCommit(false);
+        verify(dbConnection).rollback();
+        verify(dbConnection, never()).commit();
+        verify(databaseProcessor, never()).innerExecute();
+    }
+
+    @Test
+    public void testExecute_NullConnection_DoesNotAttemptRollback() throws Exception {
+        // Arrange
+        IOException ioException = new IOException("Connection failed");
+        when(GlobalAtlentic.getLoanIQConnection()).thenThrow(ioException);
+
+        // Act & Assert
+        try {
+            databaseProcessor.execute();
+            fail("Expected P06_TACC_01_ExitApplicationException");
+        } catch (P06_TACC_01_ExitApplicationException e) {
+            assertEquals("Connection failed", e.getMessage());
+            assertEquals(ioException, e.getCause());
+        }
+        verify(dbConnection, never()).rollback();
+        verify(dbConnection, never()).commit();
+        verify(databaseProcessor, never()).innerExecute();
+    }
+}
+
+
+
+
+
+
+@RunWith(MockitoJUnitRunner.class)
+public class ReportExecutorTest {
+
+    @InjectMocks
+    private ReportExecutor reportExecutor;
+
+    @Mock
+    private Connection mockConnection;
+
+    @Mock
+    private DataBaseTransaction mockTransaction;
+
+    @Mock
+    private List<RecordBean> mockRecordBeansList;
+
+    @Before
+    public void setup() throws Exception {
+        PowerMockito.mockStatic(GlobalAtlantic.class);
+        when(GlobalAtlantic.getLoanIQConnection()).thenReturn(mockConnection);
+        when(mockConnection.getAutoCommit()).thenReturn(true);
+    }
+
+    @Test
+    public void testExecute_SuccessfulExecution() throws Exception {
+        doNothing().when(mockConnection).setAutoCommit(false);
+        doNothing().when(mockConnection).commit();
+        doNothing().when(reportExecutor).initializeDataBaseTransaction(mockConnection);
+        when(reportExecutor.getDataBaseTransaction()).thenReturn(mockTransaction);
+        when(mockTransaction.getRecordsBeansList()).thenReturn(mockRecordBeansList);
+        doNothing().when(reportExecutor).innerExecute();
+        when(reportExecutor.applyCommit()).thenReturn(false);
+
+        reportExecutor.execute();
+
+        verify(mockConnection).setAutoCommit(false);
+        verify(mockConnection).commit();
+    }
+
+    @Test(expected = P06_TACC_01_ExitApplicationException.class)
+    public void testExecute_IOException_ThrowsCustomException() throws Exception {
+        doThrow(new IOException("IO error")).when(reportExecutor).initializeDataBaseTransaction(mockConnection);
+        when(GlobalAtlantic.getLoanIQConnection()).thenReturn(mockConnection);
+
+        reportExecutor.execute();
+    }
+
+    @Test
+    public void testExecute_SQLException_DoesNotThrowCustomException() throws Exception {
+        doThrow(new SQLException("SQL error")).when(reportExecutor).initializeDataBaseTransaction(mockConnection);
+        when(GlobalAtlantic.getLoanIQConnection()).thenReturn(mockConnection);
+
+        reportExecutor.execute(); // Should not throw P06_TACC_01_ExitApplicationException
     }
 }
