@@ -1,44 +1,52 @@
-import static org.junit.Assert.assertTrue;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.slf4j.LoggerFactory;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
+import java.text.SimpleDateFormat;
+import java.text.DecimalFormat;
+import static org.junit.Assert.*;
 
-public class ParameterDisplayerTest {
-
-    private ListAppender<ILoggingEvent> listAppender;
-    private ParameterDisplayer displayer;
+public class P06_IACC_01_BoprStringBufferTest {
+    
+    private P06_IACC_01_BoprStringBuffer instance;
 
     @Before
-    public void setUp() {
-        // Get Logback Logger
-        Logger logger = (Logger) LoggerFactory.getLogger(ParameterDisplayer.class);
-
-        // Create and start a ListAppender
-        listAppender = new ListAppender<>();
-        listAppender.start();
-
-        // Add the appender to the logger
-        logger.addAppender(listAppender);
-
-        displayer = new ParameterDisplayer();
-    }
-
-    @After
-    public void tearDown() {
-        listAppender.stop();
+    public void setUp() throws Exception {
+        // Instantiate the class before each test
+        instance = new P06_IACC_01_BoprStringBuffer();
     }
 
     @Test
-    public void testDisplayExpectedParameters_LogsCorrectMessage() {
-        displayer.displayExpectedParameters();
+    public void testStringBufferInitialization() {
+        // Test that g_o_sb is not null and is an instance of StringBuffer
+        assertNotNull("StringBuffer should be initialized", getField("g_o_sb"));
+        assertTrue("g_o_sb should be a StringBuffer", getField("g_o_sb") instanceof StringBuffer);
+        assertEquals("StringBuffer should be empty", 0, ((StringBuffer) getField("g_o_sb")).length());
+    }
 
-        // Check that the log contains the expected message
-        boolean found = listAppender.list.stream()
-            .anyMatch(event -> event.getFormattedMessage().contains("Expected parameters are: ARG 0 => Branch Code ex: BEFOR, ARG 1 => Event Date ex: \"84/04/2012 16:30:00\", ARG 2 => Gurantee Type (Optional) ex: COLLAT"));
-        assertTrue("Expected log message was not found", found);
+    @Test
+    public void testDateFormatInitialization() {
+        // Test that dateFormat is not null and has the correct pattern
+        assertNotNull("SimpleDateFormat should be initialized", getField("dateFormat"));
+        assertTrue("dateFormat should be a SimpleDateFormat", getField("dateFormat") instanceof SimpleDateFormat);
+        assertEquals("Date format pattern should be ddMMyyyy", "ddMMyyyy", ((SimpleDateFormat) getField("dateFormat")).toPattern());
+    }
+
+    @Test
+    public void testDecimalFormatInitialization() {
+        // Test that decimalFormat is not null and has the correct pattern
+        assertNotNull("DecimalFormat should be initialized", getField("decimalFormat"));
+        assertTrue("decimalFormat should be a DecimalFormat", getField("decimalFormat") instanceof DecimalFormat);
+        assertEquals("Decimal format pattern should be 000000000000000.000", "000000000000000.000", ((DecimalFormat) getField("decimalFormat")).toPattern());
+    }
+
+    // Helper method to access private fields using reflection
+    private Object getField(String fieldName) {
+        try {
+            java.lang.reflect.Field field = P06_IACC_01_BoprStringBuffer.class.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            return field.get(instance);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            fail("Failed to access field: " + fieldName + " - " + e.getMessage());
+            return null;
+        }
     }
 }
