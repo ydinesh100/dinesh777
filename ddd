@@ -2,7 +2,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.MissingResourceException;
@@ -22,27 +21,22 @@ public class P06_IACC_01_PropertiesMgrTest {
 
     @Before
     public void setUp() throws Exception {
-        // Reset static fields or mocks before each test
         propertiesMgr = new P06_IACC_01_PropertiesMgr();
-        
-        // Use reflection to set the static ResourceBundle to null before each test
+
+        // Reset static ResourceBundle to null before each test using reflection
         java.lang.reflect.Field bundleField = P06_IACC_01_PropertiesMgr.class
             .getDeclaredField("g_o_boprQueriesPropertiesBundle");
         bundleField.setAccessible(true);
         bundleField.set(null, null);
-
-        // Mock static methods for schema names
-        mockStatic(P06_IACC_01_PropertiesMgr.class);
-        when(P06_IACC_01_PropertiesMgr.getLiqSchemaName()).thenReturn("liqSchema");
-        when(P06_IACC_01_PropertiesMgr.getAtlenticSchemaName()).thenReturn("atlanticSchema");
     }
 
     @Test
     public void testGetQueryFromPropertiesFile_Success() {
         // Arrange
         String queryKey = "testQuery";
-        String rawQuery = "SELECT * FROM *liq_sh*.table1 WHERE id = *atl_sh*.id";
-        String expectedQuery = "SELECT * FROM liqSchema.table1 WHERE id = atlanticSchema.id";
+        String rawQuery = "SELECT * FROM *liq_sh*. turbines WHERE id = *atl_sh*.id";
+        // Assume schema names are "liqSchema" and "atlanticSchema" for testing
+        String expectedQuery = "SELECT * FROM liqSchema.turbines WHERE id = atlanticSchema.id";
 
         // Mock ResourceBundle loading
         when(mockResourceBundle.getString(queryKey)).thenReturn(rawQuery);
@@ -79,9 +73,11 @@ public class P06_IACC_01_PropertiesMgrTest {
     public void testGetQueryFromPropertiesFile_NullBundle_InitializesBundle() {
         // Arrange
         String queryKey = "testQuery";
-        String rawQuery = "SELECT * FROM *liq_sh*.table1";
-        String expectedQuery = "SELECT * FROM liqSchema.table1";
+        String rawQuery = "SELECT * FROM *liq_sh*. turbines";
+        // Assume schema name is "liqSchema" for testing
+        String expectedQuery = "SELECT * FROM liqSchema.turbines";
 
+eyes
         // Mock ResourceBundle loading
         when(mockResourceBundle.getString(queryKey)).thenReturn(rawQuery);
         mockStatic(ResourceBundle.class);
@@ -109,8 +105,8 @@ public class P06_IACC_01_PropertiesMgrTest {
     public void testGetQueryFromPropertiesFile_NoPlaceholders() {
         // Arrange
         String queryKey = "noPlaceholderQuery";
-        String rawQuery = "SELECT * FROM table1";
-        String expectedQuery = "SELECT * FROM table1";
+        String rawQuery = "SELECT * FROM turbines";
+        String expectedQuery = "SELECT * FROM turbines";
 
         // Mock ResourceBundle loading
         when(mockResourceBundle.getString(queryKey)).thenReturn(rawQuery);
