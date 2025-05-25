@@ -1,124 +1,21 @@
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import static org.junit.Assert.assertFalse;
 
-import java.util.MissingResourceException;
-import java.util.ResourceBundle;
+public class CommitHandlerTest {
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.mockito.Mockito.*;
-
-@RunWith(MockitoJUnitRunner.class)
-public class P06_IACC_01_PropertiesMgrTest {
-
-    @Mock
-    private ResourceBundle mockResourceBundle;
-
-    private P06_IACC_01_PropertiesMgr propertiesMgr;
+    private CommitHandler commitHandler;
 
     @Before
-    public void setUp() throws Exception {
-        propertiesMgr = new P06_IACC_01_PropertiesMgr();
-
-        // Reset static ResourceBundle to null before each test using reflection
-        java.lang.reflect.Field bundleField = P06_IACC_01_PropertiesMgr.class
-            .getDeclaredField("g_o_boprQueriesPropertiesBundle");
-        bundleField.setAccessible(true);
-        bundleField.set(null, null);
+    public void setUp() {
+        // Initialize the class containing the applyCommit method
+        commitHandler = new CommitHandler();
     }
 
     @Test
-    public void testGetQueryFromPropertiesFile_Success() {
-        // Arrange
-        String queryKey = "testQuery";
-        String rawQuery = "SELECT * FROM *liq_sh*. turbines WHERE id = *atl_sh*.id";
-        // Assume schema names are "liqSchema" and "atlanticSchema" for testing
-        String expectedQuery = "SELECT * FROM liqSchema.turbines WHERE id = atlanticSchema.id";
-
-        // Mock ResourceBundle loading
-        when(mockResourceBundle.getString(queryKey)).thenReturn(rawQuery);
-        mockStatic(ResourceBundle.class);
-        when(ResourceBundle.getBundle(anyString())).thenReturn(mockResourceBundle);
-
-        // Act
-        String result = P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile(queryKey);
-
-        // Assert
-        assertNotNull(result);
-        assertEquals(expectedQuery, result);
-        verify(mockResourceBundle, times(1)).getString(queryKey);
-    }
-
-    @Test(expected = MissingResourceException.class)
-    public void testGetQueryFromPropertiesFile_MissingKey() {
-        // Arrange
-        String queryKey = "invalidKey";
-
-        // Mock ResourceBundle to throw MissingResourceException
-        when(mockResourceBundle.getString(queryKey)).thenThrow(new MissingResourceException(
-            "Key not found", "ResourceBundle", queryKey));
-        mockStatic(ResourceBundle.class);
-        when(ResourceBundle.getBundle(anyString())).thenReturn(mockResourceBundle);
-
-        // Act
-        P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile(queryKey);
-
-        // Assert: Expects MissingResourceException
-    }
-
-    @Test
-    public void testGetQueryFromPropertiesFile_NullBundle_InitializesBundle() {
-        // Arrange
-        String queryKey = "testQuery";
-        String rawQuery = "SELECT * FROM *liq_sh*. turbines";
-        // Assume schema name is "liqSchema" for testing
-        String expectedQuery = "SELECT * FROM liqSchema.turbines";
-
-eyes
-        // Mock ResourceBundle loading
-        when(mockResourceBundle.getString(queryKey)).thenReturn(rawQuery);
-        mockStatic(ResourceBundle.class);
-        when(ResourceBundle.getBundle(anyString())).thenReturn(mockResourceBundle);
-
-        // Act
-        String result = P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile(queryKey);
-
-        // Assert
-        assertNotNull(result);
-        assertEquals(expectedQuery, result);
-        verifyStatic(ResourceBundle.class, times(1));
-        ResourceBundle.getBundle(anyString());
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void testGetQueryFromPropertiesFile_NullQueryKey() {
-        // Act
-        P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile(null);
-
-        // Assert: Expects NullPointerException
-    }
-
-    @Test
-    public void testGetQueryFromPropertiesFile_NoPlaceholders() {
-        // Arrange
-        String queryKey = "noPlaceholderQuery";
-        String rawQuery = "SELECT * FROM turbines";
-        String expectedQuery = "SELECT * FROM turbines";
-
-        // Mock ResourceBundle loading
-        when(mockResourceBundle.getString(queryKey)).thenReturn(rawQuery);
-        mockStatic(ResourceBundle.class);
-        when(ResourceBundle.getBundle(anyString())).thenReturn(mockResourceBundle);
-
-        // Act
-        String result = P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile(queryKey);
-
-        // Assert
-        assertNotNull(result);
-        assertEquals(expectedQuery, result);
-        verify(mockResourceBundle, times(1)).getString(queryKey);
+    public void testApplyCommitReturnsFalse() {
+        // Test that applyCommit returns false as expected
+        boolean result = commitHandler.applyCommit();
+        assertFalse("applyCommit should return false", result);
     }
 }
