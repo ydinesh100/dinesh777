@@ -1,225 +1,128 @@
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.Collections;
-import java.util.List;
+import java.util.MissingResourceException;
+import java.util.ResourceBundle;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.mockito.Mockito.*;
-import static org.junit.Assert.*;
 
 @RunWith(MockitoJUnitRunner.class)
-public class DatabaseProcessorTest {
-
-    private static final Logger LOG = LoggerFactory.getLogger(DatabaseProcessorTest.class);
+public class P06_IACC_01_PropertiesMgrTest {
 
     @Mock
-    private Connection dbConnection;
+    private ResourceBundle mockResourceBundle;
 
-    @Mock
-    private DataBaseTransaction dataBaseTransaction;
-
-    @Mock
-    private List<RecordBean> recordBeansList;
-
-    @InjectMocks
-    private DatabaseProcessor databaseProcessor;
+    private P06_IACC_01_PropertiesMgr propertiesMgr;
 
     @Before
-    public void setUp() {
-        // Initialize mocks
-        databaseProcessor.initializeDataBaseTransaction(dbConnection);
-        when(databaseProcessor.getDataBaseTransaction()).thenReturn(dataBaseTransaction);
+    public void setUp() throws Exception {
+        // Reset static fields or mocks before each test
+        propertiesMgr = new P06_IACC_01_PropertiesMgr();
+        
+        // Use reflection to set the static ResourceBundle to null before each test
+        java.lang.reflect.Field bundleField = P06_IACC_01_PropertiesMgr.class
+            .getDeclaredField("g_o_boprQueriesPropertiesBundle");
+        bundleField.setAccessible(true);
+        bundleField.set(null, null);
+
+        // Mock static methods for schema names
+        mockStatic(P06_IACC_01_PropertiesMgr.class);
+        when(P06_IACC_01_PropertiesMgr.getLiqSchemaName()).thenReturn("liqSchema");
+        when(P06_IACC_01_PropertiesMgr.getAtlenticSchemaName()).thenReturn("atlanticSchema");
     }
 
     @Test
-    public void testExecute_SuccessfulExecution() throws Exception {
+    public void testGetQueryFromPropertiesFile_Success() {
         // Arrange
-        when(GlobalAtlentic.getLoanIQConnection()).thenReturn(dbConnection);
-        when(dbConnection.getAutoCommit()).thenReturn(false);
-        when(dataBaseTransaction.getRecordsBeansList()).thenReturn(Collections.emptyList());
+        String queryKey = "testQuery";
+        String rawQuery = "SELECT * FROM *liq_sh*.table1 WHERE id = *atl_sh*.id";
+        String expectedQuery = "SELECT * FROM liqSchema.table1 WHERE id = atlanticSchema.id";
+
+        // Mock ResourceBundle loading
+        when(mockResourceBundle.getString(queryKey)).thenReturn(rawQuery);
+        mockStatic(ResourceBundle.class);
+        when(ResourceBundle.getBundle(anyString())).thenReturn(mockResourceBundle);
 
         // Act
-        databaseProcessor.execute();
+        String result = P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile(queryKey);
 
         // Assert
-        verify(dbConnection).setAutoCommit(false);
-        verify(dataBaseTransaction).getRecordsBeansList();
-        verify(dbConnection).commit();
-        verify(dbConnection, never()).rollback();
-        verify(databaseProcessor).innerExecute();
-        verify(databaseProcessor).applyCommit();
+        assertNotNull(result);
+        assertEquals(expectedQuery, result);
+        verify(mockResourceBundle, times(1)).getString(queryKey);
     }
 
-    @Test
-    public void testExecute_IOException_ThrowsExitApplicationException() throws Exception {
+    @Test(expected = MissingResourceException.class)
+    public void testGetQueryFromPropertiesFile_MissingKey() {
         // Arrange
-        IOException ioException = new IOException("Connection failed");
-        when(GlobalAtlentic.getLoanIQConnection()).thenThrow(ioException);
+        String queryKey = "invalidKey";
 
-        // Act & Assert
-        try {
-            databaseProcessor.execute();
-            fail("Expected P06_TACC_01_ExitApplicationException");
-        } catch (P06_TACC_01_ExitApplicationException e) {
-            assertEquals("Connection failed", e.getMessage());
-            assertEquals(ioException, e.getCause());
-        }
-        verify(dbConnection, never()).rollback();
-        verify(dbConnection, never()).commit();
-        verify(databaseProcessor, never()).innerExecute();
+        // Mock ResourceBundle to throw MissingResourceException
+        when(mockResourceBundle.getString(queryKey)).thenThrow(new MissingResourceException(
+            "Key not found", "ResourceBundle", queryKey));
+        mockStatic(ResourceBundle.class);
+        when(ResourceBundle.getBundle(anyString())).thenReturn(mockResourceBundle);
+
+        // Act
+        P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile(queryKey);
+
+        // Assert: Expects MissingResourceException
     }
 
     @Test
-    public void testExecute_SQLException_ThrowsExitApplicationException() throws Exception {
+    public void testGetQueryFromPropertiesFile_NullBundle_InitializesBundle() {
         // Arrange
-        SQLException sqlException = new SQLException("Database error");
-        when(GlobalAtlentic.getLoanIQConnection()).thenReturn(dbConnection);
-        when(dataBaseTransaction.getRecordsBeansList()).thenThrow(sqlException);
+        String queryKey = "testQuery";
+        String rawQuery = "SELECT * FROM *liq_sh*.table1";
+        String expectedQuery = "SELECT * FROM liqSchema.table1";
 
-        // Act & Assert
-        try {
-            databaseProcessor.execute();
-            fail("Expected P06_TACC_01_ExitApplicationException");
-        } catch (P06_TACC_01_ExitApplicationException e) {
-            assertEquals("Database error", e.getMessage());
-            assertEquals(sqlException, e.getCause());
-        }
-        verify(dbConnection).setAutoCommit(false);
-        verify(dbConnection).rollback();
-        verify(dbConnection, never()).commit();
-        verify(databaseProcessor, never()).innerExecute();
+        // Mock ResourceBundle loading
+        when(mockResourceBundle.getString(queryKey)).thenReturn(rawQuery);
+        mockStatic(ResourceBundle.class);
+        when(ResourceBundle.getBundle(anyString())).thenReturn(mockResourceBundle);
+
+        // Act
+        String result = P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile(queryKey);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(expectedQuery, result);
+        verifyStatic(ResourceBundle.class, times(1));
+        ResourceBundle.getBundle(anyString());
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testGetQueryFromPropertiesFile_NullQueryKey() {
+        // Act
+        P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile(null);
+
+        // Assert: Expects NullPointerException
     }
 
     @Test
-    public void testExecute_CustomSQLException_ThrowsExitApplicationException() throws Exception {
+    public void testGetQueryFromPropertiesFile_NoPlaceholders() {
         // Arrange
-        P06_IACC_01_SQLException customException = new P06_IACC_01_SQLException("Custom SQL error");
-        when(GlobalAtlentic.getLoanIQConnection()).thenReturn(dbConnection);
-        when(dataBaseTransaction.getRecordsBeansList()).thenThrow(customException);
+        String queryKey = "noPlaceholderQuery";
+        String rawQuery = "SELECT * FROM table1";
+        String expectedQuery = "SELECT * FROM table1";
 
-        // Act & Assert
-        try {
-            databaseProcessor.execute();
-            fail("Expected P06_TACC_01_ExitApplicationException");
-        } catch (P06_TACC_01_ExitApplicationException e) {
-            assertEquals("Custom SQL error", e.getMessage());
-            assertEquals(customException, e.getCause());
-        }
-        verify(dbConnection).setAutoCommit(false);
-        verify(dbConnection).rollback();
-        verify(dbConnection, never()).commit();
-        verify(databaseProcessor, never()).innerExecute();
-    }
+        // Mock ResourceBundle loading
+        when(mockResourceBundle.getString(queryKey)).thenReturn(rawQuery);
+        mockStatic(ResourceBundle.class);
+        when(ResourceBundle.getBundle(anyString())).thenReturn(mockResourceBundle);
 
-    @Test
-    public void testExecute_RollbackFails_StillThrowsOriginalException() throws Exception {
-        // Arrange
-        SQLException sqlException = new SQLException("Database error");
-        SQLException rollbackException = new SQLException("Rollback failed");
-        when(GlobalAtlentic.getLoanIQConnection()).thenReturn(dbConnection);
-        when(dataBaseTransaction.getRecordsBeansList()).thenThrow(sqlException);
-        doThrow(rollbackException).when(dbConnection).rollback();
+        // Act
+        String result = P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile(queryKey);
 
-        // Act & Assert
-        try {
-            databaseProcessor.execute();
-            fail("Expected P06_TACC_01_ExitApplicationException");
-        } catch (P06_TACC_01_ExitApplicationException e) {
-            assertEquals("Database error", e.getMessage());
-            assertEquals(sqlException, e.getCause());
-            // Rollback exception is caught and not propagated
-        }
-        verify(dbConnection).setAutoCommit(false);
-        verify(dbConnection).rollback();
-        verify(dbConnection, never()).commit();
-        verify(databaseProcessor, never()).innerExecute();
-    }
-
-    @Test
-    public void testExecute_NullConnection_DoesNotAttemptRollback() throws Exception {
-        // Arrange
-        IOException ioException = new IOException("Connection failed");
-        when(GlobalAtlentic.getLoanIQConnection()).thenThrow(ioException);
-
-        // Act & Assert
-        try {
-            databaseProcessor.execute();
-            fail("Expected P06_TACC_01_ExitApplicationException");
-        } catch (P06_TACC_01_ExitApplicationException e) {
-            assertEquals("Connection failed", e.getMessage());
-            assertEquals(ioException, e.getCause());
-        }
-        verify(dbConnection, never()).rollback();
-        verify(dbConnection, never()).commit();
-        verify(databaseProcessor, never()).innerExecute();
-    }
-}
-
-
-
-
-
-
-@RunWith(MockitoJUnitRunner.class)
-public class ReportExecutorTest {
-
-    @InjectMocks
-    private ReportExecutor reportExecutor;
-
-    @Mock
-    private Connection mockConnection;
-
-    @Mock
-    private DataBaseTransaction mockTransaction;
-
-    @Mock
-    private List<RecordBean> mockRecordBeansList;
-
-    @Before
-    public void setup() throws Exception {
-        PowerMockito.mockStatic(GlobalAtlantic.class);
-        when(GlobalAtlantic.getLoanIQConnection()).thenReturn(mockConnection);
-        when(mockConnection.getAutoCommit()).thenReturn(true);
-    }
-
-    @Test
-    public void testExecute_SuccessfulExecution() throws Exception {
-        doNothing().when(mockConnection).setAutoCommit(false);
-        doNothing().when(mockConnection).commit();
-        doNothing().when(reportExecutor).initializeDataBaseTransaction(mockConnection);
-        when(reportExecutor.getDataBaseTransaction()).thenReturn(mockTransaction);
-        when(mockTransaction.getRecordsBeansList()).thenReturn(mockRecordBeansList);
-        doNothing().when(reportExecutor).innerExecute();
-        when(reportExecutor.applyCommit()).thenReturn(false);
-
-        reportExecutor.execute();
-
-        verify(mockConnection).setAutoCommit(false);
-        verify(mockConnection).commit();
-    }
-
-    @Test(expected = P06_TACC_01_ExitApplicationException.class)
-    public void testExecute_IOException_ThrowsCustomException() throws Exception {
-        doThrow(new IOException("IO error")).when(reportExecutor).initializeDataBaseTransaction(mockConnection);
-        when(GlobalAtlantic.getLoanIQConnection()).thenReturn(mockConnection);
-
-        reportExecutor.execute();
-    }
-
-    @Test
-    public void testExecute_SQLException_DoesNotThrowCustomException() throws Exception {
-        doThrow(new SQLException("SQL error")).when(reportExecutor).initializeDataBaseTransaction(mockConnection);
-        when(GlobalAtlantic.getLoanIQConnection()).thenReturn(mockConnection);
-
-        reportExecutor.execute(); // Should not throw P06_TACC_01_ExitApplicationException
+        // Assert
+        assertNotNull(result);
+        assertEquals(expectedQuery, result);
+        verify(mockResourceBundle, times(1)).getString(queryKey);
     }
 }
