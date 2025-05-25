@@ -1,21 +1,47 @@
+package com.example.test;
+
 import org.junit.Before;
 import org.junit.Test;
+import com.example.core.CommitHandler;
 import static org.junit.Assert.assertFalse;
 
 public class CommitHandlerTest {
 
-    private CommitHandler commitHandler;
+    private TestCommitHandler testCommitHandler;
+
+    // Subclass to access protected method
+    private static class TestCommitHandler extends CommitHandler {
+        public boolean callApplyCommit() {
+            return applyCommit();
+        }
+    }
 
     @Before
     public void setUp() {
-        // Initialize the class containing the applyCommit method
-        commitHandler = new CommitHandler();
+        testCommitHandler = new TestCommitHandler();
     }
 
     @Test
     public void testApplyCommitReturnsFalse() {
-        // Test that applyCommit returns false as expected
-        boolean result = commitHandler.applyCommit();
+        // Basic test: verify applyCommit returns false
+        boolean result = testCommitHandler.callApplyCommit();
         assertFalse("applyCommit should return false", result);
+    }
+
+    @Test
+    public void testApplyCommitMultipleInvocations() {
+        // Test multiple invocations to ensure consistent behavior
+        for (int i = 0; i < 3; i++) {
+            boolean result = testCommitHandler.callApplyCommit();
+            assertFalse("applyCommit should return false on invocation " + (i + 1), result);
+        }
+    }
+
+    @Test
+    public void testApplyCommitNewInstance() {
+        // Test with a fresh instance to ensure no state dependency
+        TestCommitHandler freshInstance = new TestCommitHandler();
+        boolean result = freshInstance.callApplyCommit();
+        assertFalse("applyCommit should return false on new instance", result);
     }
 }
