@@ -1,93 +1,69 @@
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.io.IOException;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.Collections;
-
+import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
-import static org.junit.jupiter.api.Assertions.*;
 
-@ExtendWith(MockitoExtension.class)
-class YourServiceTest {
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
-    @InjectMocks
-    private YourServiceClass service;
+// Assuming these are part of your framework
+// import com.yourpackage.DBStatement;
+// import com.yourpackage.IDBAccess;
+// import com.yourpackage.DBResult;
+// import com.yourpackage.Constants;
+// import com.yourpackage.AtlasQueryLoader;
+
+public class ExistsAliasTypeStatementTest {
 
     @Mock
-    private Connection mockConnection;
+    private IDBAccess mockAccess;
 
     @Mock
-    private YourTransactionClass mockTransaction;
+    private DBResult mockResult;
 
-    @BeforeEach
-    void setup() throws Exception {
-        // Mock static methods
-        mockStatic(GlobalAtlantic.class);
-        mockStatic(DBUtils.class);
+    private ExistsAliasTypeStatement statement;
 
-        when(GlobalAtlantic.getLoanIQConnection()).thenReturn(mockConnection);
-        when(mockConnection.getAutoCommit()).thenReturn(true);
-        doNothing().when(mockConnection).setAutoCommit(false);
+    @Before
+    public void setUp() {
+        // Initialize mocks
+        MockitoAnnotations.initMocks(this);
 
-        // Mock method calls
-        when(service.getDataBaseTransaction()).thenReturn(mockTransaction);
-        when(mockTransaction.getRecordsBeansList()).thenReturn(Collections.emptyList());
+        // Ensure environment variable logic doesn't cause NullPointerException
+        String envValue = System.getenv("MY_ENV_VAR");
+        String safeValue = (envValue != null) ? envValue.trim() : "default";
 
-        doNothing().when(service).initializeDataBaseTransaction(mockConnection);
-        doNothing().when(service).innerExecute();
-        when(service.applyCommit()).thenReturn(true);
-        when(service.getLevelNumber()).thenReturn(1);
+        // Initialize the statement with safe/default values
+        statement = new ExistsAliasTypeStatement("testRmpm", "testAlias");
     }
 
     @Test
-    void testExecute_Successful() throws Exception {
-        assertDoesNotThrow(() -> service.execute());
+    public void testAliasAlreadyExistsTrue() {
+        // Simulate that alias type exists (count > 0)
+        when(mockResult.getInt(Constants.ALIAS_TYPE_COUNT)).thenReturn(2);
 
-        verify(mockConnection).commit();
-        verify(mockConnection, never()).rollback();
-        verifyStatic(DBUtils.class);
-        DBUtils.closeConnexion(mockConnection, null, null);
+        statement.record(mockAccess, mockResult);
+
+        assertTrue(getAliasAlreadyExists(statement));
     }
 
     @Test
-    void testExecute_IOException() throws Exception {
-        doThrow(new IOException("I/O Error")).when(service).innerExecute();
+    public void testAliasAlreadyExistsFalse() {
+        // Simulate alias type doesn't exist (count = 0)
+        when(mockResult.getInt(Constants.ALIAS_TYPE_COUNT)).thenReturn(0);
 
-        P06_IACC_01_ExitApplicationException ex = assertThrows(
-            P06_IACC_01_ExitApplicationException.class,
-            () -> service.execute()
-        );
+        statement.record(mockAccess, mockResult);
 
-        assertTrue(ex.getMessage().contains("I/O Error"));
-        verify(mockConnection).rollback();
+        assertFalse(getAliasAlreadyExists(statement));
     }
 
-    @Test
-    void testExecute_SQLException() throws Exception {
-        doThrow(new SQLException("SQL Error")).when(service).innerExecute();
-
-        P06_IACC_01_ExitApplicationException ex = assertThrows(
-            P06_IACC_01_ExitApplicationException.class,
-            () -> service.execute()
-        );
-
-        assertTrue(ex.getMessage().contains("SQL Error"));
-        verify(mockConnection).rollback();
-    }
-
-    @Test
-    void testExecute_WithNullConnectionOnError() throws Exception {
-        mockStatic(GlobalAtlantic.class).when(GlobalAtlantic::getLoanIQConnection).thenReturn(null);
-
-        doThrow(new SQLException("Connection error")).when(service).innerExecute();
-
-        assertThrows(Exception.class, () -> service.execute());
-        verifyStatic(DBUtils.class);
-        DBUtils.closeConnexion(null, null, null);
+    // Helper method using reflection to access private field if no getter exists
+    private boolean getAliasAlreadyExists(ExistsAliasTypeStatement statement) {
+        try {
+            java.lang.reflect.Field field = ExistsAliasTypeStatement.class.getDeclaredField("aliasAlreadyExists");
+            field.setAccessible(true);
+            return field.getBoolean(statement);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to access aliasAlreadyExists", e);
+        }
     }
 }
