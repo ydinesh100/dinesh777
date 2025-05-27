@@ -1,47 +1,55 @@
-package com.example.test;
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
 import org.junit.Before;
 import org.junit.Test;
-import com.example.core.CommitHandler;
-import static org.junit.Assert.assertFalse;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
-public class CommitHandlerTest {
+public class ExistsAliasTypeStatementTest {
 
-    private TestCommitHandler testCommitHandler;
+    @Mock
+    private IDBAccess mockAccess;
 
-    // Subclass to access protected method
-    private static class TestCommitHandler extends CommitHandler {
-        public boolean callApplyCommit() {
-            return applyCommit();
-        }
-    }
+    @Mock
+    private DBResult mockResult;
+
+    private ExistsAliasTypeStatement statement;
 
     @Before
     public void setUp() {
-        testCommitHandler = new TestCommitHandler();
+        MockitoAnnotations.initMocks(this);
+        statement = new ExistsAliasTypeStatement("testRmpm", "testAlias");
     }
 
     @Test
-    public void testApplyCommitReturnsFalse() {
-        // Basic test: verify applyCommit returns false
-        boolean result = testCommitHandler.callApplyCommit();
-        assertFalse("applyCommit should return false", result);
+    public void testAliasAlreadyExistsTrue() {
+        // Simulate that the alias count in DBResult is > 0
+        when(mockResult.getInt(Constants.ALIAS_TYPE_COUNT)).thenReturn(1);
+
+        statement.record(mockAccess, mockResult);
+
+        assertTrue(getAliasAlreadyExists(statement));
     }
 
     @Test
-    public void testApplyCommitMultipleInvocations() {
-        // Test multiple invocations to ensure consistent behavior
-        for (int i = 0; i < 3; i++) {
-            boolean result = testCommitHandler.callApplyCommit();
-            assertFalse("applyCommit should return false on invocation " + (i + 1), result);
+    public void testAliasAlreadyExistsFalse() {
+        // Simulate that the alias count in DBResult is 0
+        when(mockResult.getInt(Constants.ALIAS_TYPE_COUNT)).thenReturn(0);
+
+        statement.record(mockAccess, mockResult);
+
+        assertFalse(getAliasAlreadyExists(statement));
+    }
+
+    // Reflection helper if aliasAlreadyExists is private without getter
+    private boolean getAliasAlreadyExists(ExistsAliasTypeStatement statement) {
+        try {
+            java.lang.reflect.Field field = ExistsAliasTypeStatement.class.getDeclaredField("aliasAlreadyExists");
+            field.setAccessible(true);
+            return field.getBoolean(statement);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to access aliasAlreadyExists", e);
         }
-    }
-
-    @Test
-    public void testApplyCommitNewInstance() {
-        // Test with a fresh instance to ensure no state dependency
-        TestCommitHandler freshInstance = new TestCommitHandler();
-        boolean result = freshInstance.callApplyCommit();
-        assertFalse("applyCommit should return false on new instance", result);
     }
 }
