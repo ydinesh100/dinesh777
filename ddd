@@ -1,5 +1,6 @@
-import org.junit.Test;
-import static org.junit.Assert.*;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
 import java.lang.reflect.Method;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -7,36 +8,37 @@ import java.util.Date;
 public class FeedBuilderTest {
 
     @Test
-    public void testFeedHeaderUsingReflection() throws Exception {
+    void testFeedHeaderUsingReflection() throws Exception {
         // Load the class
-        Class<?> clazz = Class.forName("FeedBuilder"); // Change package if needed
+        Class<?> clazz = Class.forName("FeedBuilder");
 
-        // Create an instance using reflection
+        // Create an instance
         Object instance = clazz.getDeclaredConstructor().newInstance();
 
-        // Access and invoke the protected method feedHeader()
-        Method feedHeaderMethod = clazz.getDeclaredMethod("feedHeader");
-        feedHeaderMethod.setAccessible(true);
-        feedHeaderMethod.invoke(instance);
+        // Invoke the protected method: feedHeader()
+        Method feedHeader = clazz.getDeclaredMethod("feedHeader");
+        feedHeader.setAccessible(true);
+        feedHeader.invoke(instance);
 
-        // Access the getOutput method
-        Method getOutputMethod = clazz.getMethod("getOutput");
-        String output = (String) getOutputMethod.invoke(instance);
+        // Get the output using public getter
+        Method getOutput = clazz.getMethod("getOutput");
+        String output = (String) getOutput.invoke(instance);
 
-        // Validate output
+        // Validate length
         int expectedLength = 1 + 8 + 12 + 4 + 225;
-        assertEquals(expectedLength, output.length());
+        assertEquals(expectedLength, output.length(), "Output length should be " + expectedLength);
 
-        assertEquals("0", output.substring(0, 1).trim());
-        assertEquals("ATLANTIC LIQ", output.substring(9, 21).trim());
-        assertEquals("0001", output.substring(21, 25).trim());
+        // Validate specific content
+        assertEquals("0", output.substring(0, 1).trim(), "First field should be 0");
+        assertEquals("ATLANTIC LIQ", output.substring(9, 21).trim(), "Should contain ATLANTIC LIQ");
+        assertEquals("0001", output.substring(21, 25).trim(), "Should contain 0001");
 
-        // Validate that date can be parsed
+        // Validate date field is parseable
         String dateStr = output.substring(1, 9).trim();
         try {
             new SimpleDateFormat("EEE MMM dd").parse(dateStr);
         } catch (Exception e) {
-            fail("Date format is incorrect: " + dateStr);
+            fail("Date field format is invalid: " + dateStr);
         }
     }
 }
