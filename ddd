@@ -1,69 +1,42 @@
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
-
-import org.junit.Before;
 import org.junit.Test;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import static org.junit.Assert.*;
+import java.lang.reflect.Method;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
-// Assuming these are part of your framework
-// import com.yourpackage.DBStatement;
-// import com.yourpackage.IDBAccess;
-// import com.yourpackage.DBResult;
-// import com.yourpackage.Constants;
-// import com.yourpackage.AtlasQueryLoader;
-
-public class ExistsAliasTypeStatementTest {
-
-    @Mock
-    private IDBAccess mockAccess;
-
-    @Mock
-    private DBResult mockResult;
-
-    private ExistsAliasTypeStatement statement;
-
-    @Before
-    public void setUp() {
-        // Initialize mocks
-        MockitoAnnotations.initMocks(this);
-
-        // Ensure environment variable logic doesn't cause NullPointerException
-        String envValue = System.getenv("MY_ENV_VAR");
-        String safeValue = (envValue != null) ? envValue.trim() : "default";
-
-        // Initialize the statement with safe/default values
-        statement = new ExistsAliasTypeStatement("testRmpm", "testAlias");
-    }
+public class FeedBuilderTest {
 
     @Test
-    public void testAliasAlreadyExistsTrue() {
-        // Simulate that alias type exists (count > 0)
-        when(mockResult.getInt(Constants.ALIAS_TYPE_COUNT)).thenReturn(2);
+    public void testFeedHeaderUsingReflection() throws Exception {
+        // Load the class
+        Class<?> clazz = Class.forName("FeedBuilder"); // Change package if needed
 
-        statement.record(mockAccess, mockResult);
+        // Create an instance using reflection
+        Object instance = clazz.getDeclaredConstructor().newInstance();
 
-        assertTrue(getAliasAlreadyExists(statement));
-    }
+        // Access and invoke the protected method feedHeader()
+        Method feedHeaderMethod = clazz.getDeclaredMethod("feedHeader");
+        feedHeaderMethod.setAccessible(true);
+        feedHeaderMethod.invoke(instance);
 
-    @Test
-    public void testAliasAlreadyExistsFalse() {
-        // Simulate alias type doesn't exist (count = 0)
-        when(mockResult.getInt(Constants.ALIAS_TYPE_COUNT)).thenReturn(0);
+        // Access the getOutput method
+        Method getOutputMethod = clazz.getMethod("getOutput");
+        String output = (String) getOutputMethod.invoke(instance);
 
-        statement.record(mockAccess, mockResult);
+        // Validate output
+        int expectedLength = 1 + 8 + 12 + 4 + 225;
+        assertEquals(expectedLength, output.length());
 
-        assertFalse(getAliasAlreadyExists(statement));
-    }
+        assertEquals("0", output.substring(0, 1).trim());
+        assertEquals("ATLANTIC LIQ", output.substring(9, 21).trim());
+        assertEquals("0001", output.substring(21, 25).trim());
 
-    // Helper method using reflection to access private field if no getter exists
-    private boolean getAliasAlreadyExists(ExistsAliasTypeStatement statement) {
+        // Validate that date can be parsed
+        String dateStr = output.substring(1, 9).trim();
         try {
-            java.lang.reflect.Field field = ExistsAliasTypeStatement.class.getDeclaredField("aliasAlreadyExists");
-            field.setAccessible(true);
-            return field.getBoolean(statement);
+            new SimpleDateFormat("EEE MMM dd").parse(dateStr);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to access aliasAlreadyExists", e);
+            fail("Date format is incorrect: " + dateStr);
         }
     }
 }
