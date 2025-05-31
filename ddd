@@ -1,56 +1,88 @@
+import static org.mockito.Mockito.*;
+import static org.junit.Assert.*;
+
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.List;
+
 import org.junit.Before;
 import org.junit.Test;
 
-import java.sql.Connection;
+import com.bnpparibas.atlantic.irep.ech.bean.F06_IREP_01_EchRecordBean;
+import com.bnpparibas.atlantic.irep.ech.util.exception.F06_IREP_01_ExitApplicationException;
+import com.bnpparibas.atlantic.irep.ech.level.P06_IREP_01_Level;
+import com.bnpparibas.atlantic.irep.ech.level.P06_IREP_01_DBTransaction;
 
-import static org.junit.Assert.*;
+public class P06_IREP_01_LevelTest {
 
-public class P06_IACC_01_LevelTest {
+    private TestLevel level;
+    private P06_IREP_01_DBTransaction mockTransaction;
+    private Connection mockConnection;
 
-    private TestableLevel level;
+    private static class TestLevel extends P06_IREP_01_Level<P06_IREP_01_DBTransaction> {
+
+        private final P06_IREP_01_DBTransaction transactionMock;
+        private final boolean shouldApplyCommit;
+
+        public TestLevel(P06_IREP_01_DBTransaction transactionMock, boolean shouldApplyCommit) {
+            this.transactionMock = transactionMock;
+            this.shouldApplyCommit = shouldApplyCommit;
+        }
+
+        @Override
+        protected int getLevelNumber() {
+            return 1;
+        }
+
+        @Override
+        protected void initializeDataBaseTransaction(Connection connection) {
+            this.g_o_databaseTransaction = transactionMock;
+        }
+
+        @Override
+        protected boolean apply() {
+            return true; // Simulate processing
+        }
+
+        @Override
+        protected boolean applyCommit() {
+            return shouldApplyCommit;
+        }
+    }
 
     @Before
-    public void setUp() {
-        level = new TestableLevel();
+    public void setUp() throws Exception {
+        mockTransaction = mock(P06_IREP_01_DBTransaction.class);
+        mockConnection = mock(Connection.class);
+
+        // Mock record bean list
+        List<F06_IREP_01_EchRecordBean> mockRecordList = Arrays.asList(new F06_IREP_01_EchRecordBean());
+        when(mockTransaction.getRecordBeansList(any(), any())).thenReturn(mockRecordList);
+
+        // Simulate GlobalAtlantic.getLoanIQConnection() manually since it's static
+        // We'll inject connection directly in initialize method
+
+        level = new TestLevel(mockTransaction, true);
     }
 
     @Test
-    public void testGetDataBaseTransaction_ReturnsSetObject() {
-        DummyTransaction tx = new DummyTransaction();
-        level.g_o_dataBaseTransaction = tx;
-        assertSame(tx, level.getDataBaseTransaction());
+    public void testExecuteSuccessFlow() throws Exception {
+        // Execute
+        level.execute();
+
+        // Verifications
+        verify(mockTransaction).getRecordBeansList(any(), any());
+        assertNotNull(level.g_o_recordBeanList);
+        assertEquals(1, level.g_o_recordBeanList.size());
     }
 
-    @Test
-    public void testGetDataBaseTransaction_WhenNull() {
-        level.g_o_dataBaseTransaction = null;
-        assertNull(level.getDataBaseTransaction());
-    }
+    @Test(expected = F06_IREP_01_ExitApplicationException.class)
+    public void testExecuteRollbackOnCommitFailure() throws Exception {
+        // New level with commit failure
+        TestLevel failCommitLevel = new TestLevel(mockTransaction, false);
 
-    @Test
-    public void testInitializeDatabaseTransaction_SetsDummyTransaction() {
-        Connection mockConnection = null; // Can’t mock without libraries
-        level.initializeDatabaseTransaction(mockConnection);
-        assertNotNull(level.getDataBaseTransaction());
-        assertTrue(level.getDataBaseTransaction() instanceof DummyTransaction);
-    }
-
-    @Test
-    public void testGetLevelNumber_ReturnsExpectedValue() {
-        assertEquals(42, level.getLevelNumber());
-    }
-
-    @Test
-    public void testApplyCommit_ReturnsTrue() {
-        assertTrue(level.applyCommit());
-    }
-
-    @Test
-    public void testInnerExecuteDoesNotThrow() {
-        try {
-            level.innerExecute();
-        } catch (Exception e) {
-            fail("innerExecute() should not throw an exception.");
-        }
+        failCommitLevel.execute();
     }
 }
