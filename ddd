@@ -1,157 +1,88 @@
+package com.hupparibas.atlentic.iacc.bopr.level2Test;
+
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_BoprStringBuffer;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.text.DecimalFormat;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.Date;
 
 import static org.junit.Assert.*;
 
-public class AppendRecordTest {
+// Test class
+public class P06_IACC_01_BoprStringBufferTest {
 
-    private TestableAppendRecord testInstance;
-    private P06_LACC_01_BoprRecordBean recordBean;
+    private P06_IACC_01_BoprStringBuffer boprStringBuffer;
 
     @Before
-    public void setUp() {
-        testInstance = new TestableAppendRecord();
+    public void setup() throws Exception {
+        // Instantiate using reflection since constructor is protected
+        Class<?> clazz = Class.forName("com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_BoprStringBuffer");
+        Constructor<?> constructor = clazz.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        boprStringBuffer = (P06_IACC_01_BoprStringBuffer) constructor.newInstance();
+    }
 
-        recordBean = new P06_LACC_01_BoprRecordBean();
-        recordBean.setSenderServiceCode("SC123");
-        recordBean.setOperationReference("OP12345678901234567890");
-        recordBean.setCountryCode("FR");
-        recordBean.setEffectiveDate("20250531");
-        recordBean.setAmountCurrency("EUR");
+    @Test
+    public void testAppendRecord_shouldAppendFormattedRecord() throws Exception {
+        // Create a mock bean with dummy values
+        P06_IACC_01_BoprRecordBeanMock recordBean = new P06_IACC_01_BoprRecordBeanMock();
+        recordBean.setSenderServiceCode("ABC123");
+        recordBean.setOperationReference("OPREF00001");
+        recordBean.setCountryCode("IN");
+        recordBean.setEffectiveDate("01012025");
+        recordBean.setAmountCurrency("INR");
         recordBean.setCashflowDirection("FROM");
-        recordBean.setAmount(12345.67);
-        recordBean.setAmountInBranchCurrency(12345.67);
+        recordBean.setAmount(123456.78);
+        recordBean.setAmountInBranchCurrency(99999.99);
+
+        // Use reflection to invoke protected appendRecord
+        Method method = P06_IACC_01_BoprStringBuffer.class.getDeclaredMethod(
+                "appendRecord",
+                Class.forName("com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean"),
+                String.class
+        );
+        method.setAccessible(true);
+        method.invoke(boprStringBuffer, recordBean, "INR");
+
+        // Access internal buffer
+        Field sbField = P06_IACC_01_BoprStringBuffer.class.getDeclaredField("g_o_sb");
+        sbField.setAccessible(true);
+        StringBuffer sb = (StringBuffer) sbField.get(boprStringBuffer);
+
+        String result = sb.toString();
+
+        // Assertions
+        assertNotNull(result);
+        assertTrue(result.contains("ABC123"));
+        assertTrue(result.contains("OPREF00001"));
+        assertTrue(result.contains("IN"));
+        assertTrue(result.contains("01012025"));
+        assertTrue(result.contains("INR"));
+        assertTrue(result.contains("123456")); // part of amount
+        assertTrue(result.contains("99999"));  // part of branch amount
     }
 
-    @Test
-    public void testAppendRecordContent() {
-        testInstance.appendRecord(recordBean, "INR");
+    // Stub/mock class for the bean
+    public static class P06_IACC_01_BoprRecordBeanMock extends com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean {
 
-        String result = testInstance.getOutput();
-        assertTrue(result.contains("SC123"));  // Sender Code
-        assertTrue(result.contains("OP12345678901234567890")); // Operation Ref
-        assertTrue(result.contains("FR")); // Country Code
-        assertTrue(result.contains("20250531")); // Effective Date
-        assertTrue(result.contains("EUR")); // Amount Currency
-        assertTrue(result.contains("I")); // Direction
-        assertTrue(result.contains("INR")); // Branch Currency
-    }
-
-    @Test
-    public void testTransactionCountAndAmountSum() {
-        assertEquals(0, testInstance.getTransactionCount());
-        assertEquals(0.0, testInstance.getTotalAmount(), 0.001);
-
-        testInstance.appendRecord(recordBean, "INR");
-
-        assertEquals(1, testInstance.getTransactionCount());
-        assertEquals(12345.67, testInstance.getTotalAmount(), 0.01);
-    }
-
-    // Dummy subclass to test appendRecord
-    private static class TestableAppendRecord {
-
-        private int g_i_transactionsNumber = 0;
-        private double gd_sumAmounts_originalCurrency = 0.0;
-        private StringBuilder buffer = new StringBuilder();
-        private DecimalFormat decimalFormat = new DecimalFormat("0.00");
-
-        protected void appendRecord(final P06_LACC_01_BoprRecordBean bean, final String branchCurrency) {
-            this.g_i_transactionsNumber++;
-            appendNewLine();
-            append(1, 1);
-            append("I", 1);
-            append(bean.getSenderServiceCode(), 6);
-            append(bean.getOperationReference(), 28);
-            append(bean.getCountryCode(), 2);
-            append("", 34);
-            append("", 34);
-            append("", 50);
-            append("130", 3);
-            append(bean.getEffectiveDate(), 8);
-            append(bean.getAmountCurrency(), 3);
-            append("FROM".equals(bean.getCashflowDirection()) ? "I" : "0", 1);
-            append(String.valueOf(bean.getAmount()));
-            append(branchCurrency, 3);
-
-            if (bean.getAmountInBranchCurrency() != null) {
-                this.gd_sumAmounts_originalCurrency += Double.valueOf(
-                        this.decimalFormat.format(bean.getAmount()).replace('.', '.'));
-            }
+        public P06_IACC_01_BoprRecordBeanMock() {
+            super(); // If your real class needs arguments, mock them here
         }
 
-        private void append(String value, int width) {
-            if (value == null) value = "";
-            buffer.append(String.format("%-" + width + "s", value));
-        }
+        // Setters (you can override or create public ones if needed)
+        public void setSenderServiceCode(String val) { this.senderServiceCode = val; }
+        public void setOperationReference(String val) { this.operationReference = val; }
+        public void setCountryCode(String val) { this.countryCode = val; }
+        public void setEffectiveDate(String val) { this.effectiveDate = val; }
+        public void setAmountCurrency(String val) { this.amountCurrency = val; }
+        public void setCashflowDirection(String val) { this.cashflowDirection = val; }
+        public void setAmount(double val) { this.amount = val; }
+        public void setAmountInBranchCurrency(Double val) { this.amountInBranchCurrency = val; }
 
-        private void append(int value, int width) {
-            append(String.valueOf(value), width);
-        }
-
-        private void appendNewLine() {
-            buffer.append("\n");
-        }
-
-        public String getOutput() {
-            return buffer.toString();
-        }
-
-        public int getTransactionCount() {
-            return g_i_transactionsNumber;
-        }
-
-        public double getTotalAmount() {
-            return gd_sumAmounts_originalCurrency;
-        }
-    }
-
-    // Minimal POJO for the bean
-    private static class P06_LACC_01_BoprRecordBean {
-        private String senderServiceCode;
-        private String operationReference;
-        private String countryCode;
-        private String effectiveDate;
-        private String amountCurrency;
-        private String cashflowDirection;
-        private Double amount;
-        private Double amountInBranchCurrency;
-
-        // Getters and Setters
-        public String getSenderServiceCode() { return senderServiceCode; }
-        public void setSenderServiceCode(String senderServiceCode) { this.senderServiceCode = senderServiceCode; }
-
-        public String getOperationReference() { return operationReference; }
-        public void setOperationReference(String operationReference) { this.operationReference = operationReference; }
-
-        public String getCountryCode() { return countryCode; }
-        public void setCountryCode(String countryCode) { this.countryCode = countryCode; }
-
-        public String getEffectiveDate() { return effectiveDate; }
-        public void setEffectiveDate(String effectiveDate) { this.effectiveDate = effectiveDate; }
-
-        public String getAmountCurrency() { return amountCurrency; }
-        public void setAmountCurrency(String amountCurrency) { this.amountCurrency = amountCurrency; }
-
-        public String getCashflowDirection() { return cashflowDirection; }
-        public void setCashflowDirection(String cashflowDirection) { this.cashflowDirection = cashflowDirection; }
-
-        public Double getAmount() { return amount; }
-        public void setAmount(Double amount) { this.amount = amount; }
-
-        public Double getAmountInBranchCurrency() { return amountInBranchCurrency; }
-        public void setAmountInBranchCurrency(Double amountInBranchCurrency) { this.amountInBranchCurrency = amountInBranchCurrency; }
+        // Assumes fields like senderServiceCode, etc. exist and are accessible
+        // If not, use reflection to set private fields
     }
 }
-
-private P06_LACC_01_BoprRecordBean recordBean;
-
-@Before
-public void setUp() {
-    recordBean = new P06_LACC_01_BoprRecordBean();
-    // set fields...
-}
-
-
