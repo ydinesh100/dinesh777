@@ -1,24 +1,78 @@
-import java.lang.reflect.Field;
+import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.*;
+
 import java.lang.reflect.Method;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
 
-@Test
-public void testAppendNewLine_whenBufferNotEmpty() throws Exception {
-    // Get reference to private field g_o_sb
-    Field sbField = P06_IACC_01_BoprStringBuffer.class.getDeclaredField("g_o_sb");
-    sbField.setAccessible(true);
-    StringBuffer internalBuffer = (StringBuffer) sbField.get(boprStringBuffer);
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
-    // Add initial content to ensure buffer is not empty
-    internalBuffer.append("InitialContent");
+import com.bnpparibas.atlantic.common.utils.DBUtils;
+import com.bnpparibas.atlantic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
+import com.bnpparibas.atlantic.lacc.bopr.level.P06_IACC_01_DBTransaction;
+import com.bnpparibas.atlantic.lacc.bopr.util.exception.P06_IACC_01_SQLException;
 
-    // Invoke private method appendNewLine()
-    Method appendNewLineMethod = P06_IACC_01_BoprStringBuffer.class.getDeclaredMethod("appendNewLine");
-    appendNewLineMethod.setAccessible(true);
-    appendNewLineMethod.invoke(boprStringBuffer);
+public class P06_IACC_01_DBTransactionTest {
 
-    // Get updated buffer content
-    String result = internalBuffer.toString();
+    @Mock private Connection mockConnection;
+    @Mock private PreparedStatement mockPreparedStatement;
+    @Mock private ResultSet mockResultSet;
 
-    // Validate \r\n is appended
-    assertTrue(result.endsWith("InitialContent\r\n"));
+    private P06_IACC_01_DBTransaction dbTransaction;
+
+    @Before
+    public void setup() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
+        dbTransaction = new P06_IACC_01_DBTransaction(mockConnection) {
+            @Override
+            protected void feedingRecordBean(P06_IACC_01_BoprRecordBean p_o_recordBean, ResultSet p_o_resultSet) throws SQLException {
+                p_o_recordBean.setAmount(100);  // Simulate bean population
+            }
+
+            @Override
+            protected String getSelectQueryKey() {
+                return "test.query.key";
+            }
+
+            @Override
+            protected void innerFeedingRecordBean(P06_IACC_01_BoprRecordBean p_o_recordBean, ResultSet p_o_resultSet) {
+                // Not used in this test
+            }
+        };
+    }
+
+    @Test
+    public void testGetResultSetTrimmedString() throws Exception {
+        when(mockResultSet.getString("testField")).thenReturn(" testValue ");
+
+        Method method = P06_IACC_01_DBTransaction.class.getDeclaredMethod(
+            "getResultSetTrimmedString", ResultSet.class, String.class
+        );
+        method.setAccessible(true);
+
+        String result = (String) method.invoke(null, mockResultSet, "testField");
+
+        assertEquals("testValue", result);
+    }
+
+    @Test
+    public void testGetRecordsBeansList() throws Exception {
+        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+        when(mockResultSet.next()).thenReturn(true, false); // one record
+        when(mockResultSet.getString(anyString())).thenReturn("100"); // Simulate a field
+
+        List<P06_IACC_01_BoprRecordBean> resultList = dbTransaction.getRecordsBeansList();
+
+        assertEquals(1, resultList.size());
+        assertEquals(100, resultList.get(0).getAmount());
+    }
 }
