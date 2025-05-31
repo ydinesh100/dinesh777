@@ -1,62 +1,35 @@
-import static org.mockito.Mockito.*;
-import static org.junit.Assert.*;
-
-import java.text.DecimalFormat;
-
 import org.junit.Before;
 import org.junit.Test;
+import static org.junit.Assert.*;
 
-public class RecordAppenderTest {
+public class LineAppenderTest {
 
-    private RecordAppender recordAppender;
-    private F06_IACC_01_BoprRecordBean recordBean;
+    private LineAppender appender;
 
     @Before
     public void setUp() {
-        recordAppender = spy(new RecordAppender());
-        recordAppender.decimalFormat = new DecimalFormat("#0.00");
-        recordAppender.g_d_sumAmountsOriginalCurrency = 0.0;
-        recordAppender.g_d_sumAmountsBranchCurrency = 0.0;
-        recordAppender.transactionsNumber = 0;
-
-        recordBean = mock(F06_IACC_01_BoprRecordBean.class);
-        when(recordBean.getSenderServiceCode()).thenReturn("ABCDEF");
-        when(recordBean.getOperationReference()).thenReturn("OPREF1234567890123456789012");
-        when(recordBean.getCountryCode()).thenReturn("FR");
-        when(recordBean.getEffectiveDate()).thenReturn("20250530");
-        when(recordBean.getAmountCurrency()).thenReturn("EUR");
-        when(recordBean.getCashflowDirection()).thenReturn("FROM");
-        when(recordBean.getAmount()).thenReturn(1000.50);
-        when(recordBean.getAmountInBranchCurrency()).thenReturn(2000.75);
+        appender = new LineAppender();
     }
 
     @Test
-    public void testAppendRecord_WithValidData() {
-        recordAppender.appendRecord(recordBean, "USD");
-
-        verify(recordAppender).append("1", 1);
-        verify(recordAppender).append("ABCDEF", 6);
-        verify(recordAppender).append("OPREF1234567890123456789012", 28);
-        verify(recordAppender).append("FR", 2);
-        verify(recordAppender).append("EUR", 3);
-        verify(recordAppender).append("1", 1); // because FROM
-        verify(recordAppender).append(1000.50);
-        verify(recordAppender).append("USD", 3);
-        verify(recordAppender).append(2000.75);
-        verify(recordAppender).append("", 40);
-
-        assertEquals(1, recordAppender.transactionsNumber);
-        assertEquals(1000.50, recordAppender.g_d_sumAmountsOriginalCurrency, 0.01);
-        assertEquals(2000.75, recordAppender.g_d_sumAmountsBranchCurrency, 0.01);
+    public void testAppendNewLine_WhenStringBuilderIsEmpty() {
+        appender.setStringBuilder(new StringBuilder());
+        appender.appendNewLine();
+        assertEquals("", appender.getStringBuilder().toString());
     }
 
     @Test
-    public void testAppendRecord_WithNullAmountInBranchCurrency() {
-        when(recordBean.getAmountInBranchCurrency()).thenReturn(null);
+    public void testAppendNewLine_WhenStringBuilderHasContent() {
+        appender.setStringBuilder(new StringBuilder("Hello"));
+        appender.appendNewLine();
+        assertEquals("Hello\r\n", appender.getStringBuilder().toString());
+    }
 
-        recordAppender.appendRecord(recordBean, "USD");
-
-        verify(recordAppender).append("", 18);
-        assertEquals(0.0, recordAppender.g_d_sumAmountsBranchCurrency, 0.01);
+    @Test
+    public void testAppendNewLine_MultipleCalls() {
+        appender.setStringBuilder(new StringBuilder("Line1"));
+        appender.appendNewLine();
+        appender.appendNewLine();
+        assertEquals("Line1\r\n\r\n", appender.getStringBuilder().toString());
     }
 }
