@@ -1,7 +1,6 @@
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.*;
 
-import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -13,7 +12,6 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import com.bnpparibas.atlantic.common.utils.DBUtils;
 import com.bnpparibas.atlantic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
 import com.bnpparibas.atlantic.lacc.bopr.level.P06_IACC_01_DBTransaction;
 import com.bnpparibas.atlantic.lacc.bopr.util.exception.P06_IACC_01_SQLException;
@@ -32,47 +30,63 @@ public class P06_IACC_01_DBTransactionTest {
 
         dbTransaction = new P06_IACC_01_DBTransaction(mockConnection) {
             @Override
-            protected void feedingRecordBean(P06_IACC_01_BoprRecordBean p_o_recordBean, ResultSet p_o_resultSet) throws SQLException {
-                p_o_recordBean.setAmount(100);  // Simulate bean population
+            protected void feedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) throws SQLException {
+                bean.setAmount(rs.getInt("amount"));
             }
 
             @Override
             protected String getSelectQueryKey() {
-                return "test.query.key";
+                return "mock.query.key";
             }
 
             @Override
-            protected void innerFeedingRecordBean(P06_IACC_01_BoprRecordBean p_o_recordBean, ResultSet p_o_resultSet) {
-                // Not used in this test
+            protected void innerFeedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) {
+                // not used
             }
         };
     }
 
     @Test
-    public void testGetResultSetTrimmedString() throws Exception {
-        when(mockResultSet.getString("testField")).thenReturn(" testValue ");
+    public void testGetRecordsBeansList_withPositiveAmount() throws Exception {
+        // Arrange
+        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+        when(mockResultSet.next()).thenReturn(true, false);
+        when(mockResultSet.getInt("amount")).thenReturn(150); // > 0
 
-        Method method = P06_IACC_01_DBTransaction.class.getDeclaredMethod(
-            "getResultSetTrimmedString", ResultSet.class, String.class
-        );
-        method.setAccessible(true);
+        // Act
+        List<P06_IACC_01_BoprRecordBean> result = dbTransaction.getRecordsBeansList();
 
-        String result = (String) method.invoke(null, mockResultSet, "testField");
-
-        assertEquals("testValue", result);
+        // Assert
+        assertEquals(1, result.size());
+        assertEquals(150, result.get(0).getAmount());
     }
 
     @Test
-    public void testGetRecordsBeansList() throws Exception {
+    public void testGetRecordsBeansList_withZeroAmount() throws Exception {
+        // Arrange
         when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
         when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+        when(mockResultSet.next()).thenReturn(true, false);
+        when(mockResultSet.getInt("amount")).thenReturn(0); // Not added
 
-        when(mockResultSet.next()).thenReturn(true, false); // one record
-        when(mockResultSet.getString(anyString())).thenReturn("100"); // Simulate a field
+        // Act
+        List<P06_IACC_01_BoprRecordBean> result = dbTransaction.getRecordsBeansList();
 
-        List<P06_IACC_01_BoprRecordBean> resultList = dbTransaction.getRecordsBeansList();
+        // Assert
+        assertEquals(0, result.size());
+    }
 
-        assertEquals(1, resultList.size());
-        assertEquals(100, resultList.get(0).getAmount());
+    @Test
+    public void testGetRecordsBeansList_withSQLException() throws Exception {
+        // Arrange
+        when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("Mock SQL error"));
+
+        // Act & Assert
+        try {
+            dbTransaction.getRecordsBeansList();
+        } catch (P06_IACC_01_SQLException e) {
+            assertEquals("An error occurred while getting records to report Beans list I", e.getMessage().substring(0, 62));
+        }
     }
 }
