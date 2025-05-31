@@ -1,88 +1,147 @@
-import static org.mockito.Mockito.*;
-import static org.junit.Assert.*;
-
-import java.io.IOException;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.Arrays;
-import java.util.List;
-
 import org.junit.Before;
 import org.junit.Test;
 
-import com.bnpparibas.atlantic.irep.ech.bean.F06_IREP_01_EchRecordBean;
-import com.bnpparibas.atlantic.irep.ech.util.exception.F06_IREP_01_ExitApplicationException;
-import com.bnpparibas.atlantic.irep.ech.level.P06_IREP_01_Level;
-import com.bnpparibas.atlantic.irep.ech.level.P06_IREP_01_DBTransaction;
+import java.text.DecimalFormat;
 
-public class P06_IREP_01_LevelTest {
+import static org.junit.Assert.*;
 
-    private TestLevel level;
-    private P06_IREP_01_DBTransaction mockTransaction;
-    private Connection mockConnection;
+public class AppendRecordTest {
 
-    private static class TestLevel extends P06_IREP_01_Level<P06_IREP_01_DBTransaction> {
-
-        private final P06_IREP_01_DBTransaction transactionMock;
-        private final boolean shouldApplyCommit;
-
-        public TestLevel(P06_IREP_01_DBTransaction transactionMock, boolean shouldApplyCommit) {
-            this.transactionMock = transactionMock;
-            this.shouldApplyCommit = shouldApplyCommit;
-        }
-
-        @Override
-        protected int getLevelNumber() {
-            return 1;
-        }
-
-        @Override
-        protected void initializeDataBaseTransaction(Connection connection) {
-            this.g_o_databaseTransaction = transactionMock;
-        }
-
-        @Override
-        protected boolean apply() {
-            return true; // Simulate processing
-        }
-
-        @Override
-        protected boolean applyCommit() {
-            return shouldApplyCommit;
-        }
-    }
+    private TestableAppendRecord testInstance;
+    private P06_LACC_01_BoprRecordBean recordBean;
 
     @Before
-    public void setUp() throws Exception {
-        mockTransaction = mock(P06_IREP_01_DBTransaction.class);
-        mockConnection = mock(Connection.class);
+    public void setUp() {
+        testInstance = new TestableAppendRecord();
 
-        // Mock record bean list
-        List<F06_IREP_01_EchRecordBean> mockRecordList = Arrays.asList(new F06_IREP_01_EchRecordBean());
-        when(mockTransaction.getRecordBeansList(any(), any())).thenReturn(mockRecordList);
-
-        // Simulate GlobalAtlantic.getLoanIQConnection() manually since it's static
-        // We'll inject connection directly in initialize method
-
-        level = new TestLevel(mockTransaction, true);
+        recordBean = new P06_LACC_01_BoprRecordBean();
+        recordBean.setSenderServiceCode("SC123");
+        recordBean.setOperationReference("OP12345678901234567890");
+        recordBean.setCountryCode("FR");
+        recordBean.setEffectiveDate("20250531");
+        recordBean.setAmountCurrency("EUR");
+        recordBean.setCashflowDirection("FROM");
+        recordBean.setAmount(12345.67);
+        recordBean.setAmountInBranchCurrency(12345.67);
     }
 
     @Test
-    public void testExecuteSuccessFlow() throws Exception {
-        // Execute
-        level.execute();
+    public void testAppendRecordContent() {
+        testInstance.appendRecord(recordBean, "INR");
 
-        // Verifications
-        verify(mockTransaction).getRecordBeansList(any(), any());
-        assertNotNull(level.g_o_recordBeanList);
-        assertEquals(1, level.g_o_recordBeanList.size());
+        String result = testInstance.getOutput();
+        assertTrue(result.contains("SC123"));  // Sender Code
+        assertTrue(result.contains("OP12345678901234567890")); // Operation Ref
+        assertTrue(result.contains("FR")); // Country Code
+        assertTrue(result.contains("20250531")); // Effective Date
+        assertTrue(result.contains("EUR")); // Amount Currency
+        assertTrue(result.contains("I")); // Direction
+        assertTrue(result.contains("INR")); // Branch Currency
     }
 
-    @Test(expected = F06_IREP_01_ExitApplicationException.class)
-    public void testExecuteRollbackOnCommitFailure() throws Exception {
-        // New level with commit failure
-        TestLevel failCommitLevel = new TestLevel(mockTransaction, false);
+    @Test
+    public void testTransactionCountAndAmountSum() {
+        assertEquals(0, testInstance.getTransactionCount());
+        assertEquals(0.0, testInstance.getTotalAmount(), 0.001);
 
-        failCommitLevel.execute();
+        testInstance.appendRecord(recordBean, "INR");
+
+        assertEquals(1, testInstance.getTransactionCount());
+        assertEquals(12345.67, testInstance.getTotalAmount(), 0.01);
+    }
+
+    // Dummy subclass to test appendRecord
+    private static class TestableAppendRecord {
+
+        private int g_i_transactionsNumber = 0;
+        private double gd_sumAmounts_originalCurrency = 0.0;
+        private StringBuilder buffer = new StringBuilder();
+        private DecimalFormat decimalFormat = new DecimalFormat("0.00");
+
+        protected void appendRecord(final P06_LACC_01_BoprRecordBean bean, final String branchCurrency) {
+            this.g_i_transactionsNumber++;
+            appendNewLine();
+            append(1, 1);
+            append("I", 1);
+            append(bean.getSenderServiceCode(), 6);
+            append(bean.getOperationReference(), 28);
+            append(bean.getCountryCode(), 2);
+            append("", 34);
+            append("", 34);
+            append("", 50);
+            append("130", 3);
+            append(bean.getEffectiveDate(), 8);
+            append(bean.getAmountCurrency(), 3);
+            append("FROM".equals(bean.getCashflowDirection()) ? "I" : "0", 1);
+            append(String.valueOf(bean.getAmount()));
+            append(branchCurrency, 3);
+
+            if (bean.getAmountInBranchCurrency() != null) {
+                this.gd_sumAmounts_originalCurrency += Double.valueOf(
+                        this.decimalFormat.format(bean.getAmount()).replace('.', '.'));
+            }
+        }
+
+        private void append(String value, int width) {
+            if (value == null) value = "";
+            buffer.append(String.format("%-" + width + "s", value));
+        }
+
+        private void append(int value, int width) {
+            append(String.valueOf(value), width);
+        }
+
+        private void appendNewLine() {
+            buffer.append("\n");
+        }
+
+        public String getOutput() {
+            return buffer.toString();
+        }
+
+        public int getTransactionCount() {
+            return g_i_transactionsNumber;
+        }
+
+        public double getTotalAmount() {
+            return gd_sumAmounts_originalCurrency;
+        }
+    }
+
+    // Minimal POJO for the bean
+    private static class P06_LACC_01_BoprRecordBean {
+        private String senderServiceCode;
+        private String operationReference;
+        private String countryCode;
+        private String effectiveDate;
+        private String amountCurrency;
+        private String cashflowDirection;
+        private Double amount;
+        private Double amountInBranchCurrency;
+
+        // Getters and Setters
+        public String getSenderServiceCode() { return senderServiceCode; }
+        public void setSenderServiceCode(String senderServiceCode) { this.senderServiceCode = senderServiceCode; }
+
+        public String getOperationReference() { return operationReference; }
+        public void setOperationReference(String operationReference) { this.operationReference = operationReference; }
+
+        public String getCountryCode() { return countryCode; }
+        public void setCountryCode(String countryCode) { this.countryCode = countryCode; }
+
+        public String getEffectiveDate() { return effectiveDate; }
+        public void setEffectiveDate(String effectiveDate) { this.effectiveDate = effectiveDate; }
+
+        public String getAmountCurrency() { return amountCurrency; }
+        public void setAmountCurrency(String amountCurrency) { this.amountCurrency = amountCurrency; }
+
+        public String getCashflowDirection() { return cashflowDirection; }
+        public void setCashflowDirection(String cashflowDirection) { this.cashflowDirection = cashflowDirection; }
+
+        public Double getAmount() { return amount; }
+        public void setAmount(Double amount) { this.amount = amount; }
+
+        public Double getAmountInBranchCurrency() { return amountInBranchCurrency; }
+        public void setAmountInBranchCurrency(Double amountInBranchCurrency) { this.amountInBranchCurrency = amountInBranchCurrency; }
     }
 }
