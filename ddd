@@ -1,42 +1,11 @@
-import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.*;
-
-import java.util.ResourceBundle;
-
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-
-import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
-
-public class P06_IACC_01_PropertiesMgrTest {
-
-    private static MockedStatic<ResourceBundle> mockedStatic;
-    private static ResourceBundle mockBundle;
-
-    @BeforeClass
-    public static void setup() {
-        mockBundle = mock(ResourceBundle.class);
-        mockedStatic = Mockito.mockStatic(ResourceBundle.class);
-
-        // Make sure the getBundle call inside the class resolves to our mock
-        mockedStatic.when(() ->
-            ResourceBundle.getBundle("com.bnpparibas.atlentic.iacc.bopr.resource.AtlenticBEBopr"))
-            .thenReturn(mockBundle);
-
-        when(mockBundle.getString("level.1.action.name")).thenReturn("LEVEL_1_ACTION");
-    }
-
-    @AfterClass
-    public static void teardown() {
-        mockedStatic.close();
-    }
-
-    @Test
-    public void testGetLevel1ActionName() {
+@Test
+public void testGetLevel1ActionName() {
+    try {
         String result = P06_IACC_01_PropertiesMgr.getLevel1ActionName();
-        assertEquals("LEVEL_1_ACTION", result);  // This will hit the class and include it in coverage
+        System.out.println("Result: " + result);
+        assertEquals("LEVEL_1_ACTION", result);
+    } catch (Exception e) {
+        e.printStackTrace(); // This will show what’s really happening
+        fail("Exception occurred: " + e.getMessage());
     }
 }
