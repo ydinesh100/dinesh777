@@ -84,3 +84,96 @@ public class P06_IACC_01_LevelTest {
         verify(mockTransaction, times(1)).getRecordsBeansList();
     }
 }
+
+
+
+
+
+package com.bnpparibas.atlentic.iacc.bopr.resource.test;
+
+import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.when;
+
+import java.util.ResourceBundle;
+
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+
+import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
+
+public class P06_IACC_01_PropertiesMgrTest {
+
+    private static MockedStatic<ResourceBundle> mockedResourceBundleStatic;
+
+    private static ResourceBundle mockPropertiesBundle;
+    private static ResourceBundle mockQueriesBundle;
+
+    @BeforeClass
+    public static void setup() {
+        // Mock the static ResourceBundle.getBundle method
+        mockedResourceBundleStatic = Mockito.mockStatic(ResourceBundle.class);
+
+        // Create mocks for properties and queries bundles
+        mockPropertiesBundle = Mockito.mock(ResourceBundle.class);
+        mockQueriesBundle = Mockito.mock(ResourceBundle.class);
+
+        // Setup the mock to return different bundles based on the bundle name argument
+        mockedResourceBundleStatic.when(() -> 
+            ResourceBundle.getBundle("com.bnpparibas.atlentic.iacc.bopr.resource.AtlenticBEBopr"))
+            .thenReturn(mockPropertiesBundle);
+
+        mockedResourceBundleStatic.when(() -> 
+            ResourceBundle.getBundle("com.bnpparibas.atlentic.iacc.bopr.resource.AtlenticEBoprQueries"))
+            .thenReturn(mockQueriesBundle);
+    }
+
+    @AfterClass
+    public static void tearDown() {
+        mockedResourceBundleStatic.close();
+    }
+
+    @Test
+    public void testGetValueFromPropertiesFile() {
+        // Arrange
+        String key = "test.key";
+        String expectedValue = "test.value";
+
+        when(mockPropertiesBundle.getString(key)).thenReturn(expectedValue);
+
+        // Act
+        String actualValue = P06_IACC_01_PropertiesMgr.getLevel1ActionName();  // This calls getValueFromPropertiesFile internally
+
+        // For the test, you can mock the key that getLevel1ActionName uses:
+        when(mockPropertiesBundle.getString("level.1.action.name")).thenReturn(expectedValue);
+
+        actualValue = P06_IACC_01_PropertiesMgr.getLevel1ActionName();
+
+        // Assert
+        assertEquals(expectedValue, actualValue);
+    }
+
+    @Test
+    public void testGetQueryFromPropertiesFile() {
+        // Arrange
+        String queryKey = "select.query";
+        String rawQuery = "SELECT * FROM *liq_sh.table WHERE col = 'value' AND db = 'atl_sh'";
+        String expectedQuery = "SELECT * FROM LIQ_SCHEMA.table WHERE col = 'value' AND db = 'ATLENTIC_SCHEMA'";
+
+        when(mockQueriesBundle.getString(queryKey)).thenReturn(rawQuery);
+
+        // Mock the schema name methods to return expected schema names
+        Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class).when(() -> P06_IACC_01_PropertiesMgr.getLiqSchemaName())
+            .thenReturn("LIQ_SCHEMA");
+        Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class).when(() -> P06_IACC_01_PropertiesMgr.getAtlenticSchemaName())
+            .thenReturn("ATLENTIC_SCHEMA");
+
+        // Act
+        String actualQuery = P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile(queryKey);
+
+        // Assert
+        assertEquals(expectedQuery, actualQuery);
+    }
+}
