@@ -2,34 +2,23 @@ import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
-public class LineAppenderTest {
+public class TransactionHolderTest {
 
-    private LineAppender appender;
+    private TransactionHolder<String> stringHolder;
 
     @Before
     public void setUp() {
-        appender = new LineAppender();
+        stringHolder = new TransactionHolder<>();
     }
 
     @Test
-    public void testAppendNewLine_WhenStringBuilderIsEmpty() {
-        appender.setStringBuilder(new StringBuilder());
-        appender.appendNewLine();
-        assertEquals("", appender.getStringBuilder().toString());
+    public void testGetDataBaseTransaction_ReturnsCorrectValue() {
+        stringHolder.setDataBaseTransaction("TestTransaction");
+        assertEquals("TestTransaction", stringHolder.getDataBaseTransaction());
     }
 
     @Test
-    public void testAppendNewLine_WhenStringBuilderHasContent() {
-        appender.setStringBuilder(new StringBuilder("Hello"));
-        appender.appendNewLine();
-        assertEquals("Hello\r\n", appender.getStringBuilder().toString());
-    }
-
-    @Test
-    public void testAppendNewLine_MultipleCalls() {
-        appender.setStringBuilder(new StringBuilder("Line1"));
-        appender.appendNewLine();
-        appender.appendNewLine();
-        assertEquals("Line1\r\n\r\n", appender.getStringBuilder().toString());
+    public void testGetDataBaseTransaction_WhenNull() {
+        assertNull(stringHolder.getDataBaseTransaction());
     }
 }
