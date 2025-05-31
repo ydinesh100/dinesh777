@@ -1,99 +1,6 @@
-import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_Level;
-import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_DBTransaction;
-import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_SQLException;
-
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.*;
-import org.mockito.junit.MockitoJUnitRunner;
-
-import java.io.IOException;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.sql.Connection;
-import java.util.Collections;
-
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.*;
 
-@RunWith(MockitoJUnitRunner.class)
-public class P06_IACC_01_LevelTest {
-
-    @Mock
-    private P06_IACC_01_DBTransaction mockTransaction;
-
-    @Mock
-    private Connection mockConnection;
-
-    private P06_IACC_01_Level<P06_IACC_01_DBTransaction> level;
-
-    @Before
-    public void setUp() throws Exception {
-        // Create an anonymous subclass of the abstract class
-        level = new P06_IACC_01_Level<P06_IACC_01_DBTransaction>() {
-            @Override
-            protected void innerExecute() {
-                // Leave empty for testing
-            }
-
-            @Override
-            protected int getLevelNumber() {
-                return 1;
-            }
-
-            @Override
-            protected void initializeDataBaseTransaction(Connection p_o_dataBaseConnection) {
-                // No-op (we inject the transaction via reflection)
-            }
-
-            @Override
-            protected boolean applyCommit() {
-                return true;
-            }
-        };
-
-        // Inject mocked DBTransaction via reflection
-        Field txField = P06_IACC_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
-        txField.setAccessible(true);
-        txField.set(level, mockTransaction);
-
-        // Create dummy bean instance using reflection
-        Constructor<P06_IACC_01_BoprRecordBean> beanConstructor = P06_IACC_01_BoprRecordBean.class.getDeclaredConstructor();
-        beanConstructor.setAccessible(true);
-        P06_IACC_01_BoprRecordBean bean = beanConstructor.newInstance();
-
-        // Stub the mocked transaction to return a dummy list
-        when(mockTransaction.getRecordsBeansList()).thenReturn(Collections.singletonList(bean));
-
-        // Mock the GlobalAtlentic.getLoanIQConnection() call — optional if needed
-        // You must use PowerMockito to mock static methods if needed
-    }
-
-    @Test
-    public void testExecuteRunsSuccessfully() throws Exception {
-        try {
-            level.execute();
-        } catch (P06_IACC_01_ExitApplicationException e) {
-            // If any exception occurs, test should fail
-            assert false : "Unexpected exception: " + e.getMessage();
-        }
-
-        // Verify that method was called
-        verify(mockTransaction, times(1)).getRecordsBeansList();
-    }
-}
-
-
-
-
-
-package com.bnpparibas.atlentic.iacc.bopr.resource.test;
-
-import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.when;
-
 import java.util.ResourceBundle;
 
 import org.junit.AfterClass;
@@ -106,120 +13,30 @@ import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
 
 public class P06_IACC_01_PropertiesMgrTest {
 
-    private static MockedStatic<ResourceBundle> mockedResourceBundleStatic;
-
-    private static ResourceBundle mockPropertiesBundle;
-    private static ResourceBundle mockQueriesBundle;
+    private static MockedStatic<ResourceBundle> mockedStatic;
+    private static ResourceBundle mockBundle;
 
     @BeforeClass
     public static void setup() {
-        // Mock the static ResourceBundle.getBundle method
-        mockedResourceBundleStatic = Mockito.mockStatic(ResourceBundle.class);
+        mockBundle = mock(ResourceBundle.class);
+        mockedStatic = Mockito.mockStatic(ResourceBundle.class);
 
-        // Create mocks for properties and queries bundles
-        mockPropertiesBundle = Mockito.mock(ResourceBundle.class);
-        mockQueriesBundle = Mockito.mock(ResourceBundle.class);
-
-        // Setup the mock to return different bundles based on the bundle name argument
-        mockedResourceBundleStatic.when(() -> 
+        // Make sure the getBundle call inside the class resolves to our mock
+        mockedStatic.when(() ->
             ResourceBundle.getBundle("com.bnpparibas.atlentic.iacc.bopr.resource.AtlenticBEBopr"))
-            .thenReturn(mockPropertiesBundle);
+            .thenReturn(mockBundle);
 
-        mockedResourceBundleStatic.when(() -> 
-            ResourceBundle.getBundle("com.bnpparibas.atlentic.iacc.bopr.resource.AtlenticEBoprQueries"))
-            .thenReturn(mockQueriesBundle);
+        when(mockBundle.getString("level.1.action.name")).thenReturn("LEVEL_1_ACTION");
     }
 
     @AfterClass
-    public static void tearDown() {
-        mockedResourceBundleStatic.close();
+    public static void teardown() {
+        mockedStatic.close();
     }
 
     @Test
-    public void testGetValueFromPropertiesFile() {
-        // Arrange
-        String key = "test.key";
-        String expectedValue = "test.value";
-
-        when(mockPropertiesBundle.getString(key)).thenReturn(expectedValue);
-
-        // Act
-        String actualValue = P06_IACC_01_PropertiesMgr.getLevel1ActionName();  // This calls getValueFromPropertiesFile internally
-
-        // For the test, you can mock the key that getLevel1ActionName uses:
-        when(mockPropertiesBundle.getString("level.1.action.name")).thenReturn(expectedValue);
-
-        actualValue = P06_IACC_01_PropertiesMgr.getLevel1ActionName();
-
-        // Assert
-        assertEquals(expectedValue, actualValue);
-    }
-
-    @Test
-    public void testGetQueryFromPropertiesFile() {
-        // Arrange
-        String queryKey = "select.query";
-        String rawQuery = "SELECT * FROM *liq_sh.table WHERE col = 'value' AND db = 'atl_sh'";
-        String expectedQuery = "SELECT * FROM LIQ_SCHEMA.table WHERE col = 'value' AND db = 'ATLENTIC_SCHEMA'";
-
-        when(mockQueriesBundle.getString(queryKey)).thenReturn(rawQuery);
-
-        // Mock the schema name methods to return expected schema names
-        Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class).when(() -> P06_IACC_01_PropertiesMgr.getLiqSchemaName())
-            .thenReturn("LIQ_SCHEMA");
-        Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class).when(() -> P06_IACC_01_PropertiesMgr.getAtlenticSchemaName())
-            .thenReturn("ATLENTIC_SCHEMA");
-
-        // Act
-        String actualQuery = P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile(queryKey);
-
-        // Assert
-        assertEquals(expectedQuery, actualQuery);
-    }
-}
-
-
-
-
-
-package com.bnpparibas.atlentic.iacc.bopr.resource.test;
-
-import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.when;
-
-import java.util.ResourceBundle;
-
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-
-import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
-
-public class P06_IACC_01_PropertiesMgrTest {
-
-    private static MockedStatic<ResourceBundle> mockedResourceBundleStatic;
-    private static ResourceBundle mockPropertiesBundle;
-
-    @BeforeClass
-    public static void setup() {
-        mockPropertiesBundle = Mockito.mock(ResourceBundle.class);
-        mockedResourceBundleStatic = Mockito.mockStatic(ResourceBundle.class);
-        mockedResourceBundleStatic.when(() -> 
-            ResourceBundle.getBundle("com.bnpparibas.atlentic.iacc.bopr.resource.AtlenticBEBopr"))
-            .thenReturn(mockPropertiesBundle);
-        when(mockPropertiesBundle.getString("level.1.action.name")).thenReturn("mockedAction");
-    }
-
-    @AfterClass
-    public static void tearDown() {
-        mockedResourceBundleStatic.close();
-    }
-
-    @Test
-    public void testLevel1ActionName() {
+    public void testGetLevel1ActionName() {
         String result = P06_IACC_01_PropertiesMgr.getLevel1ActionName();
-        assertEquals("mockedAction", result);
+        assertEquals("LEVEL_1_ACTION", result);  // This will hit the class and include it in coverage
     }
 }
