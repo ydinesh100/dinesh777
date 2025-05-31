@@ -235,6 +235,49 @@ public void testAppendRecord_FullyCovered() throws Exception {
     assertTrue(result.contains("FR"));
     assertTrue(result.contains("EUR"));
     assertTrue(result.contains("INR"));
+
+
+
+
 }
+
+
+
+
+}
+
+    @Test
+    public void testAppendRecord() throws Exception {
+        // Mock the bean
+        P06_IACC_01_BoprRecordBean mockBean = mock(P06_IACC_01_BoprRecordBean.class);
+
+        // Prepare test data
+        SimpleDateFormat sdf = new SimpleDateFormat("ddMMyyyy");
+        Date date = sdf.parse("01012025");
+
+        when(mockBean.getSenderServiceCode()).thenReturn("SERV01");
+        when(mockBean.getOperationReference()).thenReturn("OP123456789012345678901234");
+        when(mockBean.getCountryCode()).thenReturn("FR");
+        when(mockBean.getEffectiveDate()).thenReturn(date);
+        when(mockBean.getCashflowDirection()).thenReturn("FROM");
+        when(mockBean.getAmountCurrency()).thenReturn("EUR");
+        when(mockBean.getAmount()).thenReturn(12345.67);
+        when(mockBean.getAmountInBranchCurrency()).thenReturn(98765.43);
+
+        // Access and invoke the protected appendRecord method
+        Method appendRecordMethod = P06_IACC_01_BoprStringBuffer.class.getDeclaredMethod(
+            "appendRecord", P06_IACC_01_BoprRecordBean.class, String.class);
+        appendRecordMethod.setAccessible(true);
+        appendRecordMethod.invoke(boprStringBuffer, mockBean, "INR");
+
+        // Validate the content
+        String result = boprStringBuffer.getBufferContent(); // assuming you’ve exposed it
+
+        assertTrue(result.contains("SERV01"));
+        assertTrue(result.contains("OP1234567890"));
+        assertTrue(result.contains("FR"));
+        assertTrue(result.contains("EUR"));
+        assertTrue(result.contains("INR"));
+
 
 
