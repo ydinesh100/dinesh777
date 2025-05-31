@@ -1,6 +1,6 @@
-import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
 import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_Level;
 import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_DBTransaction;
+import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
 import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
 import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_SQLException;
 
@@ -11,9 +11,9 @@ import org.mockito.*;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.Collections;
 
 import static org.mockito.Mockito.*;
@@ -31,11 +31,11 @@ public class P06_IACC_01_LevelTest {
 
     @Before
     public void setUp() throws Exception {
-        // Create a concrete anonymous subclass of the abstract class
+        // Create an anonymous subclass of the abstract class
         level = new P06_IACC_01_Level<P06_IACC_01_DBTransaction>() {
             @Override
             protected void innerExecute() {
-                // No-op
+                // Leave empty for testing
             }
 
             @Override
@@ -45,7 +45,7 @@ public class P06_IACC_01_LevelTest {
 
             @Override
             protected void initializeDataBaseTransaction(Connection p_o_dataBaseConnection) {
-                // No-op; we inject mock manually
+                // No-op (we inject the transaction via reflection)
             }
 
             @Override
@@ -54,34 +54,33 @@ public class P06_IACC_01_LevelTest {
             }
         };
 
-        // Inject mock into protected field using reflection
+        // Inject mocked DBTransaction via reflection
         Field txField = P06_IACC_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
         txField.setAccessible(true);
         txField.set(level, mockTransaction);
 
-        // Inject dummy record list into transaction
-        when(mockTransaction.getRecordsBeansList()).thenReturn(Collections.singletonList(new P06_IACC_01_BoprRecordBean()));
+        // Create dummy bean instance using reflection
+        Constructor<P06_IACC_01_BoprRecordBean> beanConstructor = P06_IACC_01_BoprRecordBean.class.getDeclaredConstructor();
+        beanConstructor.setAccessible(true);
+        P06_IACC_01_BoprRecordBean bean = beanConstructor.newInstance();
 
-        // Replace static method call (if needed) using PowerMockito — only if you're mocking GlobalAtlentic
-        // If you're NOT mocking GlobalAtlentic, make sure your test DB connection works
+        // Stub the mocked transaction to return a dummy list
+        when(mockTransaction.getRecordsBeansList()).thenReturn(Collections.singletonList(bean));
+
+        // Mock the GlobalAtlentic.getLoanIQConnection() call — optional if needed
+        // You must use PowerMockito to mock static methods if needed
     }
 
     @Test
-    public void testExecute() throws Exception {
-        // Setup mock connection behavior
-        when(mockConnection.getAutoCommit()).thenReturn(true);
-
-        // Inject mock DB connection into static method if possible
-        // If the real GlobalAtlentic.getLoanIQConnection() is used, ensure it doesn't hit a real DB
-
-        // You can only call this if you're allowed to run execute()
+    public void testExecuteRunsSuccessfully() throws Exception {
         try {
             level.execute();
         } catch (P06_IACC_01_ExitApplicationException e) {
-            // Handle expected exception or assert on behavior
+            // If any exception occurs, test should fail
+            assert false : "Unexpected exception: " + e.getMessage();
         }
 
-        // Validate that mocks were interacted with
-        verify(mockTransaction).getRecordsBeansList();
+        // Verify that method was called
+        verify(mockTransaction, times(1)).getRecordsBeansList();
     }
 }
