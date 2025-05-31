@@ -177,3 +177,49 @@ public class P06_IACC_01_PropertiesMgrTest {
         assertEquals(expectedQuery, actualQuery);
     }
 }
+
+
+
+
+
+package com.bnpparibas.atlentic.iacc.bopr.resource.test;
+
+import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.when;
+
+import java.util.ResourceBundle;
+
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+
+import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
+
+public class P06_IACC_01_PropertiesMgrTest {
+
+    private static MockedStatic<ResourceBundle> mockedResourceBundleStatic;
+    private static ResourceBundle mockPropertiesBundle;
+
+    @BeforeClass
+    public static void setup() {
+        mockPropertiesBundle = Mockito.mock(ResourceBundle.class);
+        mockedResourceBundleStatic = Mockito.mockStatic(ResourceBundle.class);
+        mockedResourceBundleStatic.when(() -> 
+            ResourceBundle.getBundle("com.bnpparibas.atlentic.iacc.bopr.resource.AtlenticBEBopr"))
+            .thenReturn(mockPropertiesBundle);
+        when(mockPropertiesBundle.getString("level.1.action.name")).thenReturn("mockedAction");
+    }
+
+    @AfterClass
+    public static void tearDown() {
+        mockedResourceBundleStatic.close();
+    }
+
+    @Test
+    public void testLevel1ActionName() {
+        String result = P06_IACC_01_PropertiesMgr.getLevel1ActionName();
+        assertEquals("mockedAction", result);
+    }
+}
