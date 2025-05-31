@@ -145,3 +145,13 @@ public class AppendRecordTest {
         public void setAmountInBranchCurrency(Double amountInBranchCurrency) { this.amountInBranchCurrency = amountInBranchCurrency; }
     }
 }
+
+private P06_LACC_01_BoprRecordBean recordBean;
+
+@Before
+public void setUp() {
+    recordBean = new P06_LACC_01_BoprRecordBean();
+    // set fields...
+}
+
+
