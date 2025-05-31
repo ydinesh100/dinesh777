@@ -86,3 +86,45 @@ public class P06_IACC_01_BoprStringBufferTest {
         // If not, use reflection to set private fields
     }
 }
+
+
+
+
+
+}
+
+    @Test
+    public void testAppendRecord() throws Exception {
+        Object recordBean = new MockBoprRecordBean();
+
+        Method method = P06_IACC_01_BoprStringBuffer.class.getDeclaredMethod(
+                "appendRecord",
+                recordBean.getClass(),
+                String.class
+        );
+        method.setAccessible(true);
+        method.invoke(boprStringBuffer, recordBean, "INR");
+
+        Field sbField = P06_IACC_01_BoprStringBuffer.class.getDeclaredField("g_o_sb");
+        sbField.setAccessible(true);
+        StringBuffer sb = (StringBuffer) sbField.get(boprStringBuffer);
+        String result = sb.toString();
+
+        assertNotNull(result);
+        assertTrue(result.contains("ABC123"));
+        assertTrue(result.contains("OPREF001"));
+        assertTrue(result.contains("IN"));
+        assertTrue(result.contains("01012025"));
+        assertTrue(result.contains("INR"));
+    }
+
+    // ✅ Minimal mock version of the expected bean
+    public static class MockBoprRecordBean {
+        public String getSenderServiceCode() { return "ABC123"; }
+        public String getOperationReference() { return "OPREF001"; }
+        public String getCountryCode() { return "IN"; }
+        public String getEffectiveDate() { return "01012025"; }
+        public String getAmountCurrency() { return "INR"; }
+        public String getCashflowDirection() { return "FROM"; }
+        public double getAmount() { return 123456.78; }
+        public Double getAmountInBranchCurrency() { return 99999.99; }
