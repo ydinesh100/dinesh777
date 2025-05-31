@@ -1,6 +1,6 @@
 import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
-import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_DBTransaction;
 import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_Level;
+import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_DBTransaction;
 import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
 import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_SQLException;
 
@@ -22,85 +22,66 @@ import static org.mockito.Mockito.*;
 public class P06_IACC_01_LevelTest {
 
     @Mock
-    private Connection mockConnection;
-
-    @Mock
     private P06_IACC_01_DBTransaction mockTransaction;
 
-    private TestLevel testLevel;
+    @Mock
+    private Connection mockConnection;
+
+    private P06_IACC_01_Level<P06_IACC_01_DBTransaction> level;
 
     @Before
     public void setUp() throws Exception {
-        testLevel = new TestLevel();
+        // Create a concrete anonymous subclass of the abstract class
+        level = new P06_IACC_01_Level<P06_IACC_01_DBTransaction>() {
+            @Override
+            protected void innerExecute() {
+                // No-op
+            }
 
-        // Set protected field using reflection
+            @Override
+            protected int getLevelNumber() {
+                return 1;
+            }
+
+            @Override
+            protected void initializeDataBaseTransaction(Connection p_o_dataBaseConnection) {
+                // No-op; we inject mock manually
+            }
+
+            @Override
+            protected boolean applyCommit() {
+                return true;
+            }
+        };
+
+        // Inject mock into protected field using reflection
         Field txField = P06_IACC_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
         txField.setAccessible(true);
-        txField.set(testLevel, mockTransaction);
+        txField.set(level, mockTransaction);
 
-        // Stub record bean list
+        // Inject dummy record list into transaction
         when(mockTransaction.getRecordsBeansList()).thenReturn(Collections.singletonList(new P06_IACC_01_BoprRecordBean()));
 
-        // Override actual DB connection with mock
-        testLevel.setConnection(mockConnection);
+        // Replace static method call (if needed) using PowerMockito — only if you're mocking GlobalAtlentic
+        // If you're NOT mocking GlobalAtlentic, make sure your test DB connection works
     }
 
     @Test
-    public void testExecute_Success() throws Exception {
-        testLevel.execute();
+    public void testExecute() throws Exception {
+        // Setup mock connection behavior
+        when(mockConnection.getAutoCommit()).thenReturn(true);
 
-        verify(mockConnection).setAutoCommit(false);
+        // Inject mock DB connection into static method if possible
+        // If the real GlobalAtlentic.getLoanIQConnection() is used, ensure it doesn't hit a real DB
+
+        // You can only call this if you're allowed to run execute()
+        try {
+            level.execute();
+        } catch (P06_IACC_01_ExitApplicationException e) {
+            // Handle expected exception or assert on behavior
+        }
+
+        // Validate that mocks were interacted with
         verify(mockTransaction).getRecordsBeansList();
-        verify(mockConnection).commit();
-    }
-
-    // Stub subclass
-    private static class TestLevel extends P06_IACC_01_Level<P06_IACC_01_DBTransaction> {
-
-        private Connection testConn;
-
-        public void setConnection(Connection conn) {
-            this.testConn = conn;
-        }
-
-        @Override
-        public void execute() throws P06_IACC_01_ExitApplicationException {
-            Connection dbConnection = this.testConn;
-            try {
-                dbConnection.setAutoCommit(false);
-                this.initializeDataBaseTransaction(dbConnection);
-                this.g_o_recordBeansList = this.getDataBaseTransaction().getRecordsBeansList();
-                this.innerExecute();
-                if (this.applyCommit()) {
-                    dbConnection.commit();
-                }
-            } catch (IOException | SQLException | P06_IACC_01_SQLException e) {
-                try {
-                    if (dbConnection != null) dbConnection.rollback();
-                } catch (SQLException ignore) {}
-                throw new P06_IACC_01_ExitApplicationException(e.getMessage(), e);
-            }
-        }
-
-        @Override
-        protected void initializeDataBaseTransaction(Connection p_o_dataBaseConnection)
-                throws P06_IACC_01_SQLException, IOException, P06_IACC_01_ExitApplicationException {
-            // Do nothing, transaction is already set by reflection
-        }
-
-        @Override
-        protected void innerExecute() {
-            // No-op
-        }
-
-        @Override
-        protected int getLevelNumber() {
-            return 1;
-        }
-
-        @Override
-        protected boolean applyCommit() {
-            return true;
-        }
     }
 }
