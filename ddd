@@ -1,24 +1,56 @@
 import org.junit.Before;
 import org.junit.Test;
+
+import java.sql.Connection;
+
 import static org.junit.Assert.*;
 
-public class TransactionHolderTest {
+public class P06_IACC_01_LevelTest {
 
-    private TransactionHolder<String> stringHolder;
+    private TestableLevel level;
 
     @Before
     public void setUp() {
-        stringHolder = new TransactionHolder<>();
+        level = new TestableLevel();
     }
 
     @Test
-    public void testGetDataBaseTransaction_ReturnsCorrectValue() {
-        stringHolder.setDataBaseTransaction("TestTransaction");
-        assertEquals("TestTransaction", stringHolder.getDataBaseTransaction());
+    public void testGetDataBaseTransaction_ReturnsSetObject() {
+        DummyTransaction tx = new DummyTransaction();
+        level.g_o_dataBaseTransaction = tx;
+        assertSame(tx, level.getDataBaseTransaction());
     }
 
     @Test
     public void testGetDataBaseTransaction_WhenNull() {
-        assertNull(stringHolder.getDataBaseTransaction());
+        level.g_o_dataBaseTransaction = null;
+        assertNull(level.getDataBaseTransaction());
+    }
+
+    @Test
+    public void testInitializeDatabaseTransaction_SetsDummyTransaction() {
+        Connection mockConnection = null; // Can’t mock without libraries
+        level.initializeDatabaseTransaction(mockConnection);
+        assertNotNull(level.getDataBaseTransaction());
+        assertTrue(level.getDataBaseTransaction() instanceof DummyTransaction);
+    }
+
+    @Test
+    public void testGetLevelNumber_ReturnsExpectedValue() {
+        assertEquals(42, level.getLevelNumber());
+    }
+
+    @Test
+    public void testApplyCommit_ReturnsTrue() {
+        assertTrue(level.applyCommit());
+    }
+
+    @Test
+    public void testInnerExecuteDoesNotThrow() {
+        try {
+            level.innerExecute();
+        } catch (Exception e) {
+            fail("innerExecute() should not throw an exception.");
+        }
     }
 }
