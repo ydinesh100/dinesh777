@@ -318,3 +318,64 @@ public void testAppendRecord_FullyCovered() throws Exception {
 
 
 
+
+
+@Test
+public void testAppendRecord_withNullAmountInBranchCurrency() throws Exception {
+    // Mock the record bean
+    P06_IACC_01_BoprRecordBean mockBean = mock(P06_IACC_01_BoprRecordBean.class);
+
+    SimpleDateFormat sdf = new SimpleDateFormat("ddMMyyyy");
+    Date testDate = sdf.parse("01012025");
+
+    when(mockBean.getSenderServiceCode()).thenReturn("SERV01");
+    when(mockBean.getOperationReference()).thenReturn("OP987654321");
+    when(mockBean.getCountryCode()).thenReturn("DE");
+    when(mockBean.getEffectiveDate()).thenReturn(testDate);
+    when(mockBean.getCashflowDirection()).thenReturn("TO");
+    when(mockBean.getAmountCurrency()).thenReturn("USD");
+    when(mockBean.getAmount()).thenReturn(5555.55);
+    when(mockBean.getAmountInBranchCurrency()).thenReturn(null); // <<< trigger else
+
+    // Use reflection to call the protected method
+    Method method = P06_IACC_01_BoprStringBuffer.class
+        .getDeclaredMethod("appendRecord", P06_IACC_01_BoprRecordBean.class, String.class);
+    method.setAccessible(true);
+    method.invoke(boprStringBuffer, mockBean, "INR");
+
+    // Access private buffer
+    Field sbField = P06_IACC_01_BoprStringBuffer.class.getDeclaredField("g_o_sb");
+    sbField.setAccessible(true);
+    StringBuffer buffer = (StringBuffer) sbField.get(boprStringBuffer);
+    String result = buffer.toString();
+
+    // Verify content includes known values
+    assertTrue(result.contains("SERV01"));
+    assertTrue(result.contains("OP987654321"));
+    assertTrue(result.contains("USD"));
+    assertTrue(result.contains("INR"));
+
+    // This guarantees the else was hit: empty string of length 18
+    assertTrue(result.contains(String.format("%-18s", "")));
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
