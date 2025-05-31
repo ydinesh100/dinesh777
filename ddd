@@ -128,3 +128,42 @@ public class P06_IACC_01_BoprStringBufferTest {
         public String getCashflowDirection() { return "FROM"; }
         public double getAmount() { return 123456.78; }
         public Double getAmountInBranchCurrency() { return 99999.99; }
+
+
+
+
+    @Test
+    public void testAppendRecord_WithMockBean() throws Exception {
+        // Mocking the bean
+        P06_IACC_01_BoprRecordBean mockBean = mock(P06_IACC_01_BoprRecordBean.class);
+
+        // Stubbing method responses
+        when(mockBean.getSenderServiceCode()).thenReturn("SERV01");
+        when(mockBean.getOperationReference()).thenReturn("OP1234567890");
+        when(mockBean.getCountryCode()).thenReturn("FR");
+        when(mockBean.getEffectiveDate()).thenReturn("01012025");
+        when(mockBean.getAmountCurrency()).thenReturn("EUR");
+        when(mockBean.getCashflowDirection()).thenReturn("FROM");
+        when(mockBean.getAmount()).thenReturn(12345.67);
+        when(mockBean.getAmountInBranchCurrency()).thenReturn(98765.43);
+
+        // Call appendRecord
+        Method method = P06_IACC_01_BoprStringBuffer.class.getDeclaredMethod("appendRecord", P06_IACC_01_BoprRecordBean.class, String.class);
+        method.setAccessible(true);
+        method.invoke(boprStringBuffer, mockBean, "INR");
+
+        // Access private field g_o_sb
+        Field sbField = P06_IACC_01_BoprStringBuffer.class.getDeclaredField("g_o_sb");
+        sbField.setAccessible(true);
+        StringBuffer resultBuffer = (StringBuffer) sbField.get(boprStringBuffer);
+        String result = resultBuffer.toString();
+
+        // Verify the content
+        assertTrue(result.contains("SERV01"));
+        assertTrue(result.contains("OP1234567890"));
+        assertTrue(result.contains("FR"));
+        assertTrue(result.contains("01012025"));
+        assertTrue(result.contains("EUR"));
+        assertTrue(result.contains("INR"));
+    }
+}
