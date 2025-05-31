@@ -111,6 +111,15 @@ public class P06_IACC_01_DBTransactionTest {
         when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB error"));
 
         // Act & Assert: should throw custom exception
-        dbTransaction.callGetRecordsBeansList();
-    }
+        @Test
+public void testCoverageVerification() throws Exception {
+    when(mockResultSet.next()).thenReturn(true, false);
+    when(mockResultSet.getInt("amount")).thenReturn(200);
+
+    List<P06_IACC_01_BoprRecordBean> result = dbTransaction.callGetRecordsBeansList();
+
+    assertEquals(1, result.size());
+    System.out.println(">>> Method called and returned: " + result.get(0).getAmount());
 }
+
+
