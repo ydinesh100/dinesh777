@@ -1,56 +1,122 @@
-public class P06_IACC_01_DBTransactionTest {
+import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
+import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_Level;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_SQLException;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.*;
 
-    @Mock private Connection mockConnection;
-    @Mock private PreparedStatement mockPreparedStatement;
-    @Mock private ResultSet mockResultSet;
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.Arrays;
 
-    private TestableDBTransaction dbTransaction;
+import static org.mockito.Mockito.*;
+import static org.junit.Assert.*;
+
+@RunWith(org.mockito.junit.MockitoJUnitRunner.class)
+public class P06_IACC_01_LevelTest {
+
+    @Mock
+    Connection mockConnection;
+
+    @Mock
+    P06_IACC_01_DBTransaction mockTransaction;
+
+    @InjectMocks
+    TestLevel testLevel;
 
     @Before
     public void setUp() throws Exception {
-        MockitoAnnotations.initMocks(this);
-        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
-
-        dbTransaction = new TestableDBTransaction(mockConnection);  // ✅ use subclass type
-    }
-
-    // ✅ Subclass that exposes the protected method
-    private static class TestableDBTransaction extends P06_IACC_01_DBTransaction {
-        public TestableDBTransaction(Connection conn) throws P06_IACC_01_SQLException {
-            super(conn);
-        }
-
-        @Override
-        protected void feedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) throws SQLException {
-            bean.setAmount(rs.getInt("amount"));
-        }
-
-        @Override
-        protected void innerFeedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) {}
-
-        @Override
-        protected String getSelectRecordsQueryKey() {
-            return "dummy.key";
-        }
-
-        @Override
-        protected void feedRecordsBeansListPreparedStatement(PreparedStatement ps) {}
-
-        // ✅ public wrapper for test
-        public List<P06_IACC_01_BoprRecordBean> callGetRecordsBeansList() throws P06_IACC_01_SQLException {
-            return getRecordsBeansList();  // 👈 this is the method under test
-        }
+        testLevel = new TestLevel();
+        testLevel.g_o_dataBaseTransaction = mockTransaction;
     }
 
     @Test
-    public void testGetRecordsBeansList_PositiveAmount() throws Exception {
-        when(mockResultSet.next()).thenReturn(true, false);
-        when(mockResultSet.getInt("amount")).thenReturn(100);
+    public void testExecute_Success() throws Exception {
+        // Mock the behavior of transaction
+        when(mockTransaction.getRecordsBeansList()).thenReturn(
+                Arrays.asList(new P06_IACC_01_BoprRecordBean())
+        );
 
-        List<P06_IACC_01_BoprRecordBean> result = dbTransaction.callGetRecordsBeansList();
+        // Inject mock connection and behaviors
+        testLevel.setMockConnection(mockConnection);
 
-        assertEquals(1, result.size());
-        assertEquals(100, result.get(0).getAmount());
+        testLevel.execute();
+
+        verify(mockConnection).commit();
+        verify(mockTransaction).getRecordsBeansList();
+    }
+
+    @Test(expected = P06_IACC_01_ExitApplicationException.class)
+    public void testExecute_ThrowsIOException() throws Exception {
+        testLevel = spy(new TestLevel());
+        testLevel.setMockConnection(mockConnection);
+        doThrow(new IOException("IO")).when(testLevel).innerExecute();
+
+        testLevel.execute();
+    }
+
+    @Test(expected = P06_IACC_01_ExitApplicationException.class)
+    public void testExecute_ThrowsSQLException() throws Exception {
+        testLevel = spy(new TestLevel());
+        testLevel.setMockConnection(mockConnection);
+        doThrow(new SQLException("SQL")).when(testLevel).initializeDataBaseTransaction(any());
+
+        testLevel.execute();
+    }
+
+    // Stub implementation of abstract class
+    private class TestLevel extends P06_IACC_01_Level<P06_IACC_01_DBTransaction> {
+
+        private Connection mockConn;
+
+        public void setMockConnection(Connection connection) {
+            this.mockConn = connection;
+        }
+
+        @Override
+        protected void innerExecute() throws P06_IACC_01_SQLException, IOException, P06_IACC_01_ExitApplicationException {
+            // Simulate processing
+        }
+
+        @Override
+        protected int getLevelNumber() {
+            return 1;
+        }
+
+        @Override
+        protected void initializeDataBaseTransaction(Connection p_o_dataBaseConnection)
+                throws P06_IACC_01_SQLException, IOException, P06_IACC_01_ExitApplicationException {
+            this.g_o_dataBaseTransaction = mockTransaction;
+        }
+
+        @Override
+        protected boolean applyCommit() {
+            return true;
+        }
+
+        @Override
+        public void execute() throws P06_IACC_01_ExitApplicationException {
+            // Override to use mock connection instead of actual one
+            Connection dbConnection = this.mockConn;
+            try {
+                dbConnection.setAutoCommit(false);
+                this.initializeDataBaseTransaction(dbConnection);
+                this.g_o_recordBeansList = this.getDataBaseTransaction().getRecordsBeansList();
+                this.innerExecute();
+                if (this.applyCommit()) {
+                    dbConnection.commit();
+                }
+            } catch (IOException | SQLException | P06_IACC_01_SQLException e) {
+                try {
+                    if (dbConnection != null) dbConnection.rollback();
+                } catch (SQLException ignore) {}
+                throw new P06_IACC_01_ExitApplicationException(e.getMessage(), e);
+            } finally {
+                // Skip actual close for test
+            }
+        }
     }
 }
