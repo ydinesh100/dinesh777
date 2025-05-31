@@ -1,9 +1,31 @@
+package com.bnpparibas.atlentic.iacc.bopr.level.test;
+
+import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.*;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
+import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_DBTransaction;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_SQLException;
+
 public class P06_IACC_01_DBTransactionTest {
 
     @Mock
     private Connection mockConnection;
+
     @Mock
     private PreparedStatement mockPreparedStatement;
+
     @Mock
     private ResultSet mockResultSet;
 
@@ -13,11 +35,16 @@ public class P06_IACC_01_DBTransactionTest {
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
 
+        // Set up mocks for JDBC
+        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+        // Create test subclass instance
         dbTransaction = new TestableDBTransaction(mockConnection);
     }
 
     /**
-     * Subclass with a public wrapper to expose protected method
+     * Subclass to expose the protected method via a public wrapper.
      */
     private class TestableDBTransaction extends P06_IACC_01_DBTransaction {
 
@@ -32,7 +59,7 @@ public class P06_IACC_01_DBTransactionTest {
 
         @Override
         protected void innerFeedingRecordBean(P06_IACC_01_BoprRecordBean recordBean, ResultSet resultSet) throws SQLException {
-            // not used in this test
+            // No-op for this test
         }
 
         @Override
@@ -42,25 +69,48 @@ public class P06_IACC_01_DBTransactionTest {
 
         @Override
         protected void feedRecordsBeansListPreparedStatement(PreparedStatement ps) throws SQLException {
-            // no-op
+            // No-op for this test
         }
 
-        // ✅ Public wrapper for the protected method
+        // ✅ Public wrapper for testing the protected method
         public List<P06_IACC_01_BoprRecordBean> callGetRecordsBeansList() throws P06_IACC_01_SQLException {
-            return this.getRecordsBeansList();  // can call protected method here
+            return this.getRecordsBeansList();
         }
     }
 
     @Test
-    public void testGetRecordsBeansList_positiveAmount() throws Exception {
-        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+    public void testGetRecordsBeansList_whenAmountIsPositive() throws Exception {
+        // Arrange: simulate one record with amount = 100
         when(mockResultSet.next()).thenReturn(true, false);
         when(mockResultSet.getInt("amount")).thenReturn(100);
 
+        // Act
         List<P06_IACC_01_BoprRecordBean> result = dbTransaction.callGetRecordsBeansList();
 
+        // Assert
         assertEquals(1, result.size());
         assertEquals(100, result.get(0).getAmount());
+    }
+
+    @Test
+    public void testGetRecordsBeansList_whenAmountIsZero_shouldBeSkipped() throws Exception {
+        // Arrange: simulate one record with amount = 0
+        when(mockResultSet.next()).thenReturn(true, false);
+        when(mockResultSet.getInt("amount")).thenReturn(0);
+
+        // Act
+        List<P06_IACC_01_BoprRecordBean> result = dbTransaction.callGetRecordsBeansList();
+
+        // Assert: should skip record with amount <= 0
+        assertEquals(0, result.size());
+    }
+
+    @Test(expected = P06_IACC_01_SQLException.class)
+    public void testGetRecordsBeansList_whenSQLExceptionThrown() throws Exception {
+        // Arrange: throw SQLException when preparing statement
+        when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB error"));
+
+        // Act & Assert: should throw custom exception
+        dbTransaction.callGetRecordsBeansList();
     }
 }
