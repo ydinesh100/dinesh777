@@ -1,45 +1,111 @@
-package com.bripparibas.atlentic.lacc.bopr.resource;
+package com.bnpparibas.atlentic.iacc.bopr.level2;
 
-import org.junit.Test;
+import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
+import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_SQLException;
+import org.junit.*;
+import org.junit.rules.TemporaryFolder;
+import org.mockito.*;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
+import java.io.File;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.sql.Connection;
+import java.util.*;
 
 import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
-public class P06_IACC_01_PropertiesMgrTest {
+public class P06_IACC_01_Level2Test {
 
-    @Test
-    public void testGetLevel1ActionName() {
-        String result = P06_IACC_01_PropertiesMgr.getLevel1ActionName();
-        assertEquals("LEVEL_1_ACTION", result);
+    @Rule
+    public TemporaryFolder folder = new TemporaryFolder();
+
+    @Mock
+    private P06_IACC_01_Level2DBTransaction mockTransaction;
+
+    @InjectMocks
+    private P06_IACC_01_Level2 level2;
+
+    private List<P06_IACC_01_BoprRecordBean> dummyRecords;
+
+    @Before
+    public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
+        // Prepare dummy record list
+        dummyRecords = new ArrayList<>();
+        dummyRecords.add(mock(P06_IACC_01_BoprRecordBean.class));
+        dummyRecords.add(mock(P06_IACC_01_BoprRecordBean.class));
+
+        // Set private field g_o_recordBeansList
+        Field recordListField = level2.getClass().getSuperclass().getDeclaredField("g_o_recordBeansList");
+        recordListField.setAccessible(true);
+        recordListField.set(level2, dummyRecords);
+
+        // Set mock DB transaction
+        when(mockTransaction.getBranchCurrency()).thenReturn("USD");
+        Field dbField = level2.getClass().getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
+        dbField.setAccessible(true);
+        dbField.set(level2, mockTransaction);
+
+        // Set environment variable (hack via reflection)
+        String tempDir = folder.newFolder("liq-output").getAbsolutePath() + "/";
+        setEnv("LIQFilesOutDirectory", tempDir);
+
+        // Set text file name from P06_IACC_01_Main
+        Field fileNameField = P06_IACC_01_Main.class.getDeclaredField("g_s_textFileName");
+        fileNameField.setAccessible(true);
+        fileNameField.set(null, "test_output.txt");
     }
 
     @Test
-    public void testGetLevel2ActionName() {
-        String result = P06_IACC_01_PropertiesMgr.getLevel2ActionName();
-        assertEquals("LEVEL_2_ACTION", result);
+    public void testInnerExecuteCreatesFile() throws IOException, P06_IACC_01_SQLException, P06_IACC_01_ExitApplicationException {
+        level2.innerExecute();
+
+        File expectedFile = new File(System.getenv("LIQFilesOutDirectory") + "test_output.txt");
+        assertTrue("Expected file should be created", expectedFile.exists());
+        assertTrue("Expected file should not be empty", expectedFile.length() > 0);
     }
 
     @Test
-    public void testGetQueryFromPropertiesFile_WithSchemaReplacement() {
-        String result = P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile("test.query");
-        assertEquals("SELECT * FROM LIQ_SCHEMA.table JOIN ATL_SCHEMA.table2", result);
+    public void testGetLevelNumber() {
+        assertEquals(2, level2.getLevelNumber());
     }
 
     @Test
-    public void testPrivateMethodGetValueFromPropertiesFile() throws Exception {
-        Method method = P06_IACC_01_PropertiesMgr.class.getDeclaredMethod("getValueFromPropertiesFile", String.class);
-        method.setAccessible(true);
-        String result = (String) method.invoke(null, "level.1.action.name");
-        assertEquals("LEVEL_1_ACTION", result);
+    public void testApplyCommitReturnsFalse() {
+        assertFalse(level2.applyCommit());
     }
 
     @Test
-    public void testPrivateConstructor() throws Exception {
-        Constructor<P06_IACC_01_PropertiesMgr> constructor = P06_IACC_01_PropertiesMgr.class.getDeclaredConstructor();
-        constructor.setAccessible(true);
-        Object obj = constructor.newInstance();
-        assertNotNull(obj);
+    public void testInitializeDataBaseTransactionSetsTransaction() throws P06_IACC_01_SQLException {
+        Connection mockConn = mock(Connection.class);
+        level2.initializeDataBaseTransaction(mockConn);
+
+        Field dbField;
+        try {
+            dbField = level2.getClass().getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
+            dbField.setAccessible(true);
+            Object obj = dbField.get(level2);
+            assertNotNull(obj);
+            assertTrue(obj instanceof P06_IACC_01_Level2DBTransaction);
+        } catch (Exception e) {
+            fail("Reflection failed: " + e.getMessage());
+        }
+    }
+
+    // Utility to set environment variable (hack for testing only)
+    private void setEnv(String key, String value) throws Exception {
+        Map<String, String> newenv = new HashMap<>(System.getenv());
+        newenv.put(key, value);
+        Class<?> processEnvironment = Class.forName("java.lang.ProcessEnvironment");
+        Field theEnvironmentField = processEnvironment.getDeclaredField("theEnvironment");
+        theEnvironmentField.setAccessible(true);
+        ((Map<String, String>) theEnvironmentField.get(null)).putAll(newenv);
+        Field theCaseInsensitiveEnvironmentField = processEnvironment.getDeclaredField("theCaseInsensitiveEnvironment");
+        theCaseInsensitiveEnvironmentField.setAccessible(true);
+        ((Map<String, String>) theCaseInsensitiveEnvironmentField.get(null)).putAll(newenv);
     }
 }
