@@ -61,3 +61,74 @@ public class P06_IACC_01_PropertiesMgrTest {
         assertEquals("SELECT * FROM LIQ_SCHEMA.table JOIN ATL_SCHEMA.table2", result);
     }
 }
+
+
+
+
+
+
+
+
+import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.*;
+
+import java.util.ResourceBundle;
+
+import org.junit.*;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+
+public class P06_IACC_01_PropertiesMgrTest {
+
+    private static MockedStatic<ResourceBundle> mockedStatic;
+    private static ResourceBundle mockPropsBundle;
+    private static ResourceBundle mockQueryBundle;
+
+    @BeforeClass
+    public static void setup() {
+        mockedStatic = Mockito.mockStatic(ResourceBundle.class);
+
+        mockPropsBundle = mock(ResourceBundle.class);
+        mockQueryBundle = mock(ResourceBundle.class);
+
+        mockedStatic.when(() ->
+            ResourceBundle.getBundle("com.bripparibas.atlentic.lacc.bopr.resource.AtlenticBEBopr"))
+            .thenReturn(mockPropsBundle);
+
+        mockedStatic.when(() ->
+            ResourceBundle.getBundle("com.bripparibas.atlentic.lacc.bopr.resource.AtlenticEBoprQueries"))
+            .thenReturn(mockQueryBundle);
+
+        // Mock key values
+        when(mockPropsBundle.getString("level.1.action.name")).thenReturn("LEVEL_1_ACTION");
+        when(mockPropsBundle.getString("level.2.action.name")).thenReturn("LEVEL_2_ACTION");
+        when(mockPropsBundle.getString("liq.schema.name")).thenReturn("LIQ_SCHEMA");
+        when(mockPropsBundle.getString("atlentic.schema.name")).thenReturn("ATL_SCHEMA");
+
+        when(mockQueryBundle.getString("test.query"))
+            .thenReturn("SELECT * FROM *liq_sh.table JOIN atl_sh.table2");
+    }
+
+    @AfterClass
+    public static void teardown() {
+        mockedStatic.close(); // Clean up static mocking
+    }
+
+    @Test
+    public void testGetLevel1ActionName() {
+        String result = P06_IACC_01_PropertiesMgr.getLevel1ActionName();
+        assertEquals("LEVEL_1_ACTION", result);
+    }
+
+    @Test
+    public void testGetLevel2ActionName() {
+        String result = P06_IACC_01_PropertiesMgr.getLevel2ActionName();
+        assertEquals("LEVEL_2_ACTION", result);
+    }
+
+    @Test
+    public void testGetQueryFromPropertiesFile() {
+        String result = P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile("test.query");
+        assertEquals("SELECT * FROM LIQ_SCHEMA.table JOIN ATL_SCHEMA.table2", result);
+    }
+}
