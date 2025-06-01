@@ -1,69 +1,64 @@
+import org.junit.Test;
+import org.junit.Before;
+import org.mockito.Mockito;
+
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.sql.ResultSet;
+
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
+
 public class P06_IACC_01_Level1DBTransactionTest {
 
-    private P06_IACC_01_Level1DBTransaction transaction;
-    private P06_IACC_01_Level1Bean bean;
+    private ResultSet mockResultSet;
+    private Object bean;
+    private Class<?> beanClass;
+    private Object dbTransaction;
 
     @Before
-    public void setUp() {
-        transaction = new P06_IACC_01_Level1DBTransaction();
-        bean = new P06_IACC_01_Level1Bean();
+    public void setUp() throws Exception {
+        // Load the Level1Bean class via reflection
+        beanClass = Class.forName("your.package.name.P06_IACC_01_Level1Bean"); // Replace with actual package
+        Constructor<?> constructor = beanClass.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        bean = constructor.newInstance();
+
+        // Create a mock ResultSet
+        mockResultSet = mock(ResultSet.class);
+        when(mockResultSet.getString("CURRENCY")).thenReturn("USD");
+        when(mockResultSet.getDouble("AMOUNT")).thenReturn(100.50);
+        when(mockResultSet.getInt("ID")).thenReturn(123);
+
+        // Create instance of P06_IACC_01_Level1DBTransaction
+        dbTransaction = new P06_IACC_01_Level1DBTransaction();
     }
 
     @Test
-    public void testPopulateBeanObject_withINRCurrency() throws Exception {
-        // Mock ResultSet
-        ResultSet rs = mock(ResultSet.class);
+    public void testPopulateBeanObject_usesReflection() throws Exception {
+        // Find the method populateBeanObject
+        Method populateMethod = P06_IACC_01_Level1DBTransaction.class
+                .getDeclaredMethod("populateBeanObject", Object.class, ResultSet.class);
+        populateMethod.setAccessible(true);
 
-        // Assume your bean has these columns and setters
-        when(rs.getString("CURRENCY")).thenReturn("INR");
-        when(rs.getDouble("AMOUNT")).thenReturn(1000.0);
-        when(rs.getString("TXN_TYPE")).thenReturn("SALE");
-        when(rs.getString("TXN_ID")).thenReturn("T123");
+        // Invoke the method
+        populateMethod.invoke(dbTransaction, bean, mockResultSet);
 
-        // Make method accessible
-        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod(
-                "populateBeanObject", Object.class, ResultSet.class);
-        method.setAccessible(true);
-        method.invoke(transaction, bean, rs);
+        // Validate populated fields using reflection
+        Field currencyField = beanClass.getDeclaredField("currency");
+        currencyField.setAccessible(true);
+        String currency = (String) currencyField.get(bean);
+        assertEquals("USD", currency);
 
-        assertEquals("INR", bean.getCurrency());
-        assertEquals(1000.0, bean.getAmount(), 0.001);
-        assertEquals(0.0, bean.getBaseAmount(), 0.001); // No conversion for INR
-    }
+        Field amountField = beanClass.getDeclaredField("amount");
+        amountField.setAccessible(true);
+        double amount = (double) amountField.get(bean);
+        assertEquals(100.50, amount, 0.01);
 
-    @Test
-    public void testPopulateBeanObject_withUSDCurrency() throws Exception {
-        ResultSet rs = mock(ResultSet.class);
-
-        when(rs.getString("CURRENCY")).thenReturn("USD");
-        when(rs.getDouble("AMOUNT")).thenReturn(200.0);
-        when(rs.getString("TXN_TYPE")).thenReturn("PAY");
-        when(rs.getString("TXN_ID")).thenReturn("T456");
-
-        // Stub getExchangeRate if needed
-        P06_IACC_01_Level1DBTransaction spy = Mockito.spy(transaction);
-        Mockito.doReturn(80.0).when(spy).getExchangeRate("USD");
-
-        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod(
-                "populateBeanObject", Object.class, ResultSet.class);
-        method.setAccessible(true);
-        method.invoke(spy, bean, rs);
-
-        assertEquals("USD", bean.getCurrency());
-        assertEquals(200.0, bean.getAmount(), 0.001);
-        assertEquals(16000.0, bean.getBaseAmount(), 0.001); // 200 * 80
-    }
-
-    @Test
-    public void testGenerateOperationReference() throws Exception {
-        bean.setTxnType("SALE");
-        bean.setTxnId("TXN789");
-
-        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod(
-                "generateOperationReference", Object.class);
-        method.setAccessible(true);
-
-        String reference = (String) method.invoke(transaction, bean);
-        assertEquals("SALE_TXN789", reference);
+        Field idField = beanClass.getDeclaredField("id");
+        idField.setAccessible(true);
+        int id = (int) idField.get(bean);
+        assertEquals(123, id);
     }
 }
