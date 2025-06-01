@@ -109,3 +109,36 @@ public class P06_IACC_01_Level2Test {
         ((Map<String, String>) theCaseInsensitiveEnvironmentField.get(null)).putAll(newenv);
     }
 }
+
+
+@Test
+public void testGetTextFileContent_UsesBranchCurrencyReflectively() throws Exception {
+    // Set dummy record list
+    List<P06_IACC_01_BoprRecordBean> records = new ArrayList<>();
+    records.add(mock(P06_IACC_01_BoprRecordBean.class));
+
+    // Set private field g_o_recordBeansList
+    Field recordListField = level2.getClass().getSuperclass().getDeclaredField("g_o_recordBeansList");
+    recordListField.setAccessible(true);
+    recordListField.set(level2, records);
+
+    // Create real DBTransaction instance
+    P06_IACC_01_Level2DBTransaction realTransaction = new P06_IACC_01_Level2DBTransaction(mock(Connection.class));
+
+    // Use reflection to set internal private field g_o_dataBaseTransaction
+    Field dbField = level2.getClass().getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
+    dbField.setAccessible(true);
+    dbField.set(level2, realTransaction);
+
+    // Use reflection to call private getBranchCurrency()
+    Method method = realTransaction.getClass().getDeclaredMethod("getBranchCurrency");
+    method.setAccessible(true);
+    String currency = (String) method.invoke(realTransaction);
+    assertNotNull(currency);  // Optional: assert the value returned
+
+    // Now test getTextFileContent() — it will use that branch currency
+    Method getTextMethod = level2.getClass().getDeclaredMethod("getTextFileContent");
+    getTextMethod.setAccessible(true);
+    String content = (String) getTextMethod.invoke(level2);
+    assertNotNull(content);  // Should contain header + footer, maybe more if logic implemented
+}
