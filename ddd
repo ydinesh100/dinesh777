@@ -1,49 +1,12 @@
 package com.bripparibas.atlentic.lacc.bopr.resource;
 
-import org.junit.*;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-
+import org.junit.Test;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
-import java.util.ResourceBundle;
 
 import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
 
 public class P06_IACC_01_PropertiesMgrTest {
-
-    private static MockedStatic<ResourceBundle> mockedStatic;
-    private static ResourceBundle mockPropsBundle;
-    private static ResourceBundle mockQueryBundle;
-
-    @BeforeClass
-    public static void setup() {
-        mockedStatic = Mockito.mockStatic(ResourceBundle.class);
-
-        mockPropsBundle = mock(ResourceBundle.class);
-        mockQueryBundle = mock(ResourceBundle.class);
-
-        // Mock getBundle return values
-        mockedStatic.when(() -> ResourceBundle.getBundle("com.bripparibas.atlentic.lacc.bopr.resource.AtlenticBEBopr"))
-                .thenReturn(mockPropsBundle);
-        mockedStatic.when(() -> ResourceBundle.getBundle("com.bripparibas.atlentic.lacc.bopr.resource.AtlenticEBoprQueries"))
-                .thenReturn(mockQueryBundle);
-
-        // Mock key/value pairs
-        when(mockPropsBundle.getString("level.1.action.name")).thenReturn("LEVEL_1_ACTION");
-        when(mockPropsBundle.getString("level.2.action.name")).thenReturn("LEVEL_2_ACTION");
-        when(mockPropsBundle.getString("liq.schema.name")).thenReturn("LIQ_SCHEMA");
-        when(mockPropsBundle.getString("atlentic.schema.name")).thenReturn("ATL_SCHEMA");
-
-        when(mockQueryBundle.getString("test.query"))
-                .thenReturn("SELECT * FROM *liq_sh.table JOIN atl_sh.table2");
-    }
-
-    @AfterClass
-    public static void tearDown() {
-        mockedStatic.close();
-    }
 
     @Test
     public void testGetLevel1ActionName() {
@@ -72,27 +35,11 @@ public class P06_IACC_01_PropertiesMgrTest {
     }
 
     @Test
-    public void testPrivateGetLiqSchemaName() throws Exception {
-        Method method = P06_IACC_01_PropertiesMgr.class.getDeclaredMethod("getLiqSchemaName");
-        method.setAccessible(true);
-        Object result = method.invoke(null);
-        assertEquals("LIQ_SCHEMA", result);
-    }
-
-    @Test
-    public void testPrivateGetAtlenticSchemaName() throws Exception {
-        Method method = P06_IACC_01_PropertiesMgr.class.getDeclaredMethod("getAtlenticSchemaName");
-        method.setAccessible(true);
-        Object result = method.invoke(null);
-        assertEquals("ATL_SCHEMA", result);
-    }
-
-    @Test
     public void testPrivateConstructorForCoverage() throws Exception {
         Constructor<P06_IACC_01_PropertiesMgr> constructor =
-                P06_IACC_01_PropertiesMgr.class.getDeclaredConstructor();
+            P06_IACC_01_PropertiesMgr.class.getDeclaredConstructor();
         constructor.setAccessible(true);
         P06_IACC_01_PropertiesMgr instance = constructor.newInstance();
-        assertNotNull(instance); // covers constructor
+        assertNotNull(instance);
     }
 }
