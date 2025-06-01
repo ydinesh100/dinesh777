@@ -20,28 +20,52 @@ public class P06_IACC_01_Level1DBTransactionTest {
 
     @Test
     public void testPopulateBeanObject_success() throws Exception {
-        // Arrange: Setup mock ResultSet values
+        // Arrange
         when(mockResultSet.getString("ACCOUNT_ID")).thenReturn("ACC123");
-        when(mockResultSet.getDouble("AMOUNT")).thenReturn(2500.50);
-        when(mockResultSet.getString("CURRENCY")).thenReturn("USD");
+        when(mockResultSet.getDouble("AMOUNT")).thenReturn(1234.56);
+        when(mockResultSet.getString("CURRENCY")).thenReturn("INR");
 
-        // Create a bean instance
         P06_IACC_01_Level1Bean bean = new P06_IACC_01_Level1Bean();
 
-        // Act: Call the protected method through the subclass
+        // Act
         dbTransaction.callPopulateBeanObject(bean, mockResultSet);
 
-        // Assert: Verify bean was populated correctly
+        // Assert
         assertEquals("ACC123", bean.getAccountId());
-        assertEquals(2500.50, bean.getAmount(), 0.001);
-        assertEquals("USD", bean.getCurrency());
+        assertEquals(1234.56, bean.getAmount(), 0.001);
+        assertEquals("INR", bean.getCurrency());
     }
 
-    // Optional: Add negative or null case tests here...
+    @Test(expected = SQLException.class)
+    public void testPopulateBeanObject_throwsSQLException() throws Exception {
+        // Arrange
+        when(mockResultSet.getString("ACCOUNT_ID")).thenThrow(new SQLException("DB error"));
 
-    /**
-     * Subclass to expose protected method for testing
-     */
+        P06_IACC_01_Level1Bean bean = new P06_IACC_01_Level1Bean();
+
+        // Act
+        dbTransaction.callPopulateBeanObject(bean, mockResultSet);
+    }
+
+    @Test
+    public void testPopulateBeanObject_withNullFields() throws Exception {
+        // Arrange
+        when(mockResultSet.getString("ACCOUNT_ID")).thenReturn(null);
+        when(mockResultSet.getDouble("AMOUNT")).thenReturn(0.0);
+        when(mockResultSet.getString("CURRENCY")).thenReturn(null);
+
+        P06_IACC_01_Level1Bean bean = new P06_IACC_01_Level1Bean();
+
+        // Act
+        dbTransaction.callPopulateBeanObject(bean, mockResultSet);
+
+        // Assert
+        assertNull(bean.getAccountId());
+        assertEquals(0.0, bean.getAmount(), 0.001);
+        assertNull(bean.getCurrency());
+    }
+
+    // Subclass to expose protected method
     private static class TestableLevel1DBTransaction extends P06_IACC_01_Level1DBTransaction {
         public void callPopulateBeanObject(Object bean, ResultSet rs) throws Exception {
             super.populateBeanObject(bean, rs);
