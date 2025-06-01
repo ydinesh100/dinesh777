@@ -204,6 +204,79 @@ public void setUp() throws Exception {
     fileNameField.set(null, "test_output.txt");
 }
 
+public class P06_IACC_01_Level2Test {
+
+    private List<P06_IACC_01_BoprRecordBean> dummyRecords;
+    private TestLevel2 level2;
+
+    @Rule
+    public TemporaryFolder folder = new TemporaryFolder();
+
+    // ✅ Test subclass of the class under test
+    private static class TestLevel2 extends P06_IACC_01_Level2 {
+        @Override
+        protected String getTextFileContent() {
+            return "HEADER\nRECORD1\nRECORD2\nFOOTER";
+        }
+    }
+
+    @Before
+    public void setUp() throws Exception {
+        level2 = new TestLevel2();
+
+        // Mock record list
+        dummyRecords = new ArrayList<>();
+        dummyRecords.add(mock(P06_IACC_01_BoprRecordBean.class));
+        dummyRecords.add(mock(P06_IACC_01_BoprRecordBean.class));
+
+        // Set private field g_o_recordBeansList
+        Field recordListField = level2.getClass().getSuperclass().getDeclaredField("g_o_recordBeansList");
+        recordListField.setAccessible(true);
+        recordListField.set(level2, dummyRecords);
+
+        // Set mock DB transaction — even if unused now
+        Field dbField = level2.getClass().getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
+        dbField.setAccessible(true);
+        dbField.set(level2, mock(P06_IACC_01_Level2DBTransaction.class));
+
+        // Set env variable
+        String tempDir = folder.newFolder("liq-output").getAbsolutePath() + "/";
+        setEnv("LIQFilesOutDirectory", tempDir);
+
+        // Set text file name (static field)
+        Field fileNameField = P06_IACC_01_Main.class.getDeclaredField("g_s_textFileName");
+        fileNameField.setAccessible(true);
+        fileNameField.set(null, "test_output.txt");
+    }
+
+    @Test
+    public void testInnerExecute_WritesExpectedFile() throws Exception {
+        level2.innerExecute();  // Writes file using overridden getTextFileContent()
+
+        File outputFile = new File(System.getenv("LIQFilesOutDirectory") + "test_output.txt");
+        assertTrue(outputFile.exists());
+
+        String content = new String(Files.readAllBytes(outputFile.toPath()));
+        assertTrue(content.contains("HEADER"));
+        assertTrue(content.contains("RECORD1"));
+        assertTrue(content.contains("FOOTER"));
+    }
+
+    // Utility to set env variable using reflection (works in most test JVMs)
+    private static void setEnv(String key, String value) throws Exception {
+        Map<String, String> newenv = new HashMap<>();
+        newenv.put(key, value);
+        Class<?> processEnvironmentClass = Class.forName("java.lang.ProcessEnvironment");
+        Field theEnvironmentField = processEnvironmentClass.getDeclaredField("theEnvironment");
+        theEnvironmentField.setAccessible(true);
+        ((Map<String, String>) theEnvironmentField.get(null)).putAll(newenv);
+        Field theCaseInsensitiveEnvironmentField = processEnvironmentClass.getDeclaredField("theCaseInsensitiveEnvironment");
+        theCaseInsensitiveEnvironmentField.setAccessible(true);
+        ((Map<String, String>) theCaseInsensitiveEnvironmentField.get(null)).putAll(newenv);
+    }
+}
+
+
 
 
 
