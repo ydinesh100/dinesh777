@@ -140,5 +140,39 @@ public void testGetTextFileContent_UsesBranchCurrencyReflectively() throws Excep
     Method getTextMethod = level2.getClass().getDeclaredMethod("getTextFileContent");
     getTextMethod.setAccessible(true);
     String content = (String) getTextMethod.invoke(level2);
-    assertNotNull(content);  // Should contain header + footer, maybe more if logic implemented
+    assertNotNull(content);  // Should contain header + footer, maybe more if logic @Before
+public void setUp() throws Exception {
+    MockitoAnnotations.initMocks(this);
+
+    // Prepare dummy record list
+    dummyRecords = new ArrayList<>();
+    dummyRecords.add(mock(P06_IACC_01_BoprRecordBean.class));
+    dummyRecords.add(mock(P06_IACC_01_BoprRecordBean.class));
+
+    // Set private field g_o_recordBeansList
+    Field recordListField = level2.getClass().getSuperclass().getDeclaredField("g_o_recordBeansList");
+    recordListField.setAccessible(true);
+    recordListField.set(level2, dummyRecords);
+
+    // Use a test subclass to override getBranchCurrency()
+    P06_IACC_01_Level2DBTransaction testTransaction = new TestLevel2DBTransaction();
+    Field dbField = level2.getClass().getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
+    dbField.setAccessible(true);
+    dbField.set(level2, testTransaction);
+
+    // Set environment variable (hack via reflection)
+    String tempDir = folder.newFolder("liq-output").getAbsolutePath() + "/";
+    setEnv("LIQFilesOutDirectory", tempDir);
+
+    // Set text file name from P06_IACC_01_Main
+    Field fileNameField = P06_IACC_01_Main.class.getDeclaredField("g_s_textFileName");
+    fileNameField.setAccessible(true);
+    fileNameField.set(null, "test_output.txt");
 }
+
+
+
+
+
+
+
