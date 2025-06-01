@@ -171,6 +171,39 @@ public void setUp() throws Exception {
 }
 
 
+private TestLevel2 level2;
+
+@Before
+public void setUp() throws Exception {
+    MockitoAnnotations.initMocks(this);
+
+    level2 = new TestLevel2();  // <-- Use test subclass here
+
+    // Prepare dummy record list
+    dummyRecords = new ArrayList<>();
+    dummyRecords.add(mock(P06_IACC_01_BoprRecordBean.class));
+    dummyRecords.add(mock(P06_IACC_01_BoprRecordBean.class));
+
+    // Set private field g_o_recordBeansList
+    Field recordListField = level2.getClass().getSuperclass().getDeclaredField("g_o_recordBeansList");
+    recordListField.setAccessible(true);
+    recordListField.set(level2, dummyRecords);
+
+    // Set mock DB transaction (even if unused here)
+    Field dbField = level2.getClass().getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
+    dbField.setAccessible(true);
+    dbField.set(level2, mock(P06_IACC_01_Level2DBTransaction.class));
+
+    // Set environment variable for file output
+    String tempDir = folder.newFolder("liq-output").getAbsolutePath() + "/";
+    setEnv("LIQFilesOutDirectory", tempDir);
+
+    // Set static text file name
+    Field fileNameField = P06_IACC_01_Main.class.getDeclaredField("g_s_textFileName");
+    fileNameField.setAccessible(true);
+    fileNameField.set(null, "test_output.txt");
+}
+
 
 
 
