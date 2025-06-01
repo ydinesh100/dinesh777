@@ -97,3 +97,34 @@ public class P06_IACC_01_Level2Test {
         ((Map<String, String>) theCaseInsensitiveEnvironmentField.get(null)).putAll(newenv);
     }
 }
+
+
+
+@Before
+public void setUp() throws Exception {
+    level2 = P06_IACC_01_Level2.class.getDeclaredConstructor().newInstance();
+
+    // Prepare dummy records
+    dummyRecords = new ArrayList<>();
+    dummyRecords.add(mock(P06_IACC_01_BoprRecordBean.class));
+    dummyRecords.add(mock(P06_IACC_01_BoprRecordBean.class));
+
+    Field recordListField = level2.getClass().getSuperclass().getDeclaredField("g_o_recordBeansList");
+    recordListField.setAccessible(true);
+    recordListField.set(level2, dummyRecords);
+
+    // Create the test DB transaction with dummy connection (can be null if not used)
+    TestLevel2DBTransaction testTransaction = new TestLevel2DBTransaction(null);
+
+    Field dbField = level2.getClass().getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
+    dbField.setAccessible(true);
+    dbField.set(level2, testTransaction);
+
+    // Set env variable and text file name as before
+    String tempDir = folder.newFolder("liq-output").getAbsolutePath() + "/";
+    setEnv("LIQFilesOutDirectory", tempDir);
+
+    Field fileNameField = P06_IACC_01_Main.class.getDeclaredField("g_s_textFileName");
+    fileNameField.setAccessible(true);
+    fileNameField.set(null, "test_output.txt");
+}
