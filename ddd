@@ -1,42 +1,63 @@
-import static org.junit.Assert.assertEquals;
-import static org.mockito.Matchers.eq;
-import static org.powermock.api.mockito.PowerMockito.mockStatic;
-import static org.powermock.api.mockito.PowerMockito.when;
+package com.bripparibas.atlentic.lacc.bopr.resource;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.junit.*;
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({P06_IACC_01_PropertiesMgr.class})
-public class P06_IACC_01_LevelTest {
+import java.util.ResourceBundle;
 
-    @Test
-    public void testGetLevel1ActionName_ReturnsExpectedValue() {
-        // Arrange
-        mockStatic(P06_IACC_01_PropertiesMgr.class);
-        when(P06_IACC_01_PropertiesMgr.getValueFromPropertiesFile("level.1 ion.name"))
-            .thenReturn("Level 1 Action");
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
-        // Act
-        String result = P06_IACC_01_Level.getLevel1ActionName();
+public class P06_IACC_01_PropertiesMgrTest {
 
-        // Assert
-        assertEquals("Level 1 Action", result);
+    private static MockedStatic<ResourceBundle> mockedStatic;
+    private static ResourceBundle mockPropsBundle;
+    private static ResourceBundle mockQueryBundle;
+
+    @BeforeClass
+    public static void setUp() {
+        // Mock static getBundle
+        mockedStatic = Mockito.mockStatic(ResourceBundle.class);
+        mockPropsBundle = mock(ResourceBundle.class);
+        mockQueryBundle = mock(ResourceBundle.class);
+
+        // Mock property file loading by name
+        mockedStatic.when(() -> ResourceBundle.getBundle("com.bripparibas.atlentic.lacc.bopr.resource.AtlenticBEBopr"))
+            .thenReturn(mockPropsBundle);
+        mockedStatic.when(() -> ResourceBundle.getBundle("com.bripparibas.atlentic.lacc.bopr.resource.AtlenticEBoprQueries"))
+            .thenReturn(mockQueryBundle);
+
+        // Mock getString() from property bundle
+        when(mockPropsBundle.getString("level.1.action.name")).thenReturn("LEVEL_1_ACTION");
+        when(mockPropsBundle.getString("level.2.action.name")).thenReturn("LEVEL_2_ACTION");
+        when(mockPropsBundle.getString("liq.schema.name")).thenReturn("LIQ_SCHEMA");
+        when(mockPropsBundle.getString("atlentic.schema.name")).thenReturn("ATL_SCHEMA");
+
+        // Mock getString() from query bundle
+        when(mockQueryBundle.getString("test.query")).thenReturn("SELECT * FROM *liq_sh.table JOIN atl_sh.table2");
+    }
+
+    @AfterClass
+    public static void tearDown() {
+        mockedStatic.close(); // Important: Clean up static mocking
     }
 
     @Test
-    public void testGetLevel1ActionName_ReturnsNullWhenNotFound() {
-        // Arrange
-        mockStatic(P06_IACC_01_PropertiesMgr.class);
-        when(P06_IACC_01_PropertiesMgr.getValueFromPropertiesFile("level.1 ion.name"))
-            .thenReturn(null);
+    public void testGetLevel1ActionName() {
+        String result = P06_IACC_01_PropertiesMgr.getLevel1ActionName();
+        assertEquals("LEVEL_1_ACTION", result);
+    }
 
-        // Act
-        String result = P06_IACC_01_Level.getLevel1ActionName();
+    @Test
+    public void testGetLevel2ActionName() {
+        String result = P06_IACC_01_PropertiesMgr.getLevel2ActionName();
+        assertEquals("LEVEL_2_ACTION", result);
+    }
 
-        // Assert
-        assertEquals(null, result);
+    @Test
+    public void testGetQueryFromPropertiesFile() {
+        String result = P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile("test.query");
+        assertEquals("SELECT * FROM LIQ_SCHEMA.table JOIN ATL_SCHEMA.table2", result);
     }
 }
