@@ -1,74 +1,83 @@
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.util.List;
+
+import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
+import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_DBTransaction;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_SQLException;
 
 import org.junit.Before;
 import org.junit.Test;
 
-public class P06_IACC_01_Level1DBTransactionTest {
+public class P06_IACC_01_DBTransactionTest {
 
-    private TestableLevel1DBTransaction dbTransaction;
+    private Connection mockConnection;
+    private PreparedStatement mockPreparedStatement;
     private ResultSet mockResultSet;
+    private P06_IACC_01_DBTransaction instance;
 
     @Before
-    public void setUp() {
-        dbTransaction = new TestableLevel1DBTransaction();
+    public void setUp() throws Exception {
+        mockConnection = mock(Connection.class);
+        mockPreparedStatement = mock(PreparedStatement.class);
         mockResultSet = mock(ResultSet.class);
+
+        // Anonymous subclass of the abstract class
+        Constructor<?> constructor = P06_IACC_01_DBTransaction.class.getDeclaredConstructor(Connection.class);
+        constructor.setAccessible(true);
+
+        instance = new P06_IACC_01_DBTransaction(mockConnection) {
+            @Override
+            protected void feedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) {
+                bean.setAmount(100); // setting dummy amount
+            }
+
+            @Override
+            protected void innerFeedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) {
+                // no-op
+            }
+
+            @Override
+            protected String getSelectRecordsQueryKey() {
+                return "dummy.query.key";
+            }
+
+            @Override
+            protected void feedRecordsBeansListPreparedStatement(PreparedStatement stmt) {
+                // no-op
+            }
+        };
     }
 
     @Test
-    public void testPopulateBeanObject_success() throws Exception {
-        // Arrange
-        when(mockResultSet.getString("ACCOUNT_ID")).thenReturn("ACC123");
-        when(mockResultSet.getDouble("AMOUNT")).thenReturn(1234.56);
-        when(mockResultSet.getString("CURRENCY")).thenReturn("INR");
+    public void testGetRecordsBeansList_Reflection() throws Exception {
+        // Simulate ResultSet with one row
+        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+        when(mockResultSet.next()).thenReturn(true).thenReturn(false);
 
-        P06_IACC_01_Level1Bean bean = new P06_IACC_01_Level1Bean();
+        // Use real ResultSet with dummy value
+        when(mockResultSet.getString(anyString())).thenReturn("100");
 
-        // Act
-        dbTransaction.callPopulateBeanObject(bean, mockResultSet);
+        // Set the static method in P86_IACC_01_PropertiesMgr if needed
+        // Alternatively, override getSelectRecordsQueryKey to return the query directly
 
-        // Assert
-        assertEquals("ACC123", bean.getAccountId());
-        assertEquals(1234.56, bean.getAmount(), 0.001);
-        assertEquals("INR", bean.getCurrency());
-    }
+        // Use reflection to access and invoke protected method
+        Method method = P06_IACC_01_DBTransaction.class.getDeclaredMethod("getRecordsBeansList");
+        method.setAccessible(true);
 
-    @Test(expected = SQLException.class)
-    public void testPopulateBeanObject_throwsSQLException() throws Exception {
-        // Arrange
-        when(mockResultSet.getString("ACCOUNT_ID")).thenThrow(new SQLException("DB error"));
+        @SuppressWarnings("unchecked")
+        List<P06_IACC_01_BoprRecordBean> result =
+            (List<P06_IACC_01_BoprRecordBean>) method.invoke(instance);
 
-        P06_IACC_01_Level1Bean bean = new P06_IACC_01_Level1Bean();
-
-        // Act
-        dbTransaction.callPopulateBeanObject(bean, mockResultSet);
-    }
-
-    @Test
-    public void testPopulateBeanObject_withNullFields() throws Exception {
-        // Arrange
-        when(mockResultSet.getString("ACCOUNT_ID")).thenReturn(null);
-        when(mockResultSet.getDouble("AMOUNT")).thenReturn(0.0);
-        when(mockResultSet.getString("CURRENCY")).thenReturn(null);
-
-        P06_IACC_01_Level1Bean bean = new P06_IACC_01_Level1Bean();
-
-        // Act
-        dbTransaction.callPopulateBeanObject(bean, mockResultSet);
-
-        // Assert
-        assertNull(bean.getAccountId());
-        assertEquals(0.0, bean.getAmount(), 0.001);
-        assertNull(bean.getCurrency());
-    }
-
-    // Subclass to expose protected method
-    private static class TestableLevel1DBTransaction extends P06_IACC_01_Level1DBTransaction {
-        public void callPopulateBeanObject(Object bean, ResultSet rs) throws Exception {
-            super.populateBeanObject(bean, rs);
-        }
+        assertNotNull(result);
+        assertEquals(1, result.size());
+        assertEquals(100, result.get(0).getAmount(), 0.001);
     }
 }
