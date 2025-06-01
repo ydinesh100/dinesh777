@@ -1,82 +1,15 @@
 package com.bripparibas.atlentic.lacc.bopr.resource;
 
 import org.junit.*;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.util.ResourceBundle;
+
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
-
-import java.util.ResourceBundle;
-
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-
-public class P06_IACC_01_PropertiesMgrTest {
-
-    private static MockedStatic<ResourceBundle> mockedStatic;
-    private static ResourceBundle mockPropsBundle;
-    private static ResourceBundle mockQueryBundle;
-
-    @BeforeClass
-    public static void setUp() {
-        // Mock static getBundle
-        mockedStatic = Mockito.mockStatic(ResourceBundle.class);
-        mockPropsBundle = mock(ResourceBundle.class);
-        mockQueryBundle = mock(ResourceBundle.class);
-
-        // Mock property file loading by name
-        mockedStatic.when(() -> ResourceBundle.getBundle("com.bripparibas.atlentic.lacc.bopr.resource.AtlenticBEBopr"))
-            .thenReturn(mockPropsBundle);
-        mockedStatic.when(() -> ResourceBundle.getBundle("com.bripparibas.atlentic.lacc.bopr.resource.AtlenticEBoprQueries"))
-            .thenReturn(mockQueryBundle);
-
-        // Mock getString() from property bundle
-        when(mockPropsBundle.getString("level.1.action.name")).thenReturn("LEVEL_1_ACTION");
-        when(mockPropsBundle.getString("level.2.action.name")).thenReturn("LEVEL_2_ACTION");
-        when(mockPropsBundle.getString("liq.schema.name")).thenReturn("LIQ_SCHEMA");
-        when(mockPropsBundle.getString("atlentic.schema.name")).thenReturn("ATL_SCHEMA");
-
-        // Mock getString() from query bundle
-        when(mockQueryBundle.getString("test.query")).thenReturn("SELECT * FROM *liq_sh.table JOIN atl_sh.table2");
-    }
-
-    @AfterClass
-    public static void tearDown() {
-        mockedStatic.close(); // Important: Clean up static mocking
-    }
-
-    @Test
-    public void testGetLevel1ActionName() {
-        String result = P06_IACC_01_PropertiesMgr.getLevel1ActionName();
-        assertEquals("LEVEL_1_ACTION", result);
-    }
-
-    @Test
-    public void testGetLevel2ActionName() {
-        String result = P06_IACC_01_PropertiesMgr.getLevel2ActionName();
-        assertEquals("LEVEL_2_ACTION", result);
-    }
-
-    @Test
-    public void testGetQueryFromPropertiesFile() {
-        String result = P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile("test.query");
-        assertEquals("SELECT * FROM LIQ_SCHEMA.table JOIN ATL_SCHEMA.table2", result);
-    }
-}
-
-
-
-
-
-
-
-
-import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.*;
-
-import java.util.ResourceBundle;
-
-import org.junit.*;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
 
 public class P06_IACC_01_PropertiesMgrTest {
 
@@ -91,27 +24,25 @@ public class P06_IACC_01_PropertiesMgrTest {
         mockPropsBundle = mock(ResourceBundle.class);
         mockQueryBundle = mock(ResourceBundle.class);
 
-        mockedStatic.when(() ->
-            ResourceBundle.getBundle("com.bripparibas.atlentic.lacc.bopr.resource.AtlenticBEBopr"))
-            .thenReturn(mockPropsBundle);
+        // Mock getBundle return values
+        mockedStatic.when(() -> ResourceBundle.getBundle("com.bripparibas.atlentic.lacc.bopr.resource.AtlenticBEBopr"))
+                .thenReturn(mockPropsBundle);
+        mockedStatic.when(() -> ResourceBundle.getBundle("com.bripparibas.atlentic.lacc.bopr.resource.AtlenticEBoprQueries"))
+                .thenReturn(mockQueryBundle);
 
-        mockedStatic.when(() ->
-            ResourceBundle.getBundle("com.bripparibas.atlentic.lacc.bopr.resource.AtlenticEBoprQueries"))
-            .thenReturn(mockQueryBundle);
-
-        // Mock key values
+        // Mock key/value pairs
         when(mockPropsBundle.getString("level.1.action.name")).thenReturn("LEVEL_1_ACTION");
         when(mockPropsBundle.getString("level.2.action.name")).thenReturn("LEVEL_2_ACTION");
         when(mockPropsBundle.getString("liq.schema.name")).thenReturn("LIQ_SCHEMA");
         when(mockPropsBundle.getString("atlentic.schema.name")).thenReturn("ATL_SCHEMA");
 
         when(mockQueryBundle.getString("test.query"))
-            .thenReturn("SELECT * FROM *liq_sh.table JOIN atl_sh.table2");
+                .thenReturn("SELECT * FROM *liq_sh.table JOIN atl_sh.table2");
     }
 
     @AfterClass
-    public static void teardown() {
-        mockedStatic.close(); // Clean up static mocking
+    public static void tearDown() {
+        mockedStatic.close();
     }
 
     @Test
@@ -127,8 +58,41 @@ public class P06_IACC_01_PropertiesMgrTest {
     }
 
     @Test
-    public void testGetQueryFromPropertiesFile() {
+    public void testGetQueryFromPropertiesFile_WithSchemaReplacement() {
         String result = P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile("test.query");
         assertEquals("SELECT * FROM LIQ_SCHEMA.table JOIN ATL_SCHEMA.table2", result);
+    }
+
+    @Test
+    public void testPrivateGetValueFromPropertiesFile() throws Exception {
+        Method method = P06_IACC_01_PropertiesMgr.class.getDeclaredMethod("getValueFromPropertiesFile", String.class);
+        method.setAccessible(true);
+        Object result = method.invoke(null, "level.1.action.name");
+        assertEquals("LEVEL_1_ACTION", result);
+    }
+
+    @Test
+    public void testPrivateGetLiqSchemaName() throws Exception {
+        Method method = P06_IACC_01_PropertiesMgr.class.getDeclaredMethod("getLiqSchemaName");
+        method.setAccessible(true);
+        Object result = method.invoke(null);
+        assertEquals("LIQ_SCHEMA", result);
+    }
+
+    @Test
+    public void testPrivateGetAtlenticSchemaName() throws Exception {
+        Method method = P06_IACC_01_PropertiesMgr.class.getDeclaredMethod("getAtlenticSchemaName");
+        method.setAccessible(true);
+        Object result = method.invoke(null);
+        assertEquals("ATL_SCHEMA", result);
+    }
+
+    @Test
+    public void testPrivateConstructorForCoverage() throws Exception {
+        Constructor<P06_IACC_01_PropertiesMgr> constructor =
+                P06_IACC_01_PropertiesMgr.class.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        P06_IACC_01_PropertiesMgr instance = constructor.newInstance();
+        assertNotNull(instance); // covers constructor
     }
 }
