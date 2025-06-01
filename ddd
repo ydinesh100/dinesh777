@@ -1,29 +1,42 @@
-  @Before
+@Before
     public void setUp() throws Exception {
-        // 1. Instantiate class under test
         level2 = P06_IACC_01_Level2.class.getDeclaredConstructor().newInstance();
 
-        // 2. Prepare dummy records
+        // Create dummy records
         dummyRecords = new ArrayList<>();
         dummyRecords.add(new P06_IACC_01_BoprRecordBean());
         dummyRecords.add(new P06_IACC_01_BoprRecordBean());
 
-        // 3. Inject g_o_recordBeansList
-        Field recordListField = level2.getClass().getSuperclass().getDeclaredField("g_o_recordBeansList");
-        recordListField.setAccessible(true);
-        recordListField.set(level2, dummyRecords);
+        // Set g_o_recordBeansList via reflection
+        Field recordField = level2.getClass().getSuperclass().getDeclaredField("g_o_recordBeansList");
+        recordField.setAccessible(true);
+        recordField.set(level2, dummyRecords);
 
-        // 4. Inject mocked DB transaction via test subclass
-        TestLevel2DBTransaction testTransaction = new TestLevel2DBTransaction(null);
-        Field dbField = level2.getClass().getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
-        dbField.setAccessible(true);
-        dbField.set(level2, testTransaction);
+        // Set g_o_dataBaseTransaction via reflection
+        TestLevel2DBTransaction testTx = new TestLevel2DBTransaction(null);
+        Field txField = level2.getClass().getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
+        txField.setAccessible(true);
+        txField.set(level2, testTx);
 
-        // 5. Set env var for output directory
-        String tempDir = folder.newFolder("liq-output").getAbsolutePath() + File.separator;
-        setEnv("LIQFilesOutDirectory", tempDir);
+        // Set LIQFilesOutDirectory environment variable
+        String outDir = folder.newFolder("liq-out").getAbsolutePath() + File.separator;
+        setEnv("LIQFilesOutDirectory", outDir);
 
-        // 6. Set text file name (P06_IACC_01_Main.g_s_textFileName)
-        Field fileNameField = P06_IACC_01_Main.class.getDeclaredField("g_s_textFileName");
-        fileNameField.setAccessible(true);
-        fileNameField.set(null, "test_output.txt");
+        // Set static g_s_textFileName in main class
+        Field nameField = P06_IACC_01_Main.class.getDeclaredField("g_s_textFileName");
+        nameField.setAccessible(true);
+        nameField.set(null, "test_output.txt");
+    }
+
+    @Test
+    public void testInnerExecuteCreatesFile() throws Exception {
+        level2.innerExecute();
+
+        String filePath = System.getenv("LIQFilesOutDirectory") + P06_IACC_01_Main.g_s_textFileName;
+        File outputFile = new File(filePath);
+
+        Assert.assertTrue("Output file should exist", outputFile.exists());
+        Assert.assertTrue("Output file should not be empty", outputFile.length() > 0);
+    }
+
+    
