@@ -1,31 +1,56 @@
-@Before
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2DBTransaction;
+import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_SQLException;
+import org.junit.*;
+import org.junit.rules.TemporaryFolder;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.lang.reflect.*;
+import java.util.*;
+
+public class P06_IACC_01_Level2Test {
+
+    private P06_IACC_01_Level2 level2;
+    private List<Object> dummyRecords; // Use raw Object list to add beans reflectively
+
+    @Rule
+    public TemporaryFolder folder = new TemporaryFolder();
+
+    @Before
     public void setUp() throws Exception {
         level2 = P06_IACC_01_Level2.class.getDeclaredConstructor().newInstance();
 
-        // Create dummy records
+        // Create dummy record beans reflectively
+        Class<?> beanClass = Class.forName("com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean");
+        Object bean1 = createInstance(beanClass);
+        Object bean2 = createInstance(beanClass);
         dummyRecords = new ArrayList<>();
-        dummyRecords.add(new P06_IACC_01_BoprRecordBean());
-        dummyRecords.add(new P06_IACC_01_BoprRecordBean());
+        dummyRecords.add(bean1);
+        dummyRecords.add(bean2);
 
-        // Set g_o_recordBeansList via reflection
+        // Set g_o_recordBeansList
         Field recordField = level2.getClass().getSuperclass().getDeclaredField("g_o_recordBeansList");
         recordField.setAccessible(true);
         recordField.set(level2, dummyRecords);
 
-        // Set g_o_dataBaseTransaction via reflection
-        TestLevel2DBTransaction testTx = new TestLevel2DBTransaction(null);
+        // Set g_o_dataBaseTransaction
+        TestLevel2DBTransaction tx = new TestLevel2DBTransaction(null);
         Field txField = level2.getClass().getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
         txField.setAccessible(true);
-        txField.set(level2, testTx);
+        txField.set(level2, tx);
 
-        // Set LIQFilesOutDirectory environment variable
+        // Set output dir
         String outDir = folder.newFolder("liq-out").getAbsolutePath() + File.separator;
         setEnv("LIQFilesOutDirectory", outDir);
 
-        // Set static g_s_textFileName in main class
-        Field nameField = P06_IACC_01_Main.class.getDeclaredField("g_s_textFileName");
-        nameField.setAccessible(true);
-        nameField.set(null, "test_output.txt");
+        // Set file name
+        Field f = P06_IACC_01_Main.class.getDeclaredField("g_s_textFileName");
+        f.setAccessible(true);
+        f.set(null, "test_output.txt");
     }
 
     @Test
@@ -39,4 +64,55 @@
         Assert.assertTrue("Output file should not be empty", outputFile.length() > 0);
     }
 
-    
+    // Subclass to override protected getBranchCurrency()
+    public static class TestLevel2DBTransaction extends P06_IACC_01_Level2DBTransaction {
+        public TestLevel2DBTransaction(java.sql.Connection conn) {
+            super(conn);
+        }
+
+        @Override
+        public String getBranchCurrency() {
+            return "USD";
+        }
+    }
+
+    // Utility: create instance using private constructor
+    private Object createInstance(Class<?> clazz) throws Exception {
+        Constructor<?> ctor = clazz.getDeclaredConstructor();
+        ctor.setAccessible(true);
+        return ctor.newInstance();
+    }
+
+    // Utility: update environment variable reflectively
+    @SuppressWarnings("unchecked")
+    private static void setEnv(String key, String value) throws Exception {
+        Class<?> processEnvironment = Class.forName("java.lang.ProcessEnvironment");
+
+        try {
+            Field theEnvironmentField = processEnvironment.getDeclaredField("theEnvironment");
+            theEnvironmentField.setAccessible(true);
+            Map<String, String> env = (Map<String, String>) theEnvironmentField.get(null);
+            env.put(key, value);
+
+            Field ciEnvField = processEnvironment.getDeclaredField("theCaseInsensitiveEnvironment");
+            ciEnvField.setAccessible(true);
+            Map<String, String> cienv = (Map<String, String>) ciEnvField.get(null);
+            cienv.put(key, value);
+        } catch (NoSuchFieldException e) {
+            // Fallback for newer Java versions
+            Class<?>[] classes = Collections.class.getDeclaredClasses();
+            Map<String, String> newenv = new HashMap<>(System.getenv());
+            newenv.put(key, value);
+            for (Class<?> cl : classes) {
+                if ("java.util.Collections$UnmodifiableMap".equals(cl.getName())) {
+                    Field field = cl.getDeclaredField("m");
+                    field.setAccessible(true);
+                    Object obj = field.get(System.getenv());
+                    Map<String, String> map = (Map<String, String>) obj;
+                    map.clear();
+                    map.putAll(newenv);
+                }
+            }
+        }
+    }
+}
