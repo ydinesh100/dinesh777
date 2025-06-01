@@ -1,11 +1,42 @@
-@Test
-public void testGetLevel1ActionName() {
-    try {
-        String result = P06_IACC_01_PropertiesMgr.getLevel1ActionName();
-        System.out.println("Result: " + result);
-        assertEquals("LEVEL_1_ACTION", result);
-    } catch (Exception e) {
-        e.printStackTrace(); // This will show what’s really happening
-        fail("Exception occurred: " + e.getMessage());
+import static org.junit.Assert.assertEquals;
+import static org.mockito.Matchers.eq;
+import static org.powermock.api.mockito.PowerMockito.mockStatic;
+import static org.powermock.api.mockito.PowerMockito.when;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
+
+@RunWith(PowerMockRunner.class)
+@PrepareForTest({P06_IACC_01_PropertiesMgr.class})
+public class P06_IACC_01_LevelTest {
+
+    @Test
+    public void testGetLevel1ActionName_ReturnsExpectedValue() {
+        // Arrange
+        mockStatic(P06_IACC_01_PropertiesMgr.class);
+        when(P06_IACC_01_PropertiesMgr.getValueFromPropertiesFile("level.1 ion.name"))
+            .thenReturn("Level 1 Action");
+
+        // Act
+        String result = P06_IACC_01_Level.getLevel1ActionName();
+
+        // Assert
+        assertEquals("Level 1 Action", result);
+    }
+
+    @Test
+    public void testGetLevel1ActionName_ReturnsNullWhenNotFound() {
+        // Arrange
+        mockStatic(P06_IACC_01_PropertiesMgr.class);
+        when(P06_IACC_01_PropertiesMgr.getValueFromPropertiesFile("level.1 ion.name"))
+            .thenReturn(null);
+
+        // Act
+        String result = P06_IACC_01_Level.getLevel1ActionName();
+
+        // Assert
+        assertEquals(null, result);
     }
 }
