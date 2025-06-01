@@ -1,117 +1,69 @@
-import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
-import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2DBTransaction;
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_SQLException;
-import org.junit.*;
-import org.junit.rules.TemporaryFolder;
+public class P06_IACC_01_Level1DBTransactionTest {
 
-import java.io.File;
-import java.lang.reflect.*;
-import java.sql.Connection;
-import java.util.*;
-
-import static org.junit.Assert.assertTrue;
-
-public class P06_IACC_01_Level2Test {
-
-    // ✅ Override DBTransaction class to expose getBranchCurrency()
-    public static class TestLevel2DBTransaction extends P06_IACC_01_Level2DBTransaction {
-        public TestLevel2DBTransaction(Connection conn) {
-            super(conn);
-        }
-
-        @Override
-        public String getBranchCurrency() {
-            return "USD";
-        }
-    }
-
-    private P06_IACC_01_Level2 level2;
-    private List<Object> dummyRecords;
-
-    @Rule
-    public TemporaryFolder folder = new TemporaryFolder();
+    private P06_IACC_01_Level1DBTransaction transaction;
+    private P06_IACC_01_Level1Bean bean;
 
     @Before
-    public void setUp() throws Exception {
-        // Instantiate level2
-        level2 = P06_IACC_01_Level2.class.getDeclaredConstructor().newInstance();
-
-        // Reflectively instantiate 2 dummy beans
-        Class<?> beanClass = Class.forName("com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean");
-        dummyRecords = new ArrayList<>();
-        dummyRecords.add(createInstance(beanClass));
-        dummyRecords.add(createInstance(beanClass));
-
-        // Inject g_o_recordBeansList
-        Field recordField = level2.getClass().getSuperclass().getDeclaredField("g_o_recordBeansList");
-        recordField.setAccessible(true);
-        recordField.set(level2, dummyRecords);
-
-        // Inject g_o_dataBaseTransaction with overridden test class
-        Field txField = level2.getClass().getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
-        txField.setAccessible(true);
-        txField.set(level2, new TestLevel2DBTransaction(null));
-
-        // Set environment variable for file output dir
-        String outDir = folder.newFolder("liq-out").getAbsolutePath() + File.separator;
-        setEnv("LIQFilesOutDirectory", outDir);
-
-        // Set static file name
-        Field fileNameField = P06_IACC_01_Main.class.getDeclaredField("g_s_textFileName");
-        fileNameField.setAccessible(true);
-        fileNameField.set(null, "test_output.txt");
+    public void setUp() {
+        transaction = new P06_IACC_01_Level1DBTransaction();
+        bean = new P06_IACC_01_Level1Bean();
     }
 
     @Test
-    public void testInnerExecute_createsFileWithContent() throws Exception {
-        level2.innerExecute();
+    public void testPopulateBeanObject_withINRCurrency() throws Exception {
+        // Mock ResultSet
+        ResultSet rs = mock(ResultSet.class);
 
-        String path = System.getenv("LIQFilesOutDirectory") + P06_IACC_01_Main.g_s_textFileName;
-        File outputFile = new File(path);
+        // Assume your bean has these columns and setters
+        when(rs.getString("CURRENCY")).thenReturn("INR");
+        when(rs.getDouble("AMOUNT")).thenReturn(1000.0);
+        when(rs.getString("TXN_TYPE")).thenReturn("SALE");
+        when(rs.getString("TXN_ID")).thenReturn("T123");
 
-        assertTrue("Output file should exist", outputFile.exists());
-        assertTrue("Output file should not be empty", outputFile.length() > 0);
+        // Make method accessible
+        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod(
+                "populateBeanObject", Object.class, ResultSet.class);
+        method.setAccessible(true);
+        method.invoke(transaction, bean, rs);
+
+        assertEquals("INR", bean.getCurrency());
+        assertEquals(1000.0, bean.getAmount(), 0.001);
+        assertEquals(0.0, bean.getBaseAmount(), 0.001); // No conversion for INR
     }
 
-    // Reflectively instantiate class with private constructor
-    private Object createInstance(Class<?> clazz) throws Exception {
-        Constructor<?> ctor = clazz.getDeclaredConstructor();
-        ctor.setAccessible(true);
-        return ctor.newInstance();
+    @Test
+    public void testPopulateBeanObject_withUSDCurrency() throws Exception {
+        ResultSet rs = mock(ResultSet.class);
+
+        when(rs.getString("CURRENCY")).thenReturn("USD");
+        when(rs.getDouble("AMOUNT")).thenReturn(200.0);
+        when(rs.getString("TXN_TYPE")).thenReturn("PAY");
+        when(rs.getString("TXN_ID")).thenReturn("T456");
+
+        // Stub getExchangeRate if needed
+        P06_IACC_01_Level1DBTransaction spy = Mockito.spy(transaction);
+        Mockito.doReturn(80.0).when(spy).getExchangeRate("USD");
+
+        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod(
+                "populateBeanObject", Object.class, ResultSet.class);
+        method.setAccessible(true);
+        method.invoke(spy, bean, rs);
+
+        assertEquals("USD", bean.getCurrency());
+        assertEquals(200.0, bean.getAmount(), 0.001);
+        assertEquals(16000.0, bean.getBaseAmount(), 0.001); // 200 * 80
     }
 
-    // Set env variable using reflection
-    @SuppressWarnings("unchecked")
-    private static void setEnv(String key, String value) throws Exception {
-        Map<String, String> newenv = new HashMap<>(System.getenv());
-        newenv.put(key, value);
+    @Test
+    public void testGenerateOperationReference() throws Exception {
+        bean.setTxnType("SALE");
+        bean.setTxnId("TXN789");
 
-        Class<?> processEnvironment = Class.forName("java.lang.ProcessEnvironment");
-        try {
-            Field theEnvironmentField = processEnvironment.getDeclaredField("theEnvironment");
-            theEnvironmentField.setAccessible(true);
-            Map<String, String> env = (Map<String, String>) theEnvironmentField.get(null);
-            env.put(key, value);
+        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod(
+                "generateOperationReference", Object.class);
+        method.setAccessible(true);
 
-            Field ciEnvField = processEnvironment.getDeclaredField("theCaseInsensitiveEnvironment");
-            ciEnvField.setAccessible(true);
-            Map<String, String> cienv = (Map<String, String>) ciEnvField.get(null);
-            cienv.put(key, value);
-        } catch (NoSuchFieldException e) {
-            // Fallback for JVMs without ProcessEnvironment
-            Class<?>[] classes = Collections.class.getDeclaredClasses();
-            for (Class<?> cl : classes) {
-                if ("java.util.Collections$UnmodifiableMap".equals(cl.getName())) {
-                    Field field = cl.getDeclaredField("m");
-                    field.setAccessible(true);
-                    Object obj = field.get(System.getenv());
-                    Map<String, String> map = (Map<String, String>) obj;
-                    map.clear();
-                    map.putAll(newenv);
-                }
-            }
-        }
+        String reference = (String) method.invoke(transaction, bean);
+        assertEquals("SALE_TXN789", reference);
     }
 }
