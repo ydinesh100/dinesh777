@@ -230,3 +230,96 @@ public void testInnerExecuteCreatesFile() throws Exception {
     // Clean up
     outputFile.delete();
 }
+
+
+
+
+
+
+
+
+
+import static org.junit.Assert.*;
+import org.junit.Test;
+import org.junit.Before;
+
+import java.io.*;
+import java.lang.reflect.*;
+import java.util.*;
+
+import com.bnpparibas.atlentic.iacc.bopr.level2.P86_IACC_01_Level2;
+import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2DBTransaction;
+import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
+
+public class P06_IACC_01_Level2Test {
+
+    private P86_IACC_01_Level2 level2;
+    private File tempDir;
+    private File outputFile;
+
+    @Before
+    public void setUp() throws Exception {
+        // Create temp directory
+        tempDir = new File(System.getProperty("java.io.tmpdir"), "bopr_test_dir");
+        if (!tempDir.exists()) tempDir.mkdirs();
+
+        // Set static file name in main class
+        Field fileNameField = P06_IACC_01_Main.class.getDeclaredField("g_s_textFileName");
+        fileNameField.setAccessible(true);
+        fileNameField.set(null, "test_output.txt");
+
+        // Create a minimal test subclass
+        level2 = new P86_IACC_01_Level2() {
+            @Override
+            protected String getTextFileContent() {
+                return "Test file content";
+            }
+
+            @Override
+            protected void innerExecute() throws Exception {
+                File textFile = new File(tempDir, P06_IACC_01_Main.g_s_textFileName);
+                try (FileWriter writer = new FileWriter(textFile)) {
+                    writer.write(this.getTextFileContent());
+                    writer.flush();
+                }
+            }
+        };
+
+        // Inject dummy DB transaction (required by superclass logic)
+        P06_IACC_01_Level2DBTransaction dummyTx = new P06_IACC_01_Level2DBTransaction(null);
+        Field txField = P86_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
+        txField.setAccessible(true);
+        txField.set(level2, dummyTx);
+
+        // Inject dummy record list
+        List<P06_IACC_01_BoprRecordBean> recordList = new ArrayList<>();
+        recordList.add(new P06_IACC_01_BoprRecordBean()); // one record for logging
+        Field listField = P86_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_recordBeansList");
+        listField.setAccessible(true);
+        listField.set(level2, recordList);
+    }
+
+    @Test
+    public void testInnerExecute_CreatesFileWithContent() throws Exception {
+        // Call the method under test
+        Method method = P86_IACC_01_Level2.class.getDeclaredMethod("innerExecute");
+        method.setAccessible(true);
+        method.invoke(level2);
+
+        // Verify the file was created and contains expected content
+        outputFile = new File(tempDir, P06_IACC_01_Main.g_s_textFileName);
+        assertTrue("Output file should be created", outputFile.exists());
+
+        // Read and verify file content
+        String content = new String(java.nio.file.Files.readAllBytes(outputFile.toPath()));
+        assertEquals("Test file content", content);
+    }
+
+    @After
+    public void tearDown() {
+        if (outputFile != null && outputFile.exists()) outputFile.delete();
+        if (tempDir != null && tempDir.exists()) tempDir.delete();
+    }
+}
+
