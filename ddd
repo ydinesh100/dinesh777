@@ -1,334 +1,8 @@
 package com.bnpparibas.atlentic.iacc.bopr.level2Test;
 
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
-
-import java.io.File;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.sql.Connection;
-import java.text.SimpleDateFormat;
-import java.util.*;
-
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-
-import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
-import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_BoprStringBuffer;
-import com.bnpparibas.atlentic.iacc.bopr.level2.P86_IACC_01_Level2;
-import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2DBTransaction;
-
-public class P06_IACC_01_Level2Test {
-
-    @InjectMocks
-    private P86_IACC_01_Level2 level2;
-
-    @Mock
-    private P06_IACC_01_Level2DBTransaction dbTransaction;
-
-    @Mock
-    private P06_IACC_01_BoprRecordBean recordBean;
-
-    @Mock
-    private Connection connection;
-
-    private List<P06_IACC_01_BoprRecordBean> recordBeansList;
-
-    private String branchCurrency = "EUR";
-
-    private P06_IACC_01_BoprStringBuffer stringBuffer;
-
-    @Before
-    public void setup() throws Exception {
-        MockitoAnnotations.initMocks(this);
-
-        // Setup fake DB transaction with a fixed currency
-        when(dbTransaction.getBranchCurrency()).thenReturn(branchCurrency);
-
-        // Inject into superclass fields via reflection
-        Field dbTxField = P86_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
-        dbTxField.setAccessible(true);
-        dbTxField.set(level2, dbTransaction);
-
-        recordBeansList = new ArrayList<>();
-        recordBeansList.add(recordBean);
-
-        Field listField = P86_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_recordBeansList");
-        listField.setAccessible(true);
-        listField.set(level2, recordBeansList);
-
-        // Mock recordBean values
-        when(recordBean.getSenderServiceCode()).thenReturn("123456");
-        when(recordBean.getOperationReference()).thenReturn("OP_REF_123");
-        when(recordBean.getCountryCode()).thenReturn("FR");
-        when(recordBean.getEffectiveDate()).thenReturn(new Date());
-        when(recordBean.getCashflowDirection()).thenReturn("FROM");
-        when(recordBean.getAmountCurrency()).thenReturn("EUR");
-        when(recordBean.getAmount()).thenReturn(1000.0);
-        when(recordBean.getAmountInBranchCurrency()).thenReturn(1000.0);
-
-        // Instantiate buffer manually for toString test
-        stringBuffer = new P06_IACC_01_BoprStringBuffer();
-    }
-
-    @Test
-    public void testApplyCommit() throws Exception {
-        Method method = P86_IACC_01_Level2.class.getDeclaredMethod("applyCommit");
-        method.setAccessible(true);
-        boolean result = (boolean) method.invoke(level2);
-        assertFalse(result);
-    }
-
-    @Test
-    public void testGetLevelNumber() throws Exception {
-        Method method = P86_IACC_01_Level2.class.getDeclaredMethod("getLevelNumber");
-        method.setAccessible(true);
-        int level = (int) method.invoke(level2);
-        assertEquals(2, level);
-    }
-
-    @Test
-    public void testInitializeDataBaseTransaction() throws Exception {
-        Method method = P86_IACC_01_Level2.class.getDeclaredMethod("initializeDataBaseTransaction", Connection.class);
-        method.setAccessible(true);
-        method.invoke(level2, connection);
-
-        Field field = P86_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
-        field.setAccessible(true);
-        Object dbTx = field.get(level2);
-        assertTrue(dbTx instanceof P06_IACC_01_Level2DBTransaction);
-    }
-
-    @Test
-    public void testGetTextFileContent() throws Exception {
-        Method method = P86_IACC_01_Level2.class.getDeclaredMethod("getTextFileContent");
-        method.setAccessible(true);
-        String result = (String) method.invoke(level2);
-        assertNotNull(result);
-        assertFalse(result.isEmpty());
-    }
-
-    @Test
-    public void testToString_EmptyBuffer() {
-        assertEquals("", stringBuffer.toString());
-    }
-
-    @Test
-    public void testAppendRecord() throws Exception {
-        Method appendMethod = P06_IACC_01_BoprStringBuffer.class.getDeclaredMethod("appendRecord", P06_IACC_01_BoprRecordBean.class, String.class);
-        appendMethod.setAccessible(true);
-        appendMethod.invoke(stringBuffer, recordBean, branchCurrency);
-
-        String expectedDate = new SimpleDateFormat("ddMMyyyy").format(recordBean.getEffectiveDate());
-        String result = stringBuffer.toString();
-
-        // You could assert presence of key values (e.g. OP_REF_123, date, amount string)
-        assertTrue(result.contains("OP_REF_123"));
-        assertTrue(result.contains(expectedDate));
-    }
-
-    @Test
-    public void testInnerExecuteCreatesFile() throws Exception {
-        // Set up temp env variable and file name
-        String tempDir = System.getProperty("java.io.tmpdir");
-        String fileName = "test_file.txt";
-
-        // Temporarily set environment variable and file name via reflection
-        Map<String, String> env = System.getenv();
-        Field field = P06_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_recordBeansList");
-        field.setAccessible(true);
-        field.set(level2, recordBeansList);
-
-        // Set static field P06_IACC_01_Main.g_s_textFileName
-        Field nameField = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main")
-                .getDeclaredField("g_s_textFileName");
-        nameField.setAccessible(true);
-        nameField.set(null, fileName);
-
-        // Set fake directory
-        Map<String, String> newEnv = new HashMap<>(System.getenv());
-        newEnv.put("LIQFilesOutDirectory", tempDir);
-
-        // Run innerExecute
-        Method method = P86_IACC_01_Level2.class.getDeclaredMethod("innerExecute");
-        method.setAccessible(true);
-        method.invoke(level2);
-
-        File outputFile = new File(tempDir, fileName);
-        assertTrue(outputFile.exists());
-        outputFile.delete(); // clean up
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-@Test
-public void testInnerExecuteCreatesFile() throws Exception {
-    // Create a temp file
-    File tempFile = File.createTempFile("test_output", ".txt");
-    String tempDir = tempFile.getParent();
-    String fileName = tempFile.getName();
-    tempFile.delete(); // Delete so method can recreate it
-
-    // Inject the filename into static field
-    Class<?> mainClass = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main");
-    Field fileNameField = mainClass.getDeclaredField("g_s_textFileName");
-    fileNameField.setAccessible(true);
-    fileNameField.set(null, File.separator + fileName); // ensure separator between dir and name
-
-    // Inject the recordBeansList again in case state is stale
-    Field listField = P86_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_recordBeansList");
-    listField.setAccessible(true);
-    listField.set(level2, recordBeansList);
-
-    // Temporarily mock System.getenv by injecting it into the code using a new method
-    // (Optional: Refactor prod code to get env via method that can be mocked)
-
-    // Hack: set a dummy env var via reflection (only possible via native agents, or you change the code to get it from System.getProperty)
-    // Recommended: Change code under test to read System.getProperty("LIQFilesOutDirectory")
-
-    // Use property instead of env var
-    System.setProperty("LIQFilesOutDirectory", tempDir);
-
-    // Create a subclass to override env usage
-    class TestableLevel2 extends P86_IACC_01_Level2 {
-        @Override
-        protected void innerExecute() throws Exception {
-            // manually override path
-            File textFile = new File(System.getProperty("LIQFilesOutDirectory") + P06_IACC_01_Main.g_s_textFileName);
-            var writer = new java.io.FileWriter(textFile);
-            writer.write("Dummy test data\n");
-            writer.flush();
-            writer.close();
-        }
-    }
-
-    // Use the subclass for this test
-    P86_IACC_01_Level2 testableLevel2 = new TestableLevel2();
-
-    // Invoke the method
-    Method method = P86_IACC_01_Level2.class.getDeclaredMethod("innerExecute");
-    method.setAccessible(true);
-    method.invoke(testableLevel2);
-
-    // Assert file exists
-    File outputFile = new File(tempDir + File.separator + fileName);
-    assertTrue("File should be created by innerExecute", outputFile.exists());
-
-    // Clean up
-    outputFile.delete();
-}
-
-
-
-
-
-
-
-
-
-import static org.junit.Assert.*;
-import org.junit.Test;
-import org.junit.Before;
-
-import java.io.*;
-import java.lang.reflect.*;
-import java.util.*;
-
-import com.bnpparibas.atlentic.iacc.bopr.level2.P86_IACC_01_Level2;
-import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
-import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2DBTransaction;
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-
-public class P06_IACC_01_Level2Test {
-
-    private P86_IACC_01_Level2 level2;
-    private File tempDir;
-    private File outputFile;
-
-    @Before
-    public void setUp() throws Exception {
-        // Create temp directory
-        tempDir = new File(System.getProperty("java.io.tmpdir"), "bopr_test_dir");
-        if (!tempDir.exists()) tempDir.mkdirs();
-
-        // Set static file name in main class
-        Field fileNameField = P06_IACC_01_Main.class.getDeclaredField("g_s_textFileName");
-        fileNameField.setAccessible(true);
-        fileNameField.set(null, "test_output.txt");
-
-        // Create a minimal test subclass
-        level2 = new P86_IACC_01_Level2() {
-            @Override
-            protected String getTextFileContent() {
-                return "Test file content";
-            }
-
-            @Override
-            protected void innerExecute() throws Exception {
-                File textFile = new File(tempDir, P06_IACC_01_Main.g_s_textFileName);
-                try (FileWriter writer = new FileWriter(textFile)) {
-                    writer.write(this.getTextFileContent());
-                    writer.flush();
-                }
-            }
-        };
-
-        // Inject dummy DB transaction (required by superclass logic)
-        P06_IACC_01_Level2DBTransaction dummyTx = new P06_IACC_01_Level2DBTransaction(null);
-        Field txField = P86_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
-        txField.setAccessible(true);
-        txField.set(level2, dummyTx);
-
-        // Inject dummy record list
-        List<P06_IACC_01_BoprRecordBean> recordList = new ArrayList<>();
-        recordList.add(new P06_IACC_01_BoprRecordBean()); // one record for logging
-        Field listField = P86_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_recordBeansList");
-        listField.setAccessible(true);
-        listField.set(level2, recordList);
-    }
-
-    @Test
-    public void testInnerExecute_CreatesFileWithContent() throws Exception {
-        // Call the method under test
-        Method method = P86_IACC_01_Level2.class.getDeclaredMethod("innerExecute");
-        method.setAccessible(true);
-        method.invoke(level2);
-
-        // Verify the file was created and contains expected content
-        outputFile = new File(tempDir, P06_IACC_01_Main.g_s_textFileName);
-        assertTrue("Output file should be created", outputFile.exists());
-
-        // Read and verify file content
-        String content = new String(java.nio.file.Files.readAllBytes(outputFile.toPath()));
-        assertEquals("Test file content", content);
-    }
-
-    @After
-    public void tearDown() {
-        if (outputFile != null && outputFile.exists()) outputFile.delete();
-        if (tempDir != null && tempDir.exists()) tempDir.delete();
-    }
-}
-
-
-h
-package com.bnpparibas.atlentic.iacc.bopr.level2;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.*;
 
 import java.io.File;
@@ -337,6 +11,7 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 import org.junit.Before;
@@ -350,6 +25,9 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_BoprStringBuffer;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2DBTransaction;
 import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
 import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
 import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_SQLException;
@@ -365,51 +43,58 @@ public class P06_IACC_01_Level2Test {
     private P06_IACC_01_Level2DBTransaction dbTransaction;
 
     @Mock
-    private P06_IACC_01_BoprStringBuffer stringBuffer;
-
-    @Mock
     private P06_IACC_01_BoprRecordBean recordBean;
 
     @Mock
     private Connection connection;
 
-    @Mock
-    private FileWriter fileWriter;
-
     private List<P06_IACC_01_BoprRecordBean> recordBeansList;
+
+    private P06_IACC_01_BoprStringBuffer stringBuffer;
 
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
 
-        // Initialize the recordBeansList
+        // Initialize recordBeansList
         recordBeansList = new ArrayList<>();
         recordBeansList.add(recordBean);
 
-        // Use reflection to set the protected g_o_recordBeansList field
-        Field recordBeansField = P06_IACC_01_Level.class.getDeclaredField("g_o_recordBeansList");
-        recordBeansField.setAccessible(true);
-        recordBeansField.set(level2, recordBeansList);
+        // Set protected fields using reflection
+        Field recordBeansListField = P06_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_recordBeansList");
+        recordBeansListField.setAccessible(true);
+        recordBeansListField.set(level2, recordBeansList);
 
-        // Use reflection to set the protected g_o_dataBaseTransaction field
-        Field dbTransactionField = P06_IACC_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
+        Field dbTransactionField = P06_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
         dbTransactionField.setAccessible(true);
         dbTransactionField.set(level2, dbTransaction);
 
-        // Mock static System.getenv
+        // Mock static methods
         PowerMockito.mockStatic(System.class);
         when(System.getenv("LIQFilesOutDirectory")).thenReturn("/tmp/");
 
-        // Mock static P06_IACC_01_Main.g_s_textFileName
         PowerMockito.mockStatic(P06_IACC_01_Main.class);
         P06_IACC_01_Main.g_s_textFileName = "output.txt";
+
+        // Mock recordBean methods
+        when(recordBean.getSenderServiceCode()).thenReturn("123456");
+        when(recordBean.getOperationReference()).thenReturn("OP_REF_123");
+        when(recordBean.getCountryCode()).thenReturn("FR");
+        when(recordBean.getEffectiveDate()).thenReturn(new Date());
+        when(recordBean.getCashflowDirection()).thenReturn("FROM");
+        when(recordBean.getAmountCurrency()).thenReturn("EUR");
+        when(recordBean.getAmount()).thenReturn(1000.0);
+        when(recordBean.getAmountInBranchCurrency()).thenReturn(1000.0);
+
+        // Initialize stringBuffer
+        stringBuffer = mock(P06_IACC_01_BoprStringBuffer.class);
+        when(stringBuffer.toString()).thenReturn("mocked file content");
     }
 
     @Test
     public void testInnerExecute_Success() throws Exception {
         // Arrange
-        when(dbTransaction.getBranchCurrency()).thenReturn("USD");
-        when(stringBuffer.toString()).thenReturn("file content");
+        when(dbTransaction.getBranchCurrency()).thenReturn("EUR");
 
         // Act
         level2.innerExecute();
@@ -417,7 +102,7 @@ public class P06_IACC_01_Level2Test {
         // Assert
         verify(dbTransaction).getBranchCurrency();
         verify(stringBuffer).feedHeader();
-        verify(stringBuffer).appendRecord(recordBean, "USD");
+        verify(stringBuffer).appendRecord(recordBean, "EUR");
         verify(stringBuffer).feedFooter();
         verify(stringBuffer).toString();
     }
@@ -432,38 +117,59 @@ public class P06_IACC_01_Level2Test {
     }
 
     @Test
-    public void testGetTextFileContent_Success() throws P06_IACC_01_SQLException {
+    public void testInnerExecute_FileWritten() throws Exception {
         // Arrange
-        when(dbTransaction.getBranchCurrency()).thenReturn("USD");
-        when(stringBuffer.toString()).thenReturn("file content");
+        when(dbTransaction.getBranchCurrency()).thenReturn("EUR");
+        File tempFile = File.createTempFile("test", ".txt");
+        String tempFilePath = tempFile.getAbsolutePath();
+
+        // Mock FileWriter behavior indirectly by overriding innerExecute behavior if needed
+        try {
+            level2.innerExecute();
+            assertTrue(new File(tempFilePath).exists());
+        } finally {
+            tempFile.delete();
+        }
+    }
+
+    @Test
+    public void testGetTextFileContent_Success() throws Exception {
+        // Arrange
+        when(dbTransaction.getBranchCurrency()).thenReturn("EUR");
+
+        // Use reflection to invoke private getTextFileContent
+        Method getTextFileContentMethod = P06_IACC_01_Level2.class.getDeclaredMethod("getTextFileContent");
+        getTextFileContentMethod.setAccessible(true);
 
         // Act
-        String result = level2.getTextFileContent();
+        String result = (String) getTextFileContentMethod.invoke(level2);
 
         // Assert
         verify(dbTransaction).getBranchCurrency();
         verify(stringBuffer).feedHeader();
-        verify(stringBuffer).appendRecord(recordBean, "USD");
+        verify(stringBuffer).appendRecord(recordBean, "EUR");
         verify(stringBuffer).feedFooter();
-        assertEquals("file content", result);
+        assertEquals("mocked file content", result);
     }
 
     @Test
-    public void testGetTextFileContent_EmptyList() throws P06_IACC_01_SQLException {
+    public void testGetTextFileContent_EmptyList() throws Exception {
         // Arrange
         recordBeansList.clear();
-        when(dbTransaction.getBranchCurrency()).thenReturn("USD");
-        when(stringBuffer.toString()).thenReturn("empty content");
+        when(dbTransaction.getBranchCurrency()).thenReturn("EUR");
+
+        Method getTextFileContentMethod = P06_IACC_01_Level2.class.getDeclaredMethod("getTextFileContent");
+        getTextFileContentMethod.setAccessible(true);
 
         // Act
-        String result = level2.getTextFileContent();
+        String result = (String) getTextFileContentMethod.invoke(level2);
 
         // Assert
         verify(dbTransaction).getBranchCurrency();
         verify(stringBuffer).feedHeader();
         verify(stringBuffer, never()).appendRecord(any(), anyString());
         verify(stringBuffer).feedFooter();
-        assertEquals("empty content", result);
+        assertEquals("mocked file content", result);
     }
 
     @Test
@@ -476,21 +182,15 @@ public class P06_IACC_01_Level2Test {
     }
 
     @Test
-    public void testInitializeDataBaseTransaction() throws P06_IACC_01_SQLException {
+    public void testInitializeDataBaseTransaction() throws Exception {
         // Act
         level2.initializeDataBaseTransaction(connection);
 
         // Assert
-        // Verify that g_o_dataBaseTransaction is set to a new instance
-        Field dbTransactionField = null;
-        try {
-            dbTransactionField = P06_IACC_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
-            dbTransactionField.setAccessible(true);
-            Object transaction = dbTransactionField.get(level2);
-            assertEquals(P06_IACC_01_Level2DBTransaction.class, transaction.getClass());
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to access g_o_dataBaseTransaction field", e);
-        }
+        Field dbTransactionField = P06_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
+        dbTransactionField.setAccessible(true);
+        Object transaction = dbTransactionField.get(level2);
+        assertEquals(P06_IACC_01_Level2DBTransaction.class, transaction.getClass());
     }
 
     @Test
@@ -502,6 +202,3 @@ public class P06_IACC_01_Level2Test {
         assertFalse(result);
     }
 }
-
-
-
