@@ -1,18 +1,77 @@
-@Test
-public void testGetBranchCurrencyViaReflection() throws Exception {
-    // Step 1: Set up the real or mock object
-    Field dbField = P06_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
-    dbField.setAccessible(true);
-    Object dbTxnObject = dbField.get(level2);
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
-    // Step 2: Get the method and make it accessible
-    Method getBranchCurrencyMethod = dbTxnObject.getClass().getDeclaredMethod("getBranchCurrency");
-    getBranchCurrencyMethod.setAccessible(true);
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
 
-    // Step 3: Invoke the method via reflection
-    String branchCurrency = (String) getBranchCurrencyMethod.invoke(dbTxnObject);
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.MockitoAnnotations;
 
-    // Step 4: Assertions or print (example)
-    System.out.println("Branch Currency: " + branchCurrency);
-    assertEquals("EUR", branchCurrency); // use expected value here
+import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_BoprStringBuffer;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2DBTransaction;
+
+public class P06_IACC_01_Level2ReflectionTest {
+
+    private P06_IACC_01_Level2 level2;
+    private P06_IACC_01_Level2DBTransaction dbTransaction;
+    private P06_IACC_01_BoprStringBuffer stringBuffer;
+    private List<P06_IACC_01_BoprRecordBean> recordBeansList;
+
+    @Before
+    public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
+        // Real instance of Level2
+        level2 = new P06_IACC_01_Level2();
+
+        // Create a subclass or real object where getBranchCurrency is accessible
+        dbTransaction = new P06_IACC_01_Level2DBTransaction() {
+            private String branchCurrency = "USD";
+
+            // not overriding anything; we will access via reflection
+        };
+
+        // Set g_o_dataBaseTransaction
+        Field dbField = P06_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
+        dbField.setAccessible(true);
+        dbField.set(level2, dbTransaction);
+
+        // Set g_o_recordBeansList
+        recordBeansList = new ArrayList<>();
+        P06_IACC_01_BoprRecordBean mockBean = mock(P06_IACC_01_BoprRecordBean.class);
+        recordBeansList.add(mockBean);
+
+        Field recordsField = P06_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_recordBeansList");
+        recordsField.setAccessible(true);
+        recordsField.set(level2, recordBeansList);
+
+        // Set stringBuffer
+        stringBuffer = new P06_IACC_01_BoprStringBuffer(); // real object
+        Field bufferField = P06_IACC_01_Level2.class.getDeclaredField("stringBuffer");
+        bufferField.setAccessible(true);
+        bufferField.set(level2, stringBuffer);
+    }
+
+    @Test
+    public void testGetTextFileContent_UsingReflection() throws Exception {
+        // Access getBranchCurrency() reflectively
+        Method getBranchCurrencyMethod = dbTransaction.getClass().getDeclaredMethod("getBranchCurrency");
+        getBranchCurrencyMethod.setAccessible(true);
+        String currency = (String) getBranchCurrencyMethod.invoke(dbTransaction);
+        assertEquals("USD", currency);
+
+        // Call getTextFileContent() reflectively
+        Method getTextFileContentMethod = P06_IACC_01_Level2.class.getDeclaredMethod("getTextFileContent");
+        getTextFileContentMethod.setAccessible(true);
+        String content = (String) getTextFileContentMethod.invoke(level2);
+
+        assertNotNull(content);
+        assertFalse(content.isEmpty());
+        System.out.println("Text file content: " + content);
+    }
 }
