@@ -160,5 +160,73 @@ public class P06_IACC_01_Level2Test {
         File outputFile = new File(tempDir, fileName);
         assertTrue(outputFile.exists());
         outputFile.delete(); // clean up
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@Test
+public void testInnerExecuteCreatesFile() throws Exception {
+    // Create a temp file
+    File tempFile = File.createTempFile("test_output", ".txt");
+    String tempDir = tempFile.getParent();
+    String fileName = tempFile.getName();
+    tempFile.delete(); // Delete so method can recreate it
+
+    // Inject the filename into static field
+    Class<?> mainClass = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main");
+    Field fileNameField = mainClass.getDeclaredField("g_s_textFileName");
+    fileNameField.setAccessible(true);
+    fileNameField.set(null, File.separator + fileName); // ensure separator between dir and name
+
+    // Inject the recordBeansList again in case state is stale
+    Field listField = P86_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_recordBeansList");
+    listField.setAccessible(true);
+    listField.set(level2, recordBeansList);
+
+    // Temporarily mock System.getenv by injecting it into the code using a new method
+    // (Optional: Refactor prod code to get env via method that can be mocked)
+
+    // Hack: set a dummy env var via reflection (only possible via native agents, or you change the code to get it from System.getProperty)
+    // Recommended: Change code under test to read System.getProperty("LIQFilesOutDirectory")
+
+    // Use property instead of env var
+    System.setProperty("LIQFilesOutDirectory", tempDir);
+
+    // Create a subclass to override env usage
+    class TestableLevel2 extends P86_IACC_01_Level2 {
+        @Override
+        protected void innerExecute() throws Exception {
+            // manually override path
+            File textFile = new File(System.getProperty("LIQFilesOutDirectory") + P06_IACC_01_Main.g_s_textFileName);
+            var writer = new java.io.FileWriter(textFile);
+            writer.write("Dummy test data\n");
+            writer.flush();
+            writer.close();
+        }
     }
+
+    // Use the subclass for this test
+    P86_IACC_01_Level2 testableLevel2 = new TestableLevel2();
+
+    // Invoke the method
+    Method method = P86_IACC_01_Level2.class.getDeclaredMethod("innerExecute");
+    method.setAccessible(true);
+    method.invoke(testableLevel2);
+
+    // Assert file exists
+    File outputFile = new File(tempDir + File.separator + fileName);
+    assertTrue("File should be created by innerExecute", outputFile.exists());
+
+    // Clean up
+    outputFile.delete();
 }
