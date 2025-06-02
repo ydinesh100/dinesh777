@@ -1,33 +1,46 @@
-@Test
-public void testGetDataBaseTransaction() throws Exception {
-    // Create a subclass of P06_IACC_01_Level
-    P06_IACC_01_Level<P06_IACC_01_DBTransaction> level = new P06_IACC_01_Level<P06_IACC_01_DBTransaction>() {
-        {
-            g_o_dataBaseTransaction = mock(P06_IACC_01_DBTransaction.class);
-        }
+import org.junit.Test;
+import org.mockito.Mockito;
 
-        @Override
-        protected int getLevelNumber() {
-            return 1;
-        }
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 
-        @Override
-        protected void initializeDataBaseTransaction(Connection conn) {
-            // no-op
-        }
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
-        @Override
-        protected void innerExecute() {
-            // no-op
-        }
+public class P06_IACC_01_DBTransactionTest {
 
-        @Override
-        protected boolean applyCommit() {
-            return false;
-        }
-    };
+    @Test
+    public void testGetRecordsBeansListWithException() throws Exception {
+        // Mock dependencies
+        P06_IACC_01_DBTransaction dbTransaction = Mockito.spy(new P06_IACC_01_DBTransaction());
+        PreparedStatement mockPreparedStatement = mock(PreparedStatement.class);
 
-    // Call the getter explicitly
-    P06_IACC_01_DBTransaction result = level.getDataBaseTransaction();
-    assertNotNull(result);  // Optional assertion
+        // Stub methods on dbTransaction to use the mock PreparedStatement
+        doReturn(mockPreparedStatement).when(dbTransaction)
+            .prepareStatement(anyString());
+
+        // Simulate SQLException on executeQuery
+        when(mockPreparedStatement.executeQuery()).thenThrow(new SQLException("Test Exception"));
+
+        // Use reflection to invoke the private/protected method
+        Method getRecordsBeansListMethod = P06_IACC_01_DBTransaction.class
+            .getDeclaredMethod("getRecordsBeansList");
+        getRecordsBeansListMethod.setAccessible(true);
+
+        try {
+            getRecordsBeansListMethod.invoke(dbTransaction);
+            fail("Expected P06_IACC_01_SQLException to be thrown");
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof P06_IACC_01_SQLException) {
+                P06_IACC_01_SQLException sqlException = (P06_IACC_01_SQLException) cause;
+                assertEquals("An error occurred while getting records to report Beans list I", sqlException.getMessage());
+            } else {
+                throw e;
+            }
+        }
+    }
 }
