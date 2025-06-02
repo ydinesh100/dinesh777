@@ -1,45 +1,164 @@
-import org.junit.Test;
-import java.lang.reflect.*;
-import java.sql.*;
+package com.bnpparibas.atlentic.iacc.bopr.level2Test;
+
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
-public class P06_IACC_01_DBTransactionTest {
+import java.io.File;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.sql.Connection;
+import java.text.SimpleDateFormat;
+import java.util.*;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_BoprStringBuffer;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P86_IACC_01_Level2;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2DBTransaction;
+
+public class P06_IACC_01_Level2Test {
+
+    @InjectMocks
+    private P86_IACC_01_Level2 level2;
+
+    @Mock
+    private P06_IACC_01_Level2DBTransaction dbTransaction;
+
+    @Mock
+    private P06_IACC_01_BoprRecordBean recordBean;
+
+    @Mock
+    private Connection connection;
+
+    private List<P06_IACC_01_BoprRecordBean> recordBeansList;
+
+    private String branchCurrency = "EUR";
+
+    private P06_IACC_01_BoprStringBuffer stringBuffer;
+
+    @Before
+    public void setup() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
+        // Setup fake DB transaction with a fixed currency
+        when(dbTransaction.getBranchCurrency()).thenReturn(branchCurrency);
+
+        // Inject into superclass fields via reflection
+        Field dbTxField = P86_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
+        dbTxField.setAccessible(true);
+        dbTxField.set(level2, dbTransaction);
+
+        recordBeansList = new ArrayList<>();
+        recordBeansList.add(recordBean);
+
+        Field listField = P86_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_recordBeansList");
+        listField.setAccessible(true);
+        listField.set(level2, recordBeansList);
+
+        // Mock recordBean values
+        when(recordBean.getSenderServiceCode()).thenReturn("123456");
+        when(recordBean.getOperationReference()).thenReturn("OP_REF_123");
+        when(recordBean.getCountryCode()).thenReturn("FR");
+        when(recordBean.getEffectiveDate()).thenReturn(new Date());
+        when(recordBean.getCashflowDirection()).thenReturn("FROM");
+        when(recordBean.getAmountCurrency()).thenReturn("EUR");
+        when(recordBean.getAmount()).thenReturn(1000.0);
+        when(recordBean.getAmountInBranchCurrency()).thenReturn(1000.0);
+
+        // Instantiate buffer manually for toString test
+        stringBuffer = new P06_IACC_01_BoprStringBuffer();
+    }
 
     @Test
-    public void testGetRecordsBeansListWithException() throws Exception {
-        // Step 1: Create instance via reflection
-        Constructor<P06_IACC_01_DBTransaction> constructor =
-            P06_IACC_01_DBTransaction.class.getDeclaredConstructor();
-        constructor.setAccessible(true);
-        P06_IACC_01_DBTransaction dbTransaction = constructor.newInstance();
+    public void testApplyCommit() throws Exception {
+        Method method = P86_IACC_01_Level2.class.getDeclaredMethod("applyCommit");
+        method.setAccessible(true);
+        boolean result = (boolean) method.invoke(level2);
+        assertFalse(result);
+    }
 
-        // Step 2: Mock Connection and PreparedStatement
-        Connection mockConnection = mock(Connection.class);
-        PreparedStatement mockPreparedStatement = mock(PreparedStatement.class);
+    @Test
+    public void testGetLevelNumber() throws Exception {
+        Method method = P86_IACC_01_Level2.class.getDeclaredMethod("getLevelNumber");
+        method.setAccessible(true);
+        int level = (int) method.invoke(level2);
+        assertEquals(2, level);
+    }
 
-        // Configure the mock to throw SQLException
-        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-        when(mockPreparedStatement.executeQuery()).thenThrow(new SQLException("Test Exception"));
+    @Test
+    public void testInitializeDataBaseTransaction() throws Exception {
+        Method method = P86_IACC_01_Level2.class.getDeclaredMethod("initializeDataBaseTransaction", Connection.class);
+        method.setAccessible(true);
+        method.invoke(level2, connection);
 
-        // Step 3: Inject mock connection into private field g_o_dataBaseConnection
-        Field connField = P06_IACC_01_DBTransaction.class.getDeclaredField("g_o_dataBaseConnection");
-        connField.setAccessible(true);
-        connField.set(dbTransaction, mockConnection);
+        Field field = P86_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
+        field.setAccessible(true);
+        Object dbTx = field.get(level2);
+        assertTrue(dbTx instanceof P06_IACC_01_Level2DBTransaction);
+    }
 
-        // Step 4: Use reflection to invoke protected method getRecordsBeansList()
-        Method getRecordsBeansListMethod = P06_IACC_01_DBTransaction.class
-            .getDeclaredMethod("getRecordsBeansList");
-        getRecordsBeansListMethod.setAccessible(true);
+    @Test
+    public void testGetTextFileContent() throws Exception {
+        Method method = P86_IACC_01_Level2.class.getDeclaredMethod("getTextFileContent");
+        method.setAccessible(true);
+        String result = (String) method.invoke(level2);
+        assertNotNull(result);
+        assertFalse(result.isEmpty());
+    }
 
-        // Step 5: Verify exception is thrown and wrapped correctly
-        try {
-            getRecordsBeansListMethod.invoke(dbTransaction);
-            fail("Expected P06_IACC_01_SQLException to be thrown");
-        } catch (InvocationTargetException e) {
-            Throwable cause = e.getCause();
-            assertTrue(cause instanceof P06_IACC_01_SQLException);
-            assertEquals("An error occurred while getting records to report Beans list I", cause.getMessage());
-        }
+    @Test
+    public void testToString_EmptyBuffer() {
+        assertEquals("", stringBuffer.toString());
+    }
+
+    @Test
+    public void testAppendRecord() throws Exception {
+        Method appendMethod = P06_IACC_01_BoprStringBuffer.class.getDeclaredMethod("appendRecord", P06_IACC_01_BoprRecordBean.class, String.class);
+        appendMethod.setAccessible(true);
+        appendMethod.invoke(stringBuffer, recordBean, branchCurrency);
+
+        String expectedDate = new SimpleDateFormat("ddMMyyyy").format(recordBean.getEffectiveDate());
+        String result = stringBuffer.toString();
+
+        // You could assert presence of key values (e.g. OP_REF_123, date, amount string)
+        assertTrue(result.contains("OP_REF_123"));
+        assertTrue(result.contains(expectedDate));
+    }
+
+    @Test
+    public void testInnerExecuteCreatesFile() throws Exception {
+        // Set up temp env variable and file name
+        String tempDir = System.getProperty("java.io.tmpdir");
+        String fileName = "test_file.txt";
+
+        // Temporarily set environment variable and file name via reflection
+        Map<String, String> env = System.getenv();
+        Field field = P06_IACC_01_Level2.class.getSuperclass().getDeclaredField("g_o_recordBeansList");
+        field.setAccessible(true);
+        field.set(level2, recordBeansList);
+
+        // Set static field P06_IACC_01_Main.g_s_textFileName
+        Field nameField = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main")
+                .getDeclaredField("g_s_textFileName");
+        nameField.setAccessible(true);
+        nameField.set(null, fileName);
+
+        // Set fake directory
+        Map<String, String> newEnv = new HashMap<>(System.getenv());
+        newEnv.put("LIQFilesOutDirectory", tempDir);
+
+        // Run innerExecute
+        Method method = P86_IACC_01_Level2.class.getDeclaredMethod("innerExecute");
+        method.setAccessible(true);
+        method.invoke(level2);
+
+        File outputFile = new File(tempDir, fileName);
+        assertTrue(outputFile.exists());
+        outputFile.delete(); // clean up
     }
 }
