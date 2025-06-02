@@ -323,3 +323,185 @@ public class P06_IACC_01_Level2Test {
     }
 }
 
+
+h
+package com.bnpparibas.atlentic.iacc.bopr.level2;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.mockito.Mockito.*;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.powermock.api.mockito.PowerMockito;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
+
+import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
+import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_SQLException;
+
+@RunWith(PowerMockRunner.class)
+@PrepareForTest({System.class, P06_IACC_01_Main.class})
+public class P06_IACC_01_Level2Test {
+
+    @InjectMocks
+    private P06_IACC_01_Level2 level2;
+
+    @Mock
+    private P06_IACC_01_Level2DBTransaction dbTransaction;
+
+    @Mock
+    private P06_IACC_01_BoprStringBuffer stringBuffer;
+
+    @Mock
+    private P06_IACC_01_BoprRecordBean recordBean;
+
+    @Mock
+    private Connection connection;
+
+    @Mock
+    private FileWriter fileWriter;
+
+    private List<P06_IACC_01_BoprRecordBean> recordBeansList;
+
+    @Before
+    public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
+        // Initialize the recordBeansList
+        recordBeansList = new ArrayList<>();
+        recordBeansList.add(recordBean);
+
+        // Use reflection to set the protected g_o_recordBeansList field
+        Field recordBeansField = P06_IACC_01_Level.class.getDeclaredField("g_o_recordBeansList");
+        recordBeansField.setAccessible(true);
+        recordBeansField.set(level2, recordBeansList);
+
+        // Use reflection to set the protected g_o_dataBaseTransaction field
+        Field dbTransactionField = P06_IACC_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
+        dbTransactionField.setAccessible(true);
+        dbTransactionField.set(level2, dbTransaction);
+
+        // Mock static System.getenv
+        PowerMockito.mockStatic(System.class);
+        when(System.getenv("LIQFilesOutDirectory")).thenReturn("/tmp/");
+
+        // Mock static P06_IACC_01_Main.g_s_textFileName
+        PowerMockito.mockStatic(P06_IACC_01_Main.class);
+        P06_IACC_01_Main.g_s_textFileName = "output.txt";
+    }
+
+    @Test
+    public void testInnerExecute_Success() throws Exception {
+        // Arrange
+        when(dbTransaction.getBranchCurrency()).thenReturn("USD");
+        when(stringBuffer.toString()).thenReturn("file content");
+
+        // Act
+        level2.innerExecute();
+
+        // Assert
+        verify(dbTransaction).getBranchCurrency();
+        verify(stringBuffer).feedHeader();
+        verify(stringBuffer).appendRecord(recordBean, "USD");
+        verify(stringBuffer).feedFooter();
+        verify(stringBuffer).toString();
+    }
+
+    @Test(expected = IOException.class)
+    public void testInnerExecute_EnvVariableNotSet() throws Exception {
+        // Arrange
+        when(System.getenv("LIQFilesOutDirectory")).thenReturn(null);
+
+        // Act
+        level2.innerExecute();
+    }
+
+    @Test
+    public void testGetTextFileContent_Success() throws P06_IACC_01_SQLException {
+        // Arrange
+        when(dbTransaction.getBranchCurrency()).thenReturn("USD");
+        when(stringBuffer.toString()).thenReturn("file content");
+
+        // Act
+        String result = level2.getTextFileContent();
+
+        // Assert
+        verify(dbTransaction).getBranchCurrency();
+        verify(stringBuffer).feedHeader();
+        verify(stringBuffer).appendRecord(recordBean, "USD");
+        verify(stringBuffer).feedFooter();
+        assertEquals("file content", result);
+    }
+
+    @Test
+    public void testGetTextFileContent_EmptyList() throws P06_IACC_01_SQLException {
+        // Arrange
+        recordBeansList.clear();
+        when(dbTransaction.getBranchCurrency()).thenReturn("USD");
+        when(stringBuffer.toString()).thenReturn("empty content");
+
+        // Act
+        String result = level2.getTextFileContent();
+
+        // Assert
+        verify(dbTransaction).getBranchCurrency();
+        verify(stringBuffer).feedHeader();
+        verify(stringBuffer, never()).appendRecord(any(), anyString());
+        verify(stringBuffer).feedFooter();
+        assertEquals("empty content", result);
+    }
+
+    @Test
+    public void testGetLevelNumber() {
+        // Act
+        int levelNumber = level2.getLevelNumber();
+
+        // Assert
+        assertEquals(2, levelNumber);
+    }
+
+    @Test
+    public void testInitializeDataBaseTransaction() throws P06_IACC_01_SQLException {
+        // Act
+        level2.initializeDataBaseTransaction(connection);
+
+        // Assert
+        // Verify that g_o_dataBaseTransaction is set to a new instance
+        Field dbTransactionField = null;
+        try {
+            dbTransactionField = P06_IACC_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
+            dbTransactionField.setAccessible(true);
+            Object transaction = dbTransactionField.get(level2);
+            assertEquals(P06_IACC_01_Level2DBTransaction.class, transaction.getClass());
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to access g_o_dataBaseTransaction field", e);
+        }
+    }
+
+    @Test
+    public void testApplyCommit() {
+        // Act
+        boolean result = level2.applyCommit();
+
+        // Assert
+        assertFalse(result);
+    }
+}
+
+
+
