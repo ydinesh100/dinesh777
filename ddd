@@ -1,16 +1,75 @@
-@Before
-public void setUp() throws Exception {
-    Constructor<P06_IACC_01_Level1DBTransaction> constructor =
-            P06_IACC_01_Level1DBTransaction.class.getDeclaredConstructor();
-    constructor.setAccessible(true);
-    transaction = constructor.newInstance();
+@Test
+public void testFetchExchangeRate_success() throws Exception {
+    String currencyPair = "USD/EUR";
+    double expectedRate = 1.25;
 
-    mockConnection = mock(Connection.class);
-    mockPreparedStatement = mock(PreparedStatement.class);
-    mockResultSet = mock(ResultSet.class);
+    when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+    when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+    when(mockResultSet.next()).thenReturn(true);
+    when(mockResultSet.getDouble("EXCHANGE_RATE")).thenReturn(expectedRate);
 
-    // Set the protected 'conn' field in the superclass
-    Field connField = P06_IACC_01_DBTransaction.class.getDeclaredField("conn");
-    connField.setAccessible(true);
-    connField.set(transaction, mockConnection);
+    double rate = transaction.fetchExchangeRate(currencyPair);
+
+    assertEquals(expectedRate, rate, 0.0001);
+    verify(mockPreparedStatement).setString(1, currencyPair);
+}
+
+@Test
+public void testInsertRecord_success() throws Exception {
+    P06_IACC_01_Level1RecordBean bean = new P06_IACC_01_Level1RecordBean();
+    bean.setId("123");
+    bean.setAmount(500.0);
+
+    when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+    when(mockPreparedStatement.executeUpdate()).thenReturn(1);
+
+    boolean result = transaction.insertRecord(bean);
+
+    assertTrue(result);
+    verify(mockPreparedStatement).setString(eq(1), eq("123"));
+    verify(mockPreparedStatement).setDouble(eq(2), eq(500.0));
+}
+
+@Test
+public void testDeleteRecordByRef_success() throws Exception {
+    String operationRef = "OP123";
+
+    when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+    when(mockPreparedStatement.executeUpdate()).thenReturn(1);
+
+    boolean result = transaction.deleteRecordByReference(operationRef);
+
+    assertTrue(result);
+    verify(mockPreparedStatement).setString(1, operationRef);
+}
+
+@Test
+public void testPopulateBeanFromResultSet() throws Exception {
+    when(mockResultSet.getString("ID")).thenReturn("R001");
+    when(mockResultSet.getDouble("AMOUNT")).thenReturn(1000.0);
+
+    P06_IACC_01_Level1RecordBean bean = transaction.populateBean(mockResultSet);
+
+    assertEquals("R001", bean.getId());
+    assertEquals(1000.0, bean.getAmount(), 0.001);
+}
+
+@Test
+public void testGenerateOperationReference_grouped() {
+    List<String> ids = Arrays.asList("TX1", "TX2", "TX3");
+
+    String ref = transaction.generateOperationReference(ids, true);
+
+    assertTrue(ref.startsWith("GRP-"));
+    assertTrue(ref.contains("TX1TX2TX3"));
+}
+
+@Test
+public void testGenerateOperationReference_elementary() {
+    List<String> ids = Collections.singletonList("TX9");
+
+    String ref = transaction.generateOperationReference(ids, false);
+
+    assertTrue(ref.startsWith("ELM-"));
+    assertTrue(ref.contains("TX9"));
 }
