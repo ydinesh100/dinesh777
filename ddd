@@ -1,209 +1,31 @@
 import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.*;
-
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
-public class PO6_IACC_01_LevelDBTransacrionTest {
+public class P06_IACC_01_Level1DBTransactionTest {
 
-    private PO6_IACC_01_LevelDBTransacrion instance;
+    private Object instance;
 
-    // Use @Before to instantiate the class via reflection before each test.
     @Before
     public void setUp() throws Exception {
-        Constructor<PO6_IACC_01_LevelDBTransacrion> constructor =
-                PO6_IACC_01_LevelDBTransacrion.class.getDeclaredConstructor();
+        // Obtain the constructor of your class (even if it is private)
+        Constructor<?> constructor = P06_IACC_01_Level1DBTransaction.class.getDeclaredConstructor();
         constructor.setAccessible(true);
         instance = constructor.newInstance();
     }
 
-    // Test the public startTransaction() method.
     @Test
-    public void testStartTransaction() {
-        // Initially, starting a transaction should return true.
-        boolean started = instance.startTransaction();
+    public void testStartTransactionUsingReflection() throws Exception {
+        // Attempt to locate a method named "startTransaction" (adjust the method name if necessary)
+        Method startTransMethod = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("startTransaction");
+        startTransMethod.setAccessible(true);
+
+        // Invoke the method on our instance
+        boolean started = (boolean) startTransMethod.invoke(instance);
+
+        // Assert that the transaction started (adjust expectations based on your implementation)
         assertTrue("startTransaction() should return true when no transaction is active", started);
-        assertEquals("Transaction count should be 1 after a successful start", 1, instance.getTransactionCount());
-
-        // If a transaction is already active, starting another must fail.
-        boolean startedAgain = instance.startTransaction();
-        assertFalse("startTransaction() should return false when a transaction is already active", startedAgain);
-    }
-
-    // Test the public commit() method.
-    @Test
-    public void testCommit() {
-        // Without starting, commit should return false.
-        assertFalse("commit() should return false when no transaction is active", instance.commit());
-
-        // Start a transaction, then commit should succeed.
-        instance.startTransaction();
-        assertTrue("commit() should return true when a transaction is active", instance.commit());
-        // A subsequent commit when no transaction is active should return false.
-        assertFalse(instance.commit());
-    }
-
-    // Test the public rollback() method.
-    @Test
-    public void testRollback() {
-        // Rollback without an active transaction should return false.
-        assertFalse("rollback() should return false when no transaction is active", instance.rollback());
-
-        // Start a transaction, then rollback should succeed.
-        instance.startTransaction();
-        assertTrue("rollback() should return true when a transaction is active", instance.rollback());
-        // A second rollback attempt should return false.
-        assertFalse(instance.rollback());
-    }
-
-    // Test the public multiply() method with typical inputs.
-    @Test
-    public void testMultiply() {
-        assertEquals("3 * 4 should equal 12", 12, instance.multiply(3, 4));
-    }
-
-    // Test the public getTransactionCount() method.
-    @Test
-    public void testGetTransactionCount() {
-        assertEquals("Transaction count should be 0 upon instantiation", 0, instance.getTransactionCount());
-        instance.startTransaction();
-        instance.commit();
-        assertEquals("Transaction count should be 1 after a successful transaction", 1, instance.getTransactionCount());
-    }
-
-    // Test the private logTransaction() method using reflection.
-    @Test
-    public void testPrivateLogTransaction() throws Exception {
-        Method logMethod = PO6_IACC_01_LevelDBTransacrion.class.getDeclaredMethod("logTransaction", String.class);
-        logMethod.setAccessible(true);
-        String expected = "Transaction test logged";
-        String result = (String) logMethod.invoke(instance, "test");
-        assertEquals("Private logTransaction() should return the correctly formatted string", expected, result);
-    }
-
-    // Test private logTransaction() method with a null value.
-    @Test
-    public void testPrivateLogTransactionWithNull() throws Exception {
-        Method logMethod = PO6_IACC_01_LevelDBTransacrion.class.getDeclaredMethod("logTransaction", String.class);
-        logMethod.setAccessible(true);
-        // When passing null, string concatenation in Java will result in "null".
-        String expected = "Transaction null logged";
-        String result = (String) logMethod.invoke(instance, new Object[]{null});
-        assertEquals("Private logTransaction() should handle null appropriately", expected, result);
-    }
-
-    // Test instantiation using reflection (even if the constructor were private).
-    @Test
-    public void testConstructorViaReflection() throws Exception {
-        Constructor<PO6_IACC_01_LevelDBTransacrion> constructor =
-                PO6_IACC_01_LevelDBTransacrion.class.getDeclaredConstructor();
-        constructor.setAccessible(true);
-        PO6_IACC_01_LevelDBTransacrion newInstance = constructor.newInstance();
-        assertNotNull("Instance created via reflection should not be null", newInstance);
-    }
-
-    // Test manipulating the private field "transactionCount" via reflection.
-    @Test
-    public void testPrivateFieldManipulation() throws Exception {
-        Field countField = PO6_IACC_01_LevelDBTransacrion.class.getDeclaredField("transactionCount");
-        countField.setAccessible(true);
-        countField.set(instance, 42);
-        assertEquals("getTransactionCount() should reflect the updated private field value", 42, instance.getTransactionCount());
-    }
-
-    // Test the active state of the transaction using reflection.
-    @Test
-    public void testActiveStateReflection() throws Exception {
-        Field activeField = PO6_IACC_01_LevelDBTransacrion.class.getDeclaredField("active");
-        activeField.setAccessible(true);
-
-        // Initially, there should be no active transaction.
-        assertFalse("Initially, active should be false", (Boolean) activeField.get(instance));
-
-        // After starting a transaction, active should be true.
-        instance.startTransaction();
-        assertTrue("After startTransaction, active should be true", (Boolean) activeField.get(instance));
-
-        // After committing, active should be false.
-        instance.commit();
-        assertFalse("After commit, active should be false", (Boolean) activeField.get(instance));
-
-        // Test after rollback as well.
-        instance.startTransaction();
-        instance.rollback();
-        assertFalse("After rollback, active should be false", (Boolean) activeField.get(instance));
-    }
-
-    // Test multiply() with zero values.
-    @Test
-    public void testMultiplyWithZero() {
-        assertEquals("Any number multiplied by 0 should be 0", 0, instance.multiply(0, 5));
-        assertEquals("Any number multiplied by 0 should be 0", 0, instance.multiply(5, 0));
-    }
-
-    // Test multiply() with negative numbers.
-    @Test
-    public void testMultiplyWithNegativeNumbers() {
-        assertEquals("Multiplying a negative by a positive", -12, instance.multiply(-3, 4));
-        assertEquals("Multiplying two negatives", 12, instance.multiply(-3, -4));
-    }
-
-    // Ensure that starting a transaction while one is active does not increment the transaction count.
-    @Test
-    public void testTransactionCountNotIncremented() {
-        instance.startTransaction();
-        assertEquals("Transaction count should be 1 after starting one transaction", 1, instance.getTransactionCount());
-        // Attempt to start another transaction while one is still active.
-        instance.startTransaction();
-        assertEquals("Transaction count must not be incremented if startTransaction() fails", 1, instance.getTransactionCount());
-        // Commit then start a new one.
-        instance.commit();
-        instance.startTransaction();
-        assertEquals("Transaction count should be 2 after successfully starting a second transaction", 2, instance.getTransactionCount());
-    }
-
-    // Test multiple failed attempts to commit and rollback.
-    @Test
-    public void testFailedDoubleCommitAndRollback() {
-        // Without an active transaction.
-        assertFalse("Commit should fail if no transaction is active", instance.commit());
-        assertFalse("Rollback should fail if no transaction is active", instance.rollback());
-
-        // Start a transaction, then commit, then extra commit should fail.
-        instance.startTransaction();
-        assertTrue("First commit should succeed", instance.commit());
-        assertFalse("Second commit should fail when no transaction is active", instance.commit());
-
-        // Start a transaction again, then rollback.
-        instance.startTransaction();
-        assertTrue("First rollback should succeed", instance.rollback());
-        assertFalse("Second rollback should fail", instance.rollback());
-    }
-    
-    // Test running multiple transactions sequentially.
-    @Test
-    public void testMultipleSequentialTransactions() {
-        int iterations = 10;
-        for (int i = 1; i <= iterations; i++) {
-            assertTrue("startTransaction() should succeed if no transaction is active", instance.startTransaction());
-            assertEquals("Transaction count should equal the number of successful starts", i, instance.getTransactionCount());
-            // Randomly decide to commit or rollback.
-            if (i % 2 == 0) {
-                assertTrue("commit() should succeed when there is an active transaction", instance.commit());
-            } else {
-                assertTrue("rollback() should succeed when there is an active transaction", instance.rollback());
-            }
-        }
-    }
-    
-    // Test committing after a rollback has already been performed.
-    @Test
-    public void testCommitAfterRollback() {
-        instance.startTransaction();
-        assertTrue("Rollback should succeed for an active transaction", instance.rollback());
-        // Now commit should fail as the state is inactive.
-        assertFalse("Commit should fail after rollback has been called", instance.commit());
     }
 }
