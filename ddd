@@ -1,95 +1,71 @@
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
-
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.List;
-
-import org.junit.Before;
 import org.junit.Test;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import static org.junit.Assert.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 
-import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
-import com.bnpparibas.atlentic.iacc.bopr.resource.P86_IACC_01_PropertiesMgr;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P86_IACC_01_SQLException;
+public class MyClassTest {
 
-public class P86_IACC_01_DBTransactionTest {
-
-    @Mock
-    private Connection mockConnection;
-
-    @Mock
-    private PreparedStatement mockPreparedStatement;
-
-    @Mock
-    private ResultSet mockResultSet;
-
-    private TestDBTransaction testDBTransaction;
-
-    @Before
-    public void setUp() throws Exception {
-        MockitoAnnotations.initMocks(this);
-        testDBTransaction = new TestDBTransaction(mockConnection);
-    }
-
+    // Test public method increment().
     @Test
-    public void testGetResultSetTrimmedString_returnsTrimmedString() throws SQLException {
-        when(mockResultSet.getString("some_field")).thenReturn("  hello  ");
-        String result = P86_IACC_01_DBTransaction.getResultSetTrimmedString(mockResultSet, "some_field");
-        assertEquals("hello", result);
+    public void testIncrement() {
+        MyClass instance = new MyClass();
+        // First call increments count from 0 to 1.
+        assertEquals(1, instance.increment());
+        // Second call increments count to 2.
+        assertEquals(2, instance.increment());
     }
 
+    // Test public method multiply().
     @Test
-    public void testGetResultSetTrimmedString_returnsNullIfValueIsNull() throws SQLException {
-        when(mockResultSet.getString("some_field")).thenReturn(null);
-        String result = P86_IACC_01_DBTransaction.getResultSetTrimmedString(mockResultSet, "some_field");
-        assertNull(result);
+    public void testMultiply() {
+        MyClass instance = new MyClass();
+        int result = instance.multiply(3, 4);
+        assertEquals(12, result);
     }
 
+    // Test that getCount() returns the expected value.
     @Test
-    public void testGetRecordsBeansList_returnsFilteredRecords() throws Exception {
-        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
-
-        // Simulate two rows: one with amount > 0, one with amount = 0
-        when(mockResultSet.next()).thenReturn(true, true, false); // Two rows
-        when(mockResultSet.getInt("amount")).thenReturn(100, 0);  // First valid, second ignored
-
-        List<P06_IACC_01_BoprRecordBean> list = testDBTransaction.getRecordsBeansList();
-
-        assertEquals(1, list.size());
-        assertEquals(100, list.get(0).getAmount());
+    public void testGetCount() {
+        MyClass instance = new MyClass();
+        assertEquals(0, instance.getCount());
+        instance.increment();
+        instance.increment();  // count now should be 2.
+        assertEquals(2, instance.getCount());
     }
 
-    // Helper subclass to provide concrete implementations of abstract methods
-    private class TestDBTransaction extends P86_IACC_01_DBTransaction {
+    // Test the private method add() using reflection.
+    @Test
+    public void testPrivateAddMethod() throws Exception {
+        MyClass instance = new MyClass();
+        // Get the private method "add" with parameters int, int.
+        Method privateAddMethod = MyClass.class.getDeclaredMethod("add", int.class, int.class);
+        privateAddMethod.setAccessible(true); // Allow access despite its private visibility.
+        // Invoke the method on our instance.
+        int result = (int) privateAddMethod.invoke(instance, 5, 7);
+        assertEquals(12, result);
+    }
 
-        protected TestDBTransaction(Connection connection) throws P86_IACC_01_SQLException {
-            super(connection);
-        }
+    // Test instantiation using reflection (in case the constructor is private).
+    // If your constructor is public, this is still a useful check.
+    @Test
+    public void testConstructorViaReflection() throws Exception {
+        Constructor<MyClass> constructor = MyClass.class.getDeclaredConstructor();
+        constructor.setAccessible(true); // Allow access if it is private.
+        MyClass instance = constructor.newInstance();
+        assertNotNull(instance);
+    }
 
-        @Override
-        protected void feedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet resultSet) throws SQLException {
-            bean.setAmount(resultSet.getInt("amount"));
-        }
-
-        @Override
-        protected void innerFeedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet resultSet)
-                throws SQLException {
-            // not tested
-        }
-
-        @Override
-        protected String getSelectRecordsQueryKey() {
-            return "select.records.query";
-        }
-
-        @Override
-        protected void feedRecordsBeansListPreparedStatement(PreparedStatement ps) throws SQLException {
-            // nothing to set
-        }
+    // Test private field "count" using reflection.
+    @Test
+    public void testPrivateFieldManipulation() throws Exception {
+        MyClass instance = new MyClass();
+        // Access the private field "count".
+        Field countField = MyClass.class.getDeclaredField("count");
+        countField.setAccessible(true);
+        // Set the private field "count" directly.
+        countField.set(instance, 100);
+        // Validate that getCount() now returns 100.
+        assertEquals(100, instance.getCount());
     }
 }
