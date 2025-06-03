@@ -1,97 +1,95 @@
-package com.bnpparibas.atlentic.iacc.bopr.level;
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
 import com.bnpparibas.atlentic.iacc.bopr.resource.P86_IACC_01_PropertiesMgr;
 import com.bnpparibas.atlentic.iacc.bopr.util.exception.P86_IACC_01_SQLException;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.*;
-import org.mockito.junit.MockitoJUnitRunner;
 
-import java.sql.*;
-import java.util.List;
+public class P86_IACC_01_DBTransactionTest {
 
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
+    @Mock
+    private Connection mockConnection;
 
-@RunWith(MockitoJUnitRunner.class)
-public class P06_IACC_01_Level1DBTransactionTest {
+    @Mock
+    private PreparedStatement mockPreparedStatement;
 
-    @Mock private Connection mockConnection;
-    @Mock private PreparedStatement mockPreparedStatement;
-    @Mock private ResultSet mockResultSet;
+    @Mock
+    private ResultSet mockResultSet;
 
-    @InjectMocks
-    private P06_IACC_01_Level1DBTransaction level1DBTransaction;
-
-    // Provide concrete subclass since the original class is abstract
-    private class TestLevel1DBTransaction extends P06_IACC_01_Level1DBTransaction {
-        public TestLevel1DBTransaction(Connection conn) throws P86_IACC_01_SQLException {
-            super(conn);
-        }
-
-        @Override
-        protected void feedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) throws SQLException {
-            bean.setAmount(100.0);  // mock value
-        }
-
-        @Override
-        protected String getSelectRecordsQueryKey() {
-            return "mock.query.key";
-        }
-
-        @Override
-        protected void feedRecordsBeansListPreparedStatement(PreparedStatement ps) throws SQLException {
-            // no-op for test
-        }
-    }
+    private TestDBTransaction testDBTransaction;
 
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
-        level1DBTransaction = new TestLevel1DBTransaction(mockConnection);
+        testDBTransaction = new TestDBTransaction(mockConnection);
+    }
 
-        // Mock static method for P86_IACC_01_PropertiesMgr
-        mockStatic(P86_IACC_01_PropertiesMgr.class);
-        when(P86_IACC_01_PropertiesMgr.getQueryFromPropertiesFile("mock.query.key"))
-                .thenReturn("SELECT * FROM MOCK_TABLE");
+    @Test
+    public void testGetResultSetTrimmedString_returnsTrimmedString() throws SQLException {
+        when(mockResultSet.getString("some_field")).thenReturn("  hello  ");
+        String result = P86_IACC_01_DBTransaction.getResultSetTrimmedString(mockResultSet, "some_field");
+        assertEquals("hello", result);
+    }
 
+    @Test
+    public void testGetResultSetTrimmedString_returnsNullIfValueIsNull() throws SQLException {
+        when(mockResultSet.getString("some_field")).thenReturn(null);
+        String result = P86_IACC_01_DBTransaction.getResultSetTrimmedString(mockResultSet, "some_field");
+        assertNull(result);
+    }
+
+    @Test
+    public void testGetRecordsBeansList_returnsFilteredRecords() throws Exception {
         when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
         when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+        // Simulate two rows: one with amount > 0, one with amount = 0
+        when(mockResultSet.next()).thenReturn(true, true, false); // Two rows
+        when(mockResultSet.getInt("amount")).thenReturn(100, 0);  // First valid, second ignored
+
+        List<P06_IACC_01_BoprRecordBean> list = testDBTransaction.getRecordsBeansList();
+
+        assertEquals(1, list.size());
+        assertEquals(100, list.get(0).getAmount());
     }
 
-    @Test
-    public void testGetRecordsBeansList_returnsValidBeans() throws Exception {
-        // Simulate one row returned with positive amount
-        when(mockResultSet.next()).thenReturn(true, false);
+    // Helper subclass to provide concrete implementations of abstract methods
+    private class TestDBTransaction extends P86_IACC_01_DBTransaction {
 
-        // Let feedingRecordBean assign amount = 100, which passes filter (amount > 0)
-        List<P06_IACC_01_BoprRecordBean> result = level1DBTransaction.getRecordsBeansList();
+        protected TestDBTransaction(Connection connection) throws P86_IACC_01_SQLException {
+            super(connection);
+        }
 
-        assertEquals(1, result.size());
-        assertEquals(100.0, result.get(0).getAmount(), 0.001);
-    }
+        @Override
+        protected void feedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet resultSet) throws SQLException {
+            bean.setAmount(resultSet.getInt("amount"));
+        }
 
-    @Test
-    public void testGetRecordsBeansList_filtersOutZeroAmount() throws Exception {
-        // Override feedingRecordBean to set amount = 0
-        level1DBTransaction = new TestLevel1DBTransaction(mockConnection) {
-            @Override
-            protected void feedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) throws SQLException {
-                bean.setAmount(0.0);
-            }
-        };
+        @Override
+        protected void innerFeedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet resultSet)
+                throws SQLException {
+            // not tested
+        }
 
-        when(mockResultSet.next()).thenReturn(true, false);
+        @Override
+        protected String getSelectRecordsQueryKey() {
+            return "select.records.query";
+        }
 
-        List<P06_IACC_01_BoprRecordBean> result = level1DBTransaction.getRecordsBeansList();
-        assertTrue(result.isEmpty());
-    }
-
-    @Test(expected = P86_IACC_01_SQLException.class)
-    public void testGetRecordsBeansList_throwsExceptionOnSQLException() throws Exception {
-        when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
-        level1DBTransaction.getRecordsBeansList();
+        @Override
+        protected void feedRecordsBeansListPreparedStatement(PreparedStatement ps) throws SQLException {
+            // nothing to set
+        }
     }
 }
