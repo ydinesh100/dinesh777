@@ -1,147 +1,295 @@
 import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-public class P06_IACC_01_Level1DBTransactionTest {
+public class PO6_IACC_01_LevelDBTransacrionTest {
 
-    // We'll keep our instance as Object so that we can invoke its members reflectively.
-    private Object instance;
-    private Class<?> clazz;
+    // The instance of your main class.
+    private PO6_IACC_01_LevelDBTransacrion instance;
+    // The reflective Method reference for feedCirclTransaction(ResultSet)
+    private Method feedCirclTransactionMethod;
 
     @Before
     public void setUp() throws Exception {
-        // Use reflection to load your main class
-        clazz = Class.forName("P06_IACC_01_Level1DBTransaction");
-        // Obtain the declared constructor (even if it's not public)
-        Constructor<?> constructor = clazz.getDeclaredConstructor();
-        constructor.setAccessible(true);
-        instance = constructor.newInstance();
+        // Create a new instance (even if the constructor is not public)
+        Constructor<PO6_IACC_01_LevelDBTransacrion> cons =
+            PO6_IACC_01_LevelDBTransacrion.class.getDeclaredConstructor();
+        cons.setAccessible(true);
+        instance = cons.newInstance();
+
+        // Set up the exchange rates map that the method uses.
+        // Assume a field called "g_o_exchangeRatesMap" of type Map<String, Double>
+        Field exchRateField = PO6_IACC_01_LevelDBTransacrion.class.getDeclaredField("g_o_exchangeRatesMap");
+        exchRateField.setAccessible(true);
+        Map<String, Double> rates = new HashMap<>();
+        // Provide a default rate for "USD"
+        rates.put("USD", 1.1);
+        exchRateField.set(instance, rates);
+
+        // Retrieve our private method feedCirclTransaction(ResultSet)
+        feedCirclTransactionMethod = PO6_IACC_01_LevelDBTransacrion.class.getDeclaredMethod("feedCirclTransaction", ResultSet.class);
+        feedCirclTransactionMethod.setAccessible(true);
     }
 
-    // Test the startTransaction() method using reflection.
+    /**
+     * Test case for one row in the ResultSet where IND_HB_AGENT is "Y".
+     */
     @Test
-    public void testStartTransaction() throws Exception {
-        // Retrieve the startTransaction method (no parameters).
-        Method startTransMethod = clazz.getDeclaredMethod("startTransaction");
-        startTransMethod.setAccessible(true);
+    public void testFeedCirclTransactionOneRow_Y_HBAgent() throws Exception {
+        // Create a mock ResultSet with one row.
+        ResultSet rs = mock(ResultSet.class);
+        when(rs.next()).thenReturn(true).thenReturn(false);
 
-        // Invoke the method: first call should succeed.
-        Boolean started = (Boolean) startTransMethod.invoke(instance);
-        assertTrue("First invocation of startTransaction() should return true", started);
+        // Set up the data returned by the ResultSet (using assumed column names)
+        when(rs.getString("PID_DEAL")).thenReturn("D123");
+        when(rs.getString("PID_FACILITY")).thenReturn("F456");
+        when(rs.getString("RID_OUTSTANDING")).thenReturn("O789");
+        when(rs.getString("ID_EVENT")).thenReturn("EVT001");
+        when(rs.getString("CDE_EVENT")).thenReturn("EVT_CODE");
+        when(rs.getString("RID_CASHFLOW")).thenReturn("CF001");
+        when(rs.getString("BORROWER_SERVC_GRP")).thenReturn("BGRP");
+        when(rs.getString("RID_LENDER_SERVC_GRP")).thenReturn("LSGRP");
+        when(rs.getString("AMT_SHARE")).thenReturn("1000");
+        when(rs.getString("CDE_OWNER_TYPE")).thenReturn("OWNER");
+        when(rs.getString("CDE_FEE_CATEGORY")).thenReturn("FEE");
+        when(rs.getString("ID_OWNER")).thenReturn("OWNERID");
+        // For the country, assume that the final assignment uses the buyer's code:
+        when(rs.getString("CDE_COUNTRY")).thenReturn("US");
+        when(rs.getString("CDE_COUNTRY_BUYER")).thenReturn("US");
+        when(rs.getString("CDE_COUNTRY_SELLER")).thenReturn("UK");
+        // Return an effective date.
+        Date effectiveDate = new Date(System.currentTimeMillis());
+        when(rs.getDate("DTE_EFFECTIVE")).thenReturn(effectiveDate);
+        // Cashflow amount and currency.
+        when(rs.getDouble("AMT_CASHFLOW")).thenReturn(200.0);
+        when(rs.getString("CDE_CURRENCY")).thenReturn("USD");
+        when(rs.getString("CDE_SENDER_SERVICE")).thenReturn("SENDER");
+        // For IND_HB_AGENT, return "Y" so that checkIndHbAgent becomes true.
+        when(rs.getString("IND_HB_AGENT")).thenReturn("Y");
 
-        // A second call (while transaction is already active) should fail.
-        Boolean startedAgain = (Boolean) startTransMethod.invoke(instance);
-        assertFalse("Second invocation of startTransaction() should return false", startedAgain);
+        // Invoke the private method via reflection.
+        @SuppressWarnings("unchecked")
+        List<P06_IACC_01_BoprRecordBean> recordBeans = (List<P06_IACC_01_BoprRecordBean>)
+            feedCirclTransactionMethod.invoke(instance, rs);
+
+        // Validate that one bean is returned.
+        assertNotNull(recordBeans);
+        assertEquals(1, recordBeans.size());
+
+        P06_IACC_01_BoprRecordBean bean = recordBeans.get(0);
+        // Verify the fields are set appropriately.
+        assertEquals("D123", bean.getDealId());
+        assertEquals("F456", bean.getFacilityId());
+        assertEquals("O789", bean.getOutstandingId());
+        assertEquals("EVT001", bean.getEventId());
+        assertEquals("EVT_CODE", bean.getEventCode());
+        assertEquals("CF001", bean.getCashflowId());
+        assertEquals("BGRP", bean.getBorrowerServiceGrp());
+        assertEquals("LSGRP", bean.getlenderServiceGrp());
+        assertEquals("1000", bean.getLenderShareAmount());
+        assertEquals("1000", bean.getAmtShare());
+        assertEquals("OWNER", bean.getCdeOwnerType());
+        assertEquals("FEE", bean.getCdFeeCat());
+        assertEquals("OWNERID", bean.getIdOwner());
+        // For this sample, assume that after the conditional assignments the buyer code is used.
+        assertEquals("US", bean.getCountryCode());
+        assertEquals(effectiveDate, bean.getEffectiveDate());
+        assertEquals(200.0, bean.getAmount(), 0.001);
+        assertEquals("USD", bean.getAmountCurrency());
+        assertEquals("SENDER", bean.getSenderServiceCode());
+
+        // According to the logic provided, even if IND_HB_AGENT was "Y", the cashflow direction is reset to "TO".
+        assertEquals("TO", bean.getCashflowDirection());
+
+        // Check that if an exchange rate exists, the amount in branch currency is computed.
+        // 200.0 * 1.1 = 220.0
+        assertEquals(220.0, bean.getAmountInBranchCurrency(), 0.001);
+        // Verify that an operation reference has been generated.
+        assertNotNull(bean.getOperationReference());
+        assertFalse(bean.getOperationReference().isEmpty());
     }
 
-    // Test the commit() method using reflection.
+    /**
+     * Test case for one row where IND_HB_AGENT is not "Y" and currency differs.
+     */
     @Test
-    public void testCommit() throws Exception {
-        // Retrieve the commit method.
-        Method commitMethod = clazz.getDeclaredMethod("commit");
-        commitMethod.setAccessible(true);
-        // Retrieve startTransaction method to start a transaction.
-        Method startMethod = clazz.getDeclaredMethod("startTransaction");
-        startMethod.setAccessible(true);
+    public void testFeedCirclTransactionOneRow_N_HBAgent() throws Exception {
+        // Create a mock ResultSet with one row.
+        ResultSet rs = mock(ResultSet.class);
+        when(rs.next()).thenReturn(true).thenReturn(false);
 
-        // With no active transaction, commit() should return false.
-        Boolean commitWithoutStart = (Boolean) commitMethod.invoke(instance);
-        assertFalse("commit() should return false when there is no active transaction", commitWithoutStart);
+        when(rs.getString("PID_DEAL")).thenReturn("D321");
+        when(rs.getString("PID_FACILITY")).thenReturn("F654");
+        when(rs.getString("RID_OUTSTANDING")).thenReturn("O987");
+        when(rs.getString("ID_EVENT")).thenReturn("EVT002");
+        when(rs.getString("CDE_EVENT")).thenReturn("EVT_CODE_2");
+        when(rs.getString("RID_CASHFLOW")).thenReturn("CF002");
+        when(rs.getString("BORROWER_SERVC_GRP")).thenReturn("BGRP2");
+        when(rs.getString("RID_LENDER_SERVC_GRP")).thenReturn("LSGRP2");
+        when(rs.getString("AMT_SHARE")).thenReturn("2000");
+        when(rs.getString("CDE_OWNER_TYPE")).thenReturn("OWNER2");
+        when(rs.getString("CDE_FEE_CATEGORY")).thenReturn("FEE2");
+        when(rs.getString("ID_OWNER")).thenReturn("OWNERID2");
+        // In this test, let the buyer and seller be different.
+        when(rs.getString("CDE_COUNTRY")).thenReturn("UK");
+        when(rs.getString("CDE_COUNTRY_BUYER")).thenReturn("US");
+        when(rs.getString("CDE_COUNTRY_SELLER")).thenReturn("UK");
+        Date effectiveDate = new Date(System.currentTimeMillis());
+        when(rs.getDate("DTE_EFFECTIVE")).thenReturn(effectiveDate);
+        when(rs.getDouble("AMT_CASHFLOW")).thenReturn(300.0);
+        when(rs.getString("CDE_CURRENCY")).thenReturn("EUR");
+        when(rs.getString("CDE_SENDER_SERVICE")).thenReturn("SENDER2");
+        when(rs.getString("IND_HB_AGENT")).thenReturn("N");
 
-        // Start a transaction and then commit.
-        Boolean started = (Boolean) startMethod.invoke(instance);
-        assertTrue("startTransaction() should return true when no transaction is active", started);
-        Boolean commitResult = (Boolean) commitMethod.invoke(instance);
-        assertTrue("commit() should return true after starting a transaction", commitResult);
+        // Add an exchange rate for EUR.
+        Field exchRateField = PO6_IACC_01_LevelDBTransacrion.class.getDeclaredField("g_o_exchangeRatesMap");
+        exchRateField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        Map<String, Double> rates = (Map<String, Double>) exchRateField.get(instance);
+        rates.put("EUR", 0.9);
 
-        // A subsequent commit call without a transaction should return false.
-        Boolean commitAgain = (Boolean) commitMethod.invoke(instance);
-        assertFalse("Second commit() should return false when no transaction is active", commitAgain);
+        @SuppressWarnings("unchecked")
+        List<P06_IACC_01_BoprRecordBean> recordBeans = (List<P06_IACC_01_BoprRecordBean>)
+            feedCirclTransactionMethod.invoke(instance, rs);
+
+        assertNotNull(recordBeans);
+        assertEquals(1, recordBeans.size());
+        P06_IACC_01_BoprRecordBean bean = recordBeans.get(0);
+
+        assertEquals("D321", bean.getDealId());
+        assertEquals("F654", bean.getFacilityId());
+        assertEquals("O987", bean.getOutstandingId());
+        assertEquals("EVT002", bean.getEventId());
+        assertEquals("EVT_CODE_2", bean.getEventCode());
+        assertEquals("CF002", bean.getCashflowId());
+        assertEquals("BGRP2", bean.getBorrowerServiceGrp());
+        assertEquals("LSGRP2", bean.getlenderServiceGrp());
+        assertEquals("2000", bean.getLenderShareAmount());
+        assertEquals("2000", bean.getAmtShare());
+        assertEquals("OWNER2", bean.getCdeOwnerType());
+        assertEquals("FEE2", bean.getCdFeeCat());
+        assertEquals("OWNERID2", bean.getIdOwner());
+        // Final country code is set from the buyer column
+        assertEquals("US", bean.getCountryCode());
+        assertEquals(effectiveDate, bean.getEffectiveDate());
+        assertEquals(300.0, bean.getAmount(), 0.001);
+        assertEquals("EUR", bean.getAmountCurrency());
+        assertEquals("SENDER2", bean.getSenderServiceCode());
+        assertEquals("TO", bean.getCashflowDirection());
+        // Amount in branch currency: 300.0 * 0.9 = 270.0
+        assertEquals(270.0, bean.getAmountInBranchCurrency(), 0.001);
+        assertNotNull(bean.getOperationReference());
+        assertFalse(bean.getOperationReference().isEmpty());
     }
 
-    // Test the rollback() method using reflection.
+    /**
+     * Test case for processing multiple rows.
+     */
     @Test
-    public void testRollback() throws Exception {
-        // Retrieve the rollback method.
-        Method rollbackMethod = clazz.getDeclaredMethod("rollback");
-        rollbackMethod.setAccessible(true);
-        // Retrieve startTransaction method.
-        Method startMethod = clazz.getDeclaredMethod("startTransaction");
-        startMethod.setAccessible(true);
+    public void testFeedCirclTransactionMultipleRows() throws Exception {
+        // Create a mock ResultSet representing 2 rows.
+        ResultSet rs = mock(ResultSet.class);
+        // Configure ResultSet so that next() returns true twice then false.
+        when(rs.next()).thenReturn(true, true, false);
 
-        // Without an active transaction, rollback() should return false.
-        Boolean rollbackWithoutStart = (Boolean) rollbackMethod.invoke(instance);
-        assertFalse("rollback() should return false when no transaction is active", rollbackWithoutStart);
+        // When multiple rows are needed, we can use successive values.
+        when(rs.getString("PID_DEAL")).thenReturn("D1", "D2");
+        when(rs.getString("PID_FACILITY")).thenReturn("F1", "F2");
+        when(rs.getString("RID_OUTSTANDING")).thenReturn("O1", "O2");
+        when(rs.getString("ID_EVENT")).thenReturn("EVT1", "EVT2");
+        when(rs.getString("CDE_EVENT")).thenReturn("EVC1", "EVC2");
+        when(rs.getString("RID_CASHFLOW")).thenReturn("CF1", "CF2");
+        when(rs.getString("BORROWER_SERVC_GRP")).thenReturn("BGRP1", "BGRP2");
+        when(rs.getString("RID_LENDER_SERVC_GRP")).thenReturn("LSGRP1", "LSGRP2");
+        when(rs.getString("AMT_SHARE")).thenReturn("500", "600");
+        when(rs.getString("CDE_OWNER_TYPE")).thenReturn("OWNER1", "OWNER2");
+        when(rs.getString("CDE_FEE_CATEGORY")).thenReturn("FEE1", "FEE2");
+        when(rs.getString("ID_OWNER")).thenReturn("OWN1", "OWN2");
+        when(rs.getString("CDE_COUNTRY")).thenReturn("US", "UK");
+        when(rs.getString("CDE_COUNTRY_BUYER")).thenReturn("US", "US");
+        when(rs.getString("CDE_COUNTRY_SELLER")).thenReturn("UK", "UK");
+        Date effectiveDate1 = new Date(System.currentTimeMillis());
+        Date effectiveDate2 = new Date(System.currentTimeMillis() + 1000);
+        when(rs.getDate("DTE_EFFECTIVE")).thenReturn(effectiveDate1, effectiveDate2);
+        when(rs.getDouble("AMT_CASHFLOW")).thenReturn(100.0, 200.0);
+        when(rs.getString("CDE_CURRENCY")).thenReturn("USD", "EUR");
+        when(rs.getString("CDE_SENDER_SERVICE")).thenReturn("SENDER1", "SENDER2");
+        when(rs.getString("IND_HB_AGENT")).thenReturn("Y", "N");
 
-        // Start a transaction, then rollback.
-        Boolean started = (Boolean) startMethod.invoke(instance);
-        assertTrue("startTransaction() should return true when starting a transaction", started);
-        Boolean rollbackResult = (Boolean) rollbackMethod.invoke(instance);
-        assertTrue("rollback() should return true when there is an active transaction", rollbackResult);
+        // Set an exchange rate for EUR.
+        Field exchRateField = PO6_IACC_01_LevelDBTransacrion.class.getDeclaredField("g_o_exchangeRatesMap");
+        exchRateField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        Map<String, Double> rates = (Map<String, Double>) exchRateField.get(instance);
+        rates.put("EUR", 0.8);
 
-        // Further rollback should fail.
-        Boolean rollbackAgain = (Boolean) rollbackMethod.invoke(instance);
-        assertFalse("rollback() should return false after rolling back an active transaction", rollbackAgain);
-    }
+        @SuppressWarnings("unchecked")
+        List<P06_IACC_01_BoprRecordBean> recordBeans = (List<P06_IACC_01_BoprRecordBean>)
+            feedCirclTransactionMethod.invoke(instance, rs);
+        assertNotNull(recordBeans);
+        assertEquals(2, recordBeans.size());
 
-    // Test the multiply(int, int) method.
-    @Test
-    public void testMultiply() throws Exception {
-        // Retrieve multiply method which takes two ints.
-        Method multiplyMethod = clazz.getDeclaredMethod("multiply", int.class, int.class);
-        multiplyMethod.setAccessible(true);
-        int result = (Integer) multiplyMethod.invoke(instance, 3, 4);
-        assertEquals("multiply(3,4) should yield 12", 12, result);
-    }
+        // Validate first row
+        P06_IACC_01_BoprRecordBean bean1 = recordBeans.get(0);
+        assertEquals("D1", bean1.getDealId());
+        assertEquals("F1", bean1.getFacilityId());
+        assertEquals("O1", bean1.getOutstandingId());
+        assertEquals("EVT1", bean1.getEventId());
+        assertEquals("EVC1", bean1.getEventCode());
+        assertEquals("CF1", bean1.getCashflowId());
+        assertEquals("BGRP1", bean1.getBorrowerServiceGrp());
+        assertEquals("LSGRP1", bean1.getlenderServiceGrp());
+        assertEquals("500", bean1.getLenderShareAmount());
+        assertEquals("500", bean1.getAmtShare());
+        assertEquals("OWNER1", bean1.getCdeOwnerType());
+        assertEquals("FEE1", bean1.getCdFeeCat());
+        assertEquals("OWN1", bean1.getIdOwner());
+        assertEquals("US", bean1.getCountryCode());
+        assertEquals(effectiveDate1, bean1.getEffectiveDate());
+        assertEquals(100.0, bean1.getAmount(), 0.001);
+        assertEquals("USD", bean1.getAmountCurrency());
+        assertEquals("SENDER1", bean1.getSenderServiceCode());
+        assertEquals("TO", bean1.getCashflowDirection());
+        // For USD, amount in branch currency: 100.0 * 1.1 = 110.0
+        assertEquals(110.0, bean1.getAmountInBranchCurrency(), 0.001);
+        assertNotNull(bean1.getOperationReference());
+        assertFalse(bean1.getOperationReference().isEmpty());
 
-    // Test the getTransactionCount() method.
-    @Test
-    public void testGetTransactionCount() throws Exception {
-        // Retrieve the getTransactionCount method.
-        Method getCountMethod = clazz.getDeclaredMethod("getTransactionCount");
-        getCountMethod.setAccessible(true);
-        int initialCount = (Integer) getCountMethod.invoke(instance);
-        assertEquals("Initial transaction count should be 0", 0, initialCount);
-
-        // Start a transaction (which should increment the count).
-        Method startTransMethod = clazz.getDeclaredMethod("startTransaction");
-        startTransMethod.setAccessible(true);
-        startTransMethod.invoke(instance);
-        int countAfterStart = (Integer) getCountMethod.invoke(instance);
-        // Depending on your implementation, the count should increase.
-        assertEquals("Transaction count should be 1 after starting a transaction", 1, countAfterStart);
-    }
-
-    // Test the private logTransaction(String) method.
-    @Test
-    public void testPrivateLogTransaction() throws Exception {
-        // Retrieve the private method logTransaction which accepts a String.
-        Method logMethod = clazz.getDeclaredMethod("logTransaction", String.class);
-        logMethod.setAccessible(true);
-
-        String expected = "Transaction test logged";
-        String actual = (String) logMethod.invoke(instance, "test");
-        assertEquals("logTransaction should return the correctly formatted string", expected, actual);
-    }
-
-    // Test manipulating a private field: transactionCount.
-    @Test
-    public void testPrivateFieldManipulation() throws Exception {
-        // Retrieve the private field named "transactionCount".
-        Field countField = clazz.getDeclaredField("transactionCount");
-        countField.setAccessible(true);
-
-        // Set it to a predetermined value.
-        countField.set(instance, 42);
-
-        // Retrieve the getTransactionCount method to verify our manipulation.
-        Method getCountMethod = clazz.getDeclaredMethod("getTransactionCount");
-        getCountMethod.setAccessible(true);
-        int updatedCount = (Integer) getCountMethod.invoke(instance);
-        assertEquals("getTransactionCount should reflect the updated private field value", 42, updatedCount);
+        // Validate second row
+        P06_IACC_01_BoprRecordBean bean2 = recordBeans.get(1);
+        assertEquals("D2", bean2.getDealId());
+        assertEquals("F2", bean2.getFacilityId());
+        assertEquals("O2", bean2.getOutstandingId());
+        assertEquals("EVT2", bean2.getEventId());
+        assertEquals("EVC2", bean2.getEventCode());
+        assertEquals("CF2", bean2.getCashflowId());
+        assertEquals("BGRP2", bean2.getBorrowerServiceGrp());
+        assertEquals("LSGRP2", bean2.getlenderServiceGrp());
+        assertEquals("600", bean2.getLenderShareAmount());
+        assertEquals("600", bean2.getAmtShare());
+        assertEquals("OWNER2", bean2.getCdeOwnerType());
+        assertEquals("FEE2", bean2.getCdFeeCat());
+        assertEquals("OWN2", bean2.getIdOwner());
+        assertEquals("US", bean2.getCountryCode());
+        assertEquals(effectiveDate2, bean2.getEffectiveDate());
+        assertEquals(200.0, bean2.getAmount(), 0.001);
+        assertEquals("EUR", bean2.getAmountCurrency());
+        assertEquals("SENDER2", bean2.getSenderServiceCode());
+        assertEquals("TO", bean2.getCashflowDirection());
+        // For EUR, 200.0 * 0.8 = 160.0
+        assertEquals(160.0, bean2.getAmountInBranchCurrency(), 0.001);
+        assertNotNull(bean2.getOperationReference());
+        assertFalse(bean2.getOperationReference().isEmpty());
     }
 }
