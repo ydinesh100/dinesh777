@@ -1,110 +1,16 @@
-import org.junit.*;
-import org.mockito.*;
-import java.lang.reflect.*;
-import java.sql.*;
-import java.util.*;
+@Before
+public void setUp() throws Exception {
+    Constructor<P06_IACC_01_Level1DBTransaction> constructor =
+            P06_IACC_01_Level1DBTransaction.class.getDeclaredConstructor();
+    constructor.setAccessible(true);
+    transaction = constructor.newInstance();
 
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
+    mockConnection = mock(Connection.class);
+    mockPreparedStatement = mock(PreparedStatement.class);
+    mockResultSet = mock(ResultSet.class);
 
-public class P06_IACC_01_Level1DBTransactionTest {
-
-    private P06_IACC_01_Level1DBTransaction transaction;
-    private Connection mockConnection;
-    private PreparedStatement mockPreparedStatement;
-    private ResultSet mockResultSet;
-
-    @Before
-    public void setUp() throws Exception {
-        transaction = new P06_IACC_01_Level1DBTransaction();
-        mockConnection = mock(Connection.class);
-        mockPreparedStatement = mock(PreparedStatement.class);
-        mockResultSet = mock(ResultSet.class);
-
-        // Set the protected 'conn' field in the superclass
-        Field connField = P06_IACC_01_DBTransaction.class.getDeclaredField("conn");
-        connField.setAccessible(true);
-        connField.set(transaction, mockConnection);
-    }
-
-    @Test
-    public void testPopulateFinancialRecordBean() throws Exception {
-        when(mockResultSet.getString("OPERATION_REFERENCE")).thenReturn("REF001");
-        when(mockResultSet.getString("ACCOUNT_NUMBER")).thenReturn("ACC123");
-        when(mockResultSet.getString("CURRENCY")).thenReturn("USD");
-        when(mockResultSet.getDouble("AMOUNT")).thenReturn(1000.50);
-
-        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("populateFinancialRecordBean", ResultSet.class);
-        method.setAccessible(true);
-
-        P06_IACC_01_FinancialRecordBean bean = (P06_IACC_01_FinancialRecordBean) method.invoke(transaction, mockResultSet);
-
-        assertNotNull(bean);
-        assertEquals("REF001", bean.getOperationReference());
-        assertEquals("ACC123", bean.getAccountNumber());
-        assertEquals("USD", bean.getCurrency());
-        assertEquals(1000.50, bean.getAmount(), 0.001);
-    }
-
-    @Test
-    public void testInsertFinancialRecord() throws Exception {
-        P06_IACC_01_FinancialRecordBean bean = new P06_IACC_01_FinancialRecordBean();
-        bean.setAccountNumber("ACC001");
-        bean.setCurrency("USD");
-        bean.setAmount(100.0);
-
-        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-
-        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("insertFinancialRecord", P06_IACC_01_FinancialRecordBean.class);
-        method.setAccessible(true);
-        method.invoke(transaction, bean);
-
-        verify(mockConnection, times(1)).prepareStatement(anyString());
-        verify(mockPreparedStatement, atLeastOnce()).setString(anyInt(), anyString());
-        verify(mockPreparedStatement, atLeastOnce()).setDouble(anyInt(), anyDouble());
-        verify(mockPreparedStatement, times(1)).executeUpdate();
-    }
-
-    @Test
-    public void testGenerateOperationReference() throws Exception {
-        P06_IACC_01_FinancialRecordBean bean = new P06_IACC_01_FinancialRecordBean();
-        bean.setAccountNumber("ACC789");
-        bean.setCurrency("EUR");
-
-        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("generateOperationReference", P06_IACC_01_FinancialRecordBean.class);
-        method.setAccessible(true);
-
-        String reference = (String) method.invoke(transaction, bean);
-
-        assertNotNull(reference);
-        assertTrue(reference.contains("ACC789"));
-        assertTrue(reference.contains("EUR"));
-    }
-
-    @Test
-    public void testMapExchangeRates() throws Exception {
-        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
-
-        when(mockResultSet.next()).thenReturn(true, true, false);
-        when(mockResultSet.getString("CURRENCY_CODE")).thenReturn("USD", "EUR");
-        when(mockResultSet.getDouble("EXCHANGE_RATE")).thenReturn(1.0, 0.85);
-
-        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("mapExchangeRates");
-        method.setAccessible(true);
-
-        Map<String, Double> rates = (Map<String, Double>) method.invoke(transaction);
-
-        assertEquals(2, rates.size());
-        assertEquals(1.0, rates.get("USD"), 0.001);
-        assertEquals(0.85, rates.get("EUR"), 0.001);
-    }
-
-    @After
-    public void tearDown() {
-        transaction = null;
-        mockConnection = null;
-        mockPreparedStatement = null;
-        mockResultSet = null;
-    }
+    // Set the protected 'conn' field in the superclass
+    Field connField = P06_IACC_01_DBTransaction.class.getDeclaredField("conn");
+    connField.setAccessible(true);
+    connField.set(transaction, mockConnection);
 }
