@@ -1,31 +1,147 @@
 import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.*;
+
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 public class P06_IACC_01_Level1DBTransactionTest {
 
+    // We'll keep our instance as Object so that we can invoke its members reflectively.
     private Object instance;
+    private Class<?> clazz;
 
     @Before
     public void setUp() throws Exception {
-        // Obtain the constructor of your class (even if it is private)
-        Constructor<?> constructor = P06_IACC_01_Level1DBTransaction.class.getDeclaredConstructor();
+        // Use reflection to load your main class
+        clazz = Class.forName("P06_IACC_01_Level1DBTransaction");
+        // Obtain the declared constructor (even if it's not public)
+        Constructor<?> constructor = clazz.getDeclaredConstructor();
         constructor.setAccessible(true);
         instance = constructor.newInstance();
     }
 
+    // Test the startTransaction() method using reflection.
     @Test
-    public void testStartTransactionUsingReflection() throws Exception {
-        // Attempt to locate a method named "startTransaction" (adjust the method name if necessary)
-        Method startTransMethod = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("startTransaction");
+    public void testStartTransaction() throws Exception {
+        // Retrieve the startTransaction method (no parameters).
+        Method startTransMethod = clazz.getDeclaredMethod("startTransaction");
         startTransMethod.setAccessible(true);
 
-        // Invoke the method on our instance
-        boolean started = (boolean) startTransMethod.invoke(instance);
+        // Invoke the method: first call should succeed.
+        Boolean started = (Boolean) startTransMethod.invoke(instance);
+        assertTrue("First invocation of startTransaction() should return true", started);
 
-        // Assert that the transaction started (adjust expectations based on your implementation)
+        // A second call (while transaction is already active) should fail.
+        Boolean startedAgain = (Boolean) startTransMethod.invoke(instance);
+        assertFalse("Second invocation of startTransaction() should return false", startedAgain);
+    }
+
+    // Test the commit() method using reflection.
+    @Test
+    public void testCommit() throws Exception {
+        // Retrieve the commit method.
+        Method commitMethod = clazz.getDeclaredMethod("commit");
+        commitMethod.setAccessible(true);
+        // Retrieve startTransaction method to start a transaction.
+        Method startMethod = clazz.getDeclaredMethod("startTransaction");
+        startMethod.setAccessible(true);
+
+        // With no active transaction, commit() should return false.
+        Boolean commitWithoutStart = (Boolean) commitMethod.invoke(instance);
+        assertFalse("commit() should return false when there is no active transaction", commitWithoutStart);
+
+        // Start a transaction and then commit.
+        Boolean started = (Boolean) startMethod.invoke(instance);
         assertTrue("startTransaction() should return true when no transaction is active", started);
+        Boolean commitResult = (Boolean) commitMethod.invoke(instance);
+        assertTrue("commit() should return true after starting a transaction", commitResult);
+
+        // A subsequent commit call without a transaction should return false.
+        Boolean commitAgain = (Boolean) commitMethod.invoke(instance);
+        assertFalse("Second commit() should return false when no transaction is active", commitAgain);
+    }
+
+    // Test the rollback() method using reflection.
+    @Test
+    public void testRollback() throws Exception {
+        // Retrieve the rollback method.
+        Method rollbackMethod = clazz.getDeclaredMethod("rollback");
+        rollbackMethod.setAccessible(true);
+        // Retrieve startTransaction method.
+        Method startMethod = clazz.getDeclaredMethod("startTransaction");
+        startMethod.setAccessible(true);
+
+        // Without an active transaction, rollback() should return false.
+        Boolean rollbackWithoutStart = (Boolean) rollbackMethod.invoke(instance);
+        assertFalse("rollback() should return false when no transaction is active", rollbackWithoutStart);
+
+        // Start a transaction, then rollback.
+        Boolean started = (Boolean) startMethod.invoke(instance);
+        assertTrue("startTransaction() should return true when starting a transaction", started);
+        Boolean rollbackResult = (Boolean) rollbackMethod.invoke(instance);
+        assertTrue("rollback() should return true when there is an active transaction", rollbackResult);
+
+        // Further rollback should fail.
+        Boolean rollbackAgain = (Boolean) rollbackMethod.invoke(instance);
+        assertFalse("rollback() should return false after rolling back an active transaction", rollbackAgain);
+    }
+
+    // Test the multiply(int, int) method.
+    @Test
+    public void testMultiply() throws Exception {
+        // Retrieve multiply method which takes two ints.
+        Method multiplyMethod = clazz.getDeclaredMethod("multiply", int.class, int.class);
+        multiplyMethod.setAccessible(true);
+        int result = (Integer) multiplyMethod.invoke(instance, 3, 4);
+        assertEquals("multiply(3,4) should yield 12", 12, result);
+    }
+
+    // Test the getTransactionCount() method.
+    @Test
+    public void testGetTransactionCount() throws Exception {
+        // Retrieve the getTransactionCount method.
+        Method getCountMethod = clazz.getDeclaredMethod("getTransactionCount");
+        getCountMethod.setAccessible(true);
+        int initialCount = (Integer) getCountMethod.invoke(instance);
+        assertEquals("Initial transaction count should be 0", 0, initialCount);
+
+        // Start a transaction (which should increment the count).
+        Method startTransMethod = clazz.getDeclaredMethod("startTransaction");
+        startTransMethod.setAccessible(true);
+        startTransMethod.invoke(instance);
+        int countAfterStart = (Integer) getCountMethod.invoke(instance);
+        // Depending on your implementation, the count should increase.
+        assertEquals("Transaction count should be 1 after starting a transaction", 1, countAfterStart);
+    }
+
+    // Test the private logTransaction(String) method.
+    @Test
+    public void testPrivateLogTransaction() throws Exception {
+        // Retrieve the private method logTransaction which accepts a String.
+        Method logMethod = clazz.getDeclaredMethod("logTransaction", String.class);
+        logMethod.setAccessible(true);
+
+        String expected = "Transaction test logged";
+        String actual = (String) logMethod.invoke(instance, "test");
+        assertEquals("logTransaction should return the correctly formatted string", expected, actual);
+    }
+
+    // Test manipulating a private field: transactionCount.
+    @Test
+    public void testPrivateFieldManipulation() throws Exception {
+        // Retrieve the private field named "transactionCount".
+        Field countField = clazz.getDeclaredField("transactionCount");
+        countField.setAccessible(true);
+
+        // Set it to a predetermined value.
+        countField.set(instance, 42);
+
+        // Retrieve the getTransactionCount method to verify our manipulation.
+        Method getCountMethod = clazz.getDeclaredMethod("getTransactionCount");
+        getCountMethod.setAccessible(true);
+        int updatedCount = (Integer) getCountMethod.invoke(instance);
+        assertEquals("getTransactionCount should reflect the updated private field value", 42, updatedCount);
     }
 }
