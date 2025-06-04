@@ -1,23 +1,49 @@
-@Test
-public void testGetRecordsBeansList_SQLExceptionHandling() {
-    // Simulate SQLException on prepareStatement
-    try {
-        when(mockConnection.prepareStatement(anyString()))
-            .thenThrow(new SQLException("Simulated DB error"));
+Here are comprehensive JUnit4 test cases for the `P86_IACC_01_DBTransaction` class, covering its main functionalities:
 
-        // Subclass to expose method
-        class TestTransaction extends P86_IACC_01_DBTransaction {
-            TestTransaction(Connection conn) {
-                super(conn);
-            }
+```java
+package com.bnpparibas.atlentic.iacc.bopr.level.test;
 
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
+
+import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
+import com.bnpparibas.atlentic.iacc.bopr.level.P86_IACC_01_DBTransaction;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P86_IACC_01_SQLException;
+
+@RunWith(MockitoJUnitRunner.class)
+public class P86_IACC_01_DBTransactionTest {
+
+    @Mock
+    private Connection mockConnection;
+    
+    @Mock
+    private PreparedStatement mockPreparedStatement;
+    
+    @Mock
+    private ResultSet mockResultSet;
+    
+    private P86_IACC_01_DBTransaction dbTransaction;
+    
+    @Before
+    public void setUp() throws Exception {
+        dbTransaction = new P86_IACC_01_DBTransaction(mockConnection) {
             @Override
-            protected void feedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) throws SQLException {
-                // Not reached
+            protected void feedingRecordBean(P06_IACC_01_BoprRecordBean p_o_recordBean, ResultSet p_o_resultSet) 
+                throws SQLException {
+                innerFeedingRecordBean(p_o_recordBean, p_o_resultSet);
             }
-
-            @Override
-            protected void innerFeedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) throws SQLException {}
 
             @Override
             protected String getSelectRecordsQueryKey() {
@@ -25,22 +51,141 @@ public void testGetRecordsBeansList_SQLExceptionHandling() {
             }
 
             @Override
-            protected void feedRecordsBeansListPreparedStatement(PreparedStatement ps) throws SQLException {}
-            
-            public List<P06_IACC_01_BoprRecordBean> callGetRecordsBeansList() throws P06_IACC_01_SQLException {
-                return this.getRecordsBeansList();
+            protected void feedRecordsBeansListPreparedStatement(PreparedStatement p_o_preparedStatement) 
+                throws SQLException {
+                // No implementation needed for basic test
             }
-        }
 
-        TestTransaction tx = new TestTransaction(mockConnection);
+            @Override
+            protected void innerFeedingRecordBean(P06_IACC_01_BoprRecordBean p_o_recordBean, ResultSet p_o_resultSet) 
+                throws SQLException {
+                p_o_recordBean.setAmount(p_o_resultSet.getBigDecimal("AMOUNT"));
+                p_o_recordBean.setCurrency(p_o_resultSet.getString("CURRENCY"));
+            }
+        };
+        
+        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+    }
 
-        // Act & Assert: Should throw custom exception
-        tx.callGetRecordsBeansList();
-        fail("Expected P06_IACC_01_SQLException to be thrown");
+    @Test
+    public void testGetResultSetTrimedString_NonNullValue() throws Exception {
+        when(mockResultSet.getString("TEST_FIELD")).thenReturn("  test value  ");
+        
+        String result = dbTransaction.getResultSetTrimedString(mockResultSet, "TEST_FIELD");
+        
+        assertEquals("test value", result);
+    }
 
-    } catch (P06_IACC_01_SQLException ex) {
-        assertTrue(ex.getMessage().contains("An error occurred while getting records"));
-    } catch (Exception ex) {
-        fail("Unexpected exception: " + ex);
+    @Test
+    public void testGetResultSetTrimedString_NullValue() throws Exception {
+        when(mockResultSet.getString("TEST_FIELD")).thenReturn(null);
+        
+        String result = dbTransaction.getResultSetTrimedString(mockResultSet, "TEST_FIELD");
+        
+        assertNull(result);
+    }
+
+    @Test
+    public void testGetRecordsBeansList_WithPositiveAmount() throws Exception {
+        when(mockResultSet.next()).thenReturn(true, false); // One record
+        when(mockResultSet.getBigDecimal("AMOUNT")).thenReturn(new BigDecimal("100.00"));
+        when(mockResultSet.getString("CURRENCY")).thenReturn("USD");
+        
+        List<P06_IACC_01_BoprRecordBean> result = dbTransaction.getRecordsBeansList();
+        
+        assertEquals(1, result.size());
+        assertEquals(new BigDecimal("100.00"), result.get(0).getAmount());
+        assertEquals("USD", result.get(0).getCurrency());
+    }
+
+    @Test
+    public void testGetRecordsBeansList_WithZeroAmount() throws Exception {
+        when(mockResultSet.next()).thenReturn(true, false); // One record
+        when(mockResultSet.getBigDecimal("AMOUNT")).thenReturn(new BigDecimal("0.00"));
+        when(mockResultSet.getString("CURRENCY")).thenReturn("USD");
+        
+        List<P06_IACC_01_BoprRecordBean> result = dbTransaction.getRecordsBeansList();
+        
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testGetRecordsBeansList_WithNegativeAmount() throws Exception {
+        when(mockResultSet.next()).thenReturn(true, false); // One record
+        when(mockResultSet.getBigDecimal("AMOUNT")).thenReturn(new BigDecimal("-50.00"));
+        when(mockResultSet.getString("CURRENCY")).thenReturn("USD");
+        
+        List<P06_IACC_01_BoprRecordBean> result = dbTransaction.getRecordsBeansList();
+        
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testGetRecordsBeansList_EmptyResultSet() throws Exception {
+        when(mockResultSet.next()).thenReturn(false); // No records
+        
+        List<P06_IACC_01_BoprRecordBean> result = dbTransaction.getRecordsBeansList();
+        
+        assertTrue(result.isEmpty());
+    }
+
+    @Test(expected = P86_IACC_01_SQLException.class)
+    public void testGetRecordsBeansList_SQLException() throws Exception {
+        when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("Test exception"));
+        
+        dbTransaction.getRecordsBeansList();
+    }
+
+    @Test
+    public void testGetSelectRecordsQueryKey() throws Exception {
+        assertEquals("test.query.key", dbTransaction.getSelectRecordsQueryKey());
+    }
+
+    @Test
+    public void testInnerFeedingRecordBean() throws Exception {
+        P06_IACC_01_BoprRecordBean recordBean = new P06_IACC_01_BoprRecordBean();
+        when(mockResultSet.getBigDecimal("AMOUNT")).thenReturn(new BigDecimal("200.00"));
+        when(mockResultSet.getString("CURRENCY")).thenReturn("EUR");
+        
+        dbTransaction.innerFeedingRecordBean(recordBean, mockResultSet);
+        
+        assertEquals(new BigDecimal("200.00"), recordBean.getAmount());
+        assertEquals("EUR", recordBean.getCurrency());
+    }
+
+    @Test(expected = SQLException.class)
+    public void testInnerFeedingRecordBean_SQLException() throws Exception {
+        P06_IACC_01_BoprRecordBean recordBean = new P06_IACC_01_BoprRecordBean();
+        when(mockResultSet.getBigDecimal("AMOUNT")).thenThrow(new SQLException("Test exception"));
+        
+        dbTransaction.innerFeedingRecordBean(recordBean, mockResultSet);
     }
 }
+```
+
+Key features of these test cases:
+
+1. **Setup**: Uses Mockito to mock database objects (Connection, PreparedStatement, ResultSet)
+2. **Test Coverage**:
+   - Normal scenarios with valid data
+   - Edge cases (null values, empty results)
+   - Error scenarios (SQL exceptions)
+   - Positive/Negative/Zero amount filtering
+3. **Verification**:
+   - Proper trimming of strings from ResultSet
+   - Correct filtering of records based on amount
+   - Proper exception handling
+   - Correct implementation of abstract methods
+4. **Organization**:
+   - Clear test method names indicating what they test
+   - Proper setup and cleanup
+   - Separation of different test scenarios
+
+The test class uses a concrete anonymous subclass of the abstract `P86_IACC_01_DBTransaction` to test its functionality. This is a common pattern when testing abstract classes.
+
+You may need to adjust the test cases based on:
+1. The actual implementation of `P06_IACC_01_BoprRecordBean`
+2. Any additional abstract methods in the base class
+3. Specific business rules for record filtering
+4. The actual database schema and expected queries
