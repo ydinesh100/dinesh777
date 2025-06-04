@@ -1,40 +1,103 @@
-@Test
-public void test_getRecordsBeansList_success() throws Exception {
-    // Prepare mocks
-    mockStatic(P86_IACC_01_PropertiesMgr.class);
-    when(P86_IACC_01_PropertiesMgr.getQueryFromPropertiesFile("test.query.key"))
-            .thenReturn("SELECT * FROM dummy_table");
+@RunWith(MockitoJUnitRunner.class)
+public class P06_IACC_01_Level1DBTransactionTest {
 
-    when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-    when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
-    when(mockResultSet.next()).thenReturn(true, false);  // Only one record
-    when(mockResultSet.getString("amount")).thenReturn("100.0");
+    @Mock
+    private Connection mockConnection;
 
-    // Create subclass to override abstract/protected methods
-    P06_IACC_01_DBTransaction dbTransaction = new P06_IACC_01_DBTransaction(mockConnection) {
-        @Override
-        protected void feedRecordsBeansListPreparedStatement(PreparedStatement ps) {}
+    @Mock
+    private PreparedStatement mockPreparedStatement;
 
-        @Override
-        protected String getSelectRecordsQueryKey() {
-            return "test.query.key";
-        }
+    @Mock
+    private ResultSet mockResultSet;
 
-        @Override
-        protected void feedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) {
-            bean.setAmount(100.0);
-        }
-    };
+    private P06_IACC_01_Level1DBTransaction transaction;
 
-    // Use reflection to invoke protected method
-    Method method = P06_IACC_01_DBTransaction.class.getDeclaredMethod("getRecordsBeansList");
-    method.setAccessible(true);
+    @Before
+    public void setUp() throws Exception {
+        transaction = new P06_IACC_01_Level1DBTransaction() {
+            @Override
+            protected String getSelectRecordsQueryKey() {
+                return "mock.query.key";
+            }
 
-    @SuppressWarnings("unchecked")
-    List<P06_IACC_01_BoprRecordBean> result = (List<P06_IACC_01_BoprRecordBean>) method.invoke(dbTransaction);
+            @Override
+            protected String getQueryFromProperties(String key) {
+                return "SELECT * FROM FAKE_TABLE";
+            }
 
-    // Assert
-    assertNotNull(result);
-    assertEquals(1, result.size());
-    assertEquals(100.0, result.get(0).getAmount(), 0.001);
+            @Override
+            protected void feedRecordsBeansListPreparedStatement(PreparedStatement stmt) {
+                // no-op for test
+            }
+
+            @Override
+            protected void feedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) {
+                // simulate population
+                bean.setAmount(123.45);
+                bean.setDealId("D123");
+            }
+        };
+
+        // Inject mock connection via reflection
+        Field connField = P06_IACC_01_Level1DBTransaction.class.getDeclaredField("g_o_dataBaseConnection");
+        connField.setAccessible(true);
+        connField.set(transaction, mockConnection);
+    }
+
+    @Test
+    public void test_getRecordsBeansList_success() throws Exception {
+        Mockito.when(mockConnection.prepareStatement(Mockito.anyString())).thenReturn(mockPreparedStatement);
+        Mockito.when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+        Mockito.when(mockResultSet.next()).thenReturn(true, false); // only one row
+
+        List<P06_IACC_01_BoprRecordBean> result = transaction.getRecordsBeansList();
+
+        Assert.assertEquals(1, result.size());
+        Assert.assertEquals("D123", result.get(0).getDealId());
+        Assert.assertEquals(123.45, result.get(0).getAmount(), 0.001);
+    }
+
+    @Test
+    public void test_getRecordsBeansList_filters_zero_amount() throws Exception {
+        transaction = new P06_IACC_01_Level1DBTransaction() {
+            @Override
+            protected String getSelectRecordsQueryKey() {
+                return "mock.query.key";
+            }
+
+            @Override
+            protected String getQueryFromProperties(String key) {
+                return "SELECT * FROM FAKE_TABLE";
+            }
+
+            @Override
+            protected void feedRecordsBeansListPreparedStatement(PreparedStatement stmt) {
+            }
+
+            @Override
+            protected void feedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) {
+                bean.setAmount(0.0); // Will be filtered
+            }
+        };
+
+        Field connField = P06_IACC_01_Level1DBTransaction.class.getDeclaredField("g_o_dataBaseConnection");
+        connField.setAccessible(true);
+        connField.set(transaction, mockConnection);
+
+        Mockito.when(mockConnection.prepareStatement(Mockito.anyString())).thenReturn(mockPreparedStatement);
+        Mockito.when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+        Mockito.when(mockResultSet.next()).thenReturn(true, false);
+
+        List<P06_IACC_01_BoprRecordBean> result = transaction.getRecordsBeansList();
+
+        Assert.assertTrue(result.isEmpty());
+    }
+
+    @Test(expected = P86_IACC_01_SQLException.class)
+    public void test_getRecordsBeansList_SQLException() throws Exception {
+        Mockito.when(mockConnection.prepareStatement(Mockito.anyString()))
+               .thenThrow(new SQLException("DB failed"));
+
+        transaction.getRecordsBeansList();
+    }
 }
