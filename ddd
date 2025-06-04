@@ -1,25 +1,40 @@
 @Test
-public void test_getRecordsBeansList_catchBlock_SQLException() throws Exception {
-    // Simulate SQLException in prepareStatement
-    when(mockConnection.prepareStatement(anyString()))
-        .thenThrow(new SQLException("Simulated DB error"));
+public void test_getRecordsBeansList_success() throws Exception {
+    // Prepare mocks
+    mockStatic(P86_IACC_01_PropertiesMgr.class);
+    when(P86_IACC_01_PropertiesMgr.getQueryFromPropertiesFile("test.query.key"))
+            .thenReturn("SELECT * FROM dummy_table");
 
-    // Access the protected method using reflection
+    when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+    when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+    when(mockResultSet.next()).thenReturn(true, false);  // Only one record
+    when(mockResultSet.getString("amount")).thenReturn("100.0");
+
+    // Create subclass to override abstract/protected methods
+    P06_IACC_01_DBTransaction dbTransaction = new P06_IACC_01_DBTransaction(mockConnection) {
+        @Override
+        protected void feedRecordsBeansListPreparedStatement(PreparedStatement ps) {}
+
+        @Override
+        protected String getSelectRecordsQueryKey() {
+            return "test.query.key";
+        }
+
+        @Override
+        protected void feedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) {
+            bean.setAmount(100.0);
+        }
+    };
+
+    // Use reflection to invoke protected method
     Method method = P06_IACC_01_DBTransaction.class.getDeclaredMethod("getRecordsBeansList");
     method.setAccessible(true);
 
-    try {
-        method.invoke(dbTransaction); // This should throw InvocationTargetException wrapping your custom exception
-        fail("Expected P86_IACC_01_SQLException to be thrown");
-    } catch (InvocationTargetException ex) {
-        Throwable cause = ex.getCause();
+    @SuppressWarnings("unchecked")
+    List<P06_IACC_01_BoprRecordBean> result = (List<P06_IACC_01_BoprRecordBean>) method.invoke(dbTransaction);
 
-        // Improved check: print full cause if test fails
-        if (!(cause instanceof P86_IACC_01_SQLException)) {
-            cause.printStackTrace(); // for debugging
-            fail("Expected P86_IACC_01_SQLException but got: " + cause.getClass().getName());
-        }
-
-        assertTrue(cause.getMessage().contains("An error occurred while getting records"));
-    }
+    // Assert
+    assertNotNull(result);
+    assertEquals(1, result.size());
+    assertEquals(100.0, result.get(0).getAmount(), 0.001);
 }
