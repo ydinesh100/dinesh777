@@ -1,41 +1,46 @@
 @Test
 public void testGetRecordsBeansList() throws Exception {
-    // Arrange
+    // Arrange mocks
     when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
     when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+    when(mockResultSet.next()).thenReturn(true).thenReturn(false); // One row
+    when(mockResultSet.getString(anyString())).thenReturn("dummy");
 
-    // Simulate one record in the ResultSet
-    when(mockResultSet.next()).thenReturn(true).thenReturn(false); // Only one row
-    when(mockResultSet.getString(anyString())).thenReturn("dummy"); // If needed for string fields
+    // Define subclass with test method inside
+    class TestTransaction extends P86_IACC_01_DBTransaction {
+        TestTransaction(Connection conn) {
+            super(conn);
+        }
 
-    // Define a test implementation of the abstract class
-    P86_IACC_01_DBTransaction testTransaction = new P86_IACC_01_DBTransaction(mockConnection) {
         @Override
         protected void feedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) throws SQLException {
-            bean.setAmount(100.0); // Must be > 0 to pass the filter
+            bean.setAmount(100.0); // Simulate valid record
         }
 
         @Override
-        protected void innerFeedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) throws SQLException {
-            // Not needed for this test
-        }
+        protected void innerFeedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) {}
 
         @Override
         protected String getSelectRecordsQueryKey() {
-            return "test.query.key"; // This is used internally in the query fetch
+            return "test.query.key";
         }
 
         @Override
-        protected void feedRecordsBeansListPreparedStatement(PreparedStatement ps) throws SQLException {
-            // No additional parameter binding needed for this test
+        protected void feedRecordsBeansListPreparedStatement(PreparedStatement ps) {}
+        
+        // Expose protected method via a public test method
+        public List<P06_IACC_01_BoprRecordBean> callGetRecordsBeansList() throws P86_IACC_01_SQLException {
+            return this.getRecordsBeansList();
         }
-    };
+    }
+
+    TestTransaction testTransaction = new TestTransaction(mockConnection);
 
     // Act
-    List<P06_IACC_01_BoprRecordBean> resultList = testTransaction.getRecordsBeansList();
+    List<P06_IACC_01_BoprRecordBean> result = testTransaction.callGetRecordsBeansList();
 
     // Assert
-    assertNotNull(resultList);
-    assertEquals(1, resultList.size());
-    assertEquals(100.0, resultList.get(0).getAmount(), 0.0001); // Use delta for double comparison
+    assertNotNull(result);
+    assertEquals(1, result.size());
+    assertEquals(100.0, result.get(0).getAmount(), 0.0001);
 }
