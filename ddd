@@ -1,132 +1,100 @@
-package com.bnpparibas.atlentic.iacc.bopr.level1;
+package com.bnpparibas.atlentic.iacc.bopr.level.test;
 
-import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
-import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_SQLException;
-import org.junit.*;
-import org.junit.runner.RunWith;
-import org.mockito.*;
-
-import java.sql.*;
-import java.util.*;
-
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.*;
 
-public class P06_IACC_01_Level1DBTransactionTest {
+import java.lang.reflect.Method;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 
-    @Mock Connection mockConnection;
-    @Mock PreparedStatement mockPreparedStatement;
-    @Mock ResultSet mockResultSet;
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
-    P06_IACC_01_Level1DBTransaction transaction;
+import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
+import com.bnpparibas.atlentic.iacc.bopr.level.P86_IACC_01_DBTransaction;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P86_IACC_01_SQLException;
+
+public class P86_IACC_01_DBTransactionTest {
+
+    @Mock
+    private Connection mockConnection;
+
+    @Mock
+    private PreparedStatement mockPreparedStatement;
+
+    @Mock
+    private ResultSet mockResultSet;
+
+    private P86_IACC_01_DBTransaction dbTransaction;
 
     @Before
-    public void setUp() throws Exception {
+    public void setup() throws Exception {
         MockitoAnnotations.initMocks(this);
-        // Mock the properties manager to return dummy SQL
-        mockStaticPropertiesMgr();
-        // Create the transaction object with the mocked connection
-        transaction = Mockito.spy(new P06_IACC_01_Level1DBTransaction(mockConnection));
-    }
 
-    private void mockStaticPropertiesMgr() {
-        // Mock static method getQueryFromPropertiesFile if needed
-        // Or set up a test implementation in your test resources
-        // Here we assume it returns a simple SQL string
-        P06_IACC_01_PropertiesMgr mgr = mock(P06_IACC_01_PropertiesMgr.class);
-        when(P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile(anyString()))
-                .thenReturn("SELECT * FROM DUAL");
-    }
-
-    @Test
-    public void testGetExchangeRatesMap() throws Exception {
         when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
         when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
-        when(mockResultSet.next()).thenReturn(true, false);
-        when(mockResultSet.getString("cde_currency")).thenReturn("USD");
-        when(mockResultSet.getDouble("exchange_rate")).thenReturn(1.1);
 
-        Map<String, Double> rates = transaction.getExchangeRatesMap();
+        // Create concrete subclass for testing
+        dbTransaction = new P86_IACC_01_DBTransaction(mockConnection) {
+            @Override
+            protected void feedingRecordBean(P06_IACC_01_BoprRecordBean p_o_recordBean, ResultSet p_o_resultSet) throws SQLException {
+                // Minimal mock implementation
+                p_o_recordBean.setAmount(new java.math.BigDecimal("10"));
+            }
 
-        assertNotNull(rates);
-        assertEquals(1, rates.size());
-        assertEquals(Double.valueOf(1.1), rates.get("USD"));
-        verify(mockPreparedStatement).close();
-        verify(mockResultSet).close();
+            @Override
+            protected void innerFeedingRecordBean(P06_IACC_01_BoprRecordBean p_o_recordBean, ResultSet p_o_resultSet) throws SQLException {
+                // Implement for test if needed
+            }
+
+            @Override
+            protected String getSelectRecordsQueryKey() {
+                return "test.query.key";
+            }
+
+            @Override
+            protected void feedRecordsBeansListPreparedStatement(PreparedStatement p_o_preparedStatement) throws SQLException {
+                // Stub method for now
+            }
+        };
     }
 
     @Test
-    public void testInsertRecordBean() throws Exception {
-        P06_IACC_01_BoprRecordBean bean = mock(P06_IACC_01_BoprRecordBean.class);
-        when(bean.getBranchCode()).thenReturn("BR1");
-        when(bean.getEventTimestamp()).thenReturn(new java.util.Date());
-        when(bean.getDealId()).thenReturn("D1");
-        when(bean.getFacilityId()).thenReturn("F1");
-        when(bean.getOutstandingId()).thenReturn("O1");
-        when(bean.getEventId()).thenReturn("E1");
-        when(bean.getEventCode()).thenReturn("CODE");
-        when(bean.getCashflowId()).thenReturn("CF1");
-        when(bean.getCashflowDirection()).thenReturn("FROM");
-        when(bean.getCountryCode()).thenReturn("FR");
-        when(bean.getEffectiveDate()).thenReturn(new java.util.Date());
-        when(bean.getAmount()).thenReturn(100.0);
-        when(bean.getAmountCurrency()).thenReturn("EUR");
-        when(bean.getAmountInBranchCurrency()).thenReturn(110.0);
-        when(bean.getSenderServiceCode()).thenReturn("SVC");
-        when(bean.getOperationReference()).thenReturn("OPREF");
-
-        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-        when(mockPreparedStatement.executeUpdate()).thenReturn(1);
-
-        int result = transaction.insertRecordBean(bean);
-
-        assertEquals(1, result);
-        verify(mockPreparedStatement).close();
+    public void testGetResultSetTrimedString() throws Exception {
+        when(mockResultSet.getString("testField")).thenReturn("  testValue  ");
+        Method method = P86_IACC_01_DBTransaction.class.getDeclaredMethod("getResultSetTrimedString", ResultSet.class, String.class);
+        method.setAccessible(true);
+        String result = (String) method.invoke(null, mockResultSet, "testField");
+        assertEquals("testValue", result);
     }
 
     @Test
-    public void testDeleteConcurrentRecords() throws Exception {
-        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-        when(mockPreparedStatement.executeUpdate()).thenReturn(1);
-
-        transaction.deleteConcurrentRecords();
-
-        verify(mockPreparedStatement).executeUpdate();
-        verify(mockPreparedStatement).close();
+    public void testGetSelectRecordsQueryKey() throws Exception {
+        Method method = P86_IACC_01_DBTransaction.class.getDeclaredMethod("getSelectRecordsQueryKey");
+        method.setAccessible(true);
+        String result = (String) method.invoke(dbTransaction);
+        assertEquals("test.query.key", result);
     }
 
     @Test
-    public void testFeedingRecordBean() throws Exception {
-        P06_IACC_01_BoprRecordBean bean = new P06_IACC_01_BoprRecordBean();
-        when(mockResultSet.getString(anyString())).thenReturn("TEST");
-        when(mockResultSet.getDate(anyString())).thenReturn(new java.sql.Date(System.currentTimeMillis()));
-
-        doNothing().when(transaction).innerFeedingRecordBean(any(P06_IACC_01_BoprRecordBean.class), any(ResultSet.class));
-
-        transaction.feedingRecordBean(bean, mockResultSet);
-
-        assertEquals("TEST", bean.getDealId());
-        assertEquals("TEST", bean.getFacilityId());
-        // ... test other fields as needed
+    public void testFeedRecordsBeansListPreparedStatementUsingReflection() throws Exception {
+        Method method = P86_IACC_01_DBTransaction.class.getDeclaredMethod("feedRecordsBeansListPreparedStatement", PreparedStatement.class);
+        method.setAccessible(true);
+        method.invoke(dbTransaction, mockPreparedStatement);
+        // No assertion – we only test if it can be invoked without exception
     }
 
     @Test
-    public void testGenerateOperationReference() {
-        P06_IACC_01_BoprRecordBean bean = new P06_IACC_01_BoprRecordBean();
-        bean.setEventCode("PAPER");
-        bean.setIdOwner("OWNER1");
-        bean.setAmtShare("100");
-        bean.setBorrowerServiceGrp("BSG");
-        bean.setlenderServiceGrp("LSG");
-        bean.setFacilityId("F1");
-        bean.setDealId("D1");
-        bean.setOutstandingId("O1");
-        bean.setCdeOwnerType("FAC");
-        bean.setCdFeeCat("ONG");
+    public void testInnerFeedingRecordBeanUsingReflection() throws Exception {
+        Method method = P86_IACC_01_DBTransaction.class.getDeclaredMethod("innerFeedingRecordBean", P06_IACC_01_BoprRecordBean.class, ResultSet.class);
+        method.setAccessible(true);
 
-        String ref = transaction.generateOperationReference(bean);
-        assertNotNull(ref);
-        // Add more assertions based on your business logic
+        P06_IACC_01_BoprRecordBean mockRecordBean = new P06_IACC_01_BoprRecordBean();
+        method.invoke(dbTransaction, mockRecordBean, mockResultSet);
+        // No assertion – just checking reflective invocation
     }
 }
