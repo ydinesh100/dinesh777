@@ -3,22 +3,24 @@ public void testGetRecordsBeansList() throws Exception {
     // Arrange mocks
     when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
     when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
-    when(mockResultSet.next()).thenReturn(true).thenReturn(false); // One row
+    when(mockResultSet.next()).thenReturn(true).thenReturn(false); // Simulate one row
     when(mockResultSet.getString(anyString())).thenReturn("dummy");
 
-    // Define subclass with test method inside
-    class TestTransaction extends P86_IACC_01_DBTransaction {
-        TestTransaction(Connection conn) {
+    // Subclass with public wrapper method to access protected method
+    class TestTransaction extends P06_IACC_01_DBTransaction {
+        TestTransaction(Connection conn) throws P06_IACC_01_SQLException {
             super(conn);
         }
 
         @Override
         protected void feedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) throws SQLException {
-            bean.setAmount(100.0); // Simulate valid record
+            bean.setAmount(100.0); // Must be > 0 for inclusion
         }
 
         @Override
-        protected void innerFeedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) {}
+        protected void innerFeedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) throws SQLException {
+            // No-op
+        }
 
         @Override
         protected String getSelectRecordsQueryKey() {
@@ -26,14 +28,16 @@ public void testGetRecordsBeansList() throws Exception {
         }
 
         @Override
-        protected void feedRecordsBeansListPreparedStatement(PreparedStatement ps) {}
-        
-        // Expose protected method via a public test method
-        public List<P06_IACC_01_BoprRecordBean> callGetRecordsBeansList() throws P86_IACC_01_SQLException {
+        protected void feedRecordsBeansListPreparedStatement(PreparedStatement ps) throws SQLException {
+            // No-op
+        }
+
+        public List<P06_IACC_01_BoprRecordBean> callGetRecordsBeansList() throws P06_IACC_01_SQLException {
             return this.getRecordsBeansList();
         }
     }
 
+    // Instantiate the subclass
     TestTransaction testTransaction = new TestTransaction(mockConnection);
 
     // Act
@@ -42,5 +46,5 @@ public void testGetRecordsBeansList() throws Exception {
     // Assert
     assertNotNull(result);
     assertEquals(1, result.size());
-    assertEquals(100.0, result.get(0).getAmount(), 0.0001);
+    assertEquals(100.0, result.get(0).getAmount(), 0.0001); // delta for double comparison
 }
