@@ -4,38 +4,38 @@ public void testGetRecordsBeansList() throws Exception {
     when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
     when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
 
-    // Simulate one row returned
-    when(mockResultSet.next()).thenReturn(true).thenReturn(false);
-    when(mockResultSet.getString(anyString())).thenReturn("dummyValue");
+    // Simulate one record in the ResultSet
+    when(mockResultSet.next()).thenReturn(true).thenReturn(false); // Only one row
+    when(mockResultSet.getString(anyString())).thenReturn("dummy"); // If needed for string fields
 
-    // Create a subclass that sets a non-zero amount to pass the filter
+    // Define a test implementation of the abstract class
     P86_IACC_01_DBTransaction testTransaction = new P86_IACC_01_DBTransaction(mockConnection) {
         @Override
         protected void feedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) throws SQLException {
-            bean.setAmount(new BigDecimal("100"));  // Required for bean to be added
+            bean.setAmount(100.0); // Must be > 0 to pass the filter
         }
 
         @Override
         protected void innerFeedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) throws SQLException {
-            // no-op
+            // Not needed for this test
         }
 
         @Override
         protected String getSelectRecordsQueryKey() {
-            return "test.query.key";
+            return "test.query.key"; // This is used internally in the query fetch
         }
 
         @Override
         protected void feedRecordsBeansListPreparedStatement(PreparedStatement ps) throws SQLException {
-            // no-op
+            // No additional parameter binding needed for this test
         }
     };
 
     // Act
-    List<P06_IACC_01_BoprRecordBean> result = testTransaction.getRecordsBeansList();
+    List<P06_IACC_01_BoprRecordBean> resultList = testTransaction.getRecordsBeansList();
 
     // Assert
-    assertNotNull(result);
-    assertEquals(1, result.size());
-    assertEquals(new BigDecimal("100"), result.get(0).getAmount());
+    assertNotNull(resultList);
+    assertEquals(1, resultList.size());
+    assertEquals(100.0, resultList.get(0).getAmount(), 0.0001); // Use delta for double comparison
 }
