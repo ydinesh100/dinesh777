@@ -1,96 +1,25 @@
-package com.bnpparibas.atlentic.iacc.bopr.level.test;
+@Test
+public void test_getRecordsBeansList_catchBlock_SQLException() throws Exception {
+    // Simulate SQLException in prepareStatement
+    when(mockConnection.prepareStatement(anyString()))
+        .thenThrow(new SQLException("Simulated DB error"));
 
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
+    // Access the protected method using reflection
+    Method method = P06_IACC_01_DBTransaction.class.getDeclaredMethod("getRecordsBeansList");
+    method.setAccessible(true);
 
-import java.lang.reflect.Method;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.List;
+    try {
+        method.invoke(dbTransaction); // This should throw InvocationTargetException wrapping your custom exception
+        fail("Expected P86_IACC_01_SQLException to be thrown");
+    } catch (InvocationTargetException ex) {
+        Throwable cause = ex.getCause();
 
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-
-import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
-import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_DBTransaction;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P86_IACC_01_SQLException;
-
-public class P06_IACC_01_DBTransactionTest {
-
-    @Mock private Connection mockConnection;
-    @Mock private PreparedStatement mockPreparedStatement;
-    @Mock private ResultSet mockResultSet;
-
-    private P06_IACC_01_DBTransaction dbTransaction;
-
-    @Before
-    public void setUp() throws Exception {
-        MockitoAnnotations.initMocks(this);
-
-        dbTransaction = new P06_IACC_01_DBTransaction(mockConnection) {
-            @Override
-            protected void feedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) throws SQLException {
-                bean.setAmount(100.0); // Set a valid positive amount
-            }
-
-            @Override
-            protected void innerFeedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) {
-                // Not needed for this test
-            }
-
-            @Override
-            protected String getSelectRecordsQueryKey() {
-                return "test.query.key";
-            }
-
-            @Override
-            protected void feedRecordsBeansListPreparedStatement(PreparedStatement ps) throws SQLException {
-                // No-op for this test
-            }
-        };
-    }
-
-    @Test
-    public void test_getRecordsBeansList_tryBlock_success() throws Exception {
-        // Mock behavior
-        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
-        when(mockResultSet.next()).thenReturn(true, false); // One record
-        when(mockResultSet.getString(anyString())).thenReturn("dummy");
-
-        // Reflectively invoke protected method
-        Method method = P06_IACC_01_DBTransaction.class.getDeclaredMethod("getRecordsBeansList");
-        method.setAccessible(true);
-
-        @SuppressWarnings("unchecked")
-        List<P06_IACC_01_BoprRecordBean> result = (List<P06_IACC_01_BoprRecordBean>) method.invoke(dbTransaction);
-
-        // Assert
-        assertNotNull(result);
-        assertEquals(1, result.size());
-        assertEquals(100.0, result.get(0).getAmount(), 0.001);
-    }
-
-    @Test
-    public void test_getRecordsBeansList_catchBlock_SQLException() throws Exception {
-        // Simulate SQLException
-        when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("Simulated DB error"));
-
-        // Reflectively invoke protected method
-        Method method = P06_IACC_01_DBTransaction.class.getDeclaredMethod("getRecordsBeansList");
-        method.setAccessible(true);
-
-        try {
-            method.invoke(dbTransaction);
-            fail("Expected P86_IACC_01_SQLException to be thrown");
-        } catch (java.lang.reflect.InvocationTargetException ex) {
-            Throwable cause = ex.getCause();
-            assertTrue(cause instanceof P86_IACC_01_SQLException);
-            assertTrue(cause.getMessage().contains("An error occurred while getting records"));
+        // Improved check: print full cause if test fails
+        if (!(cause instanceof P86_IACC_01_SQLException)) {
+            cause.printStackTrace(); // for debugging
+            fail("Expected P86_IACC_01_SQLException but got: " + cause.getClass().getName());
         }
+
+        assertTrue(cause.getMessage().contains("An error occurred while getting records"));
     }
 }
