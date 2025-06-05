@@ -1,10 +1,9 @@
 package com.bnpparibas.atlentic.iacc.bopr.level.test;
 
 import static org.mockito.Mockito.*;
-import static org.junit.Assert.*;
 
-import java.lang.reflect.Method;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.io.IOException;
@@ -18,10 +17,10 @@ import org.mockito.Mockito;
 
 import com.bnpparibas.atlentic.common.GlobalAtlentic;
 import com.bnpparibas.atlentic.common.utils.DBUtils;
-import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_Level;
+import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
 import com.bnpparibas.atlentic.iacc.bopr.exception.P06_IACC_01_ExitApplicationException;
 import com.bnpparibas.atlentic.iacc.bopr.exception.P06_IACC_01_SQLException;
-import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
+import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_Level;
 import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_DBTransaction;
 
 public class P06_IACC_01_Level_ExecuteTest {
@@ -35,7 +34,7 @@ public class P06_IACC_01_Level_ExecuteTest {
 
     @Before
     public void setUp() throws Exception {
-        // Use anonymous subclass if P06_IACC_01_Level is abstract
+        // Create anonymous subclass if original is abstract
         levelInstance = new P06_IACC_01_Level() {
             @Override
             protected int getLevelNumber() {
@@ -56,25 +55,25 @@ public class P06_IACC_01_Level_ExecuteTest {
         mockConnection = mock(Connection.class);
         mockDBTransaction = mock(P06_IACC_01_DBTransaction.class);
 
-        // Set g_o_dataBaseTransaction using reflection
+        // Inject mock transaction using reflection
         Field dbTransField = P06_IACC_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
         dbTransField.setAccessible(true);
         dbTransField.set(levelInstance, mockDBTransaction);
 
-        // Mock GlobalAtlentic.getLoanIQConnection()
+        // Static mocks
         globalAtlenticMock = Mockito.mockStatic(GlobalAtlentic.class);
         globalAtlenticMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
 
-        // Mock DBUtils.closeConnexion()
         dbUtilsMock = Mockito.mockStatic(DBUtils.class);
 
-        // Stub initializeDataBaseTransaction method (if private)
+        // Mock initializeDataBaseTransaction()
         Method initMethod = P06_IACC_01_Level.class.getDeclaredMethod("initializeDataBaseTransaction", Connection.class);
         initMethod.setAccessible(true);
         initMethod.invoke(levelInstance, mockConnection);
 
-        // Stub getRecordsBeansList()
-        when(mockDBTransaction.getRecordsBeansList()).thenReturn(Collections.singletonList(new P06_IACC_01_BoprRecordBean()));
+        // Mock bean list return (no constructor required)
+        P06_IACC_01_BoprRecordBean mockBean = mock(P06_IACC_01_BoprRecordBean.class);
+        when(mockDBTransaction.getRecordsBeansList()).thenReturn(Collections.singletonList(mockBean));
     }
 
     @After
@@ -84,7 +83,7 @@ public class P06_IACC_01_Level_ExecuteTest {
     }
 
     @Test
-    public void testExecute_SuccessfulExecution() throws Exception {
+    public void testExecute_SuccessfulPath() throws Exception {
         Method executeMethod = P06_IACC_01_Level.class.getDeclaredMethod("execute");
         executeMethod.setAccessible(true);
 
@@ -96,17 +95,17 @@ public class P06_IACC_01_Level_ExecuteTest {
     }
 
     @Test(expected = P06_IACC_01_ExitApplicationException.class)
-    public void testExecute_IOException_TriggersRollback() throws Throwable {
-        // Override innerExecute to throw IOException
-        P06_IACC_01_Level errorLevelInstance = new P06_IACC_01_Level() {
+    public void testExecute_IOExceptionDuringInnerExecute() throws Throwable {
+        // Subclass with throwing behavior
+        P06_IACC_01_Level errorLevel = new P06_IACC_01_Level() {
             @Override
             protected int getLevelNumber() {
-                return 1;
+                return 2;
             }
 
             @Override
             protected void innerExecute() throws IOException {
-                throw new IOException("Test IO Error");
+                throw new IOException("Simulated IOException");
             }
 
             @Override
@@ -115,28 +114,28 @@ public class P06_IACC_01_Level_ExecuteTest {
             }
         };
 
-        // Inject mock DBTransaction
+        // Inject mocked DB transaction
         Field dbTransField = P06_IACC_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
         dbTransField.setAccessible(true);
-        dbTransField.set(errorLevelInstance, mockDBTransaction);
+        dbTransField.set(errorLevel, mockDBTransaction);
 
-        // Mock again
         globalAtlenticMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
 
-        // init DB transaction via reflection
         Method initMethod = P06_IACC_01_Level.class.getDeclaredMethod("initializeDataBaseTransaction", Connection.class);
         initMethod.setAccessible(true);
-        initMethod.invoke(errorLevelInstance, mockConnection);
+        initMethod.invoke(errorLevel, mockConnection);
 
-        when(mockDBTransaction.getRecordsBeansList()).thenReturn(Collections.singletonList(new P06_IACC_01_BoprRecordBean()));
+        P06_IACC_01_BoprRecordBean mockBean = mock(P06_IACC_01_BoprRecordBean.class);
+        when(mockDBTransaction.getRecordsBeansList()).thenReturn(Collections.singletonList(mockBean));
 
-        // Call and assert exception using reflection
+        // Call and catch underlying exception
         Method executeMethod = P06_IACC_01_Level.class.getDeclaredMethod("execute");
         executeMethod.setAccessible(true);
+
         try {
-            executeMethod.invoke(errorLevelInstance);
+            executeMethod.invoke(errorLevel);
         } catch (Exception e) {
-            throw e.getCause(); // Unwrap InvocationTargetException
+            throw e.getCause(); // unwrap InvocationTargetException
         }
     }
 }
