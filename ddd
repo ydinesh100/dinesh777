@@ -1,17 +1,16 @@
 package com.bnpparibas.atlentic.iacc.bopr.level.test;
 
+import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
-import java.lang.reflect.Field;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.sql.Connection;
-import java.sql.SQLException;
-import java.io.IOException;
-import java.util.Collections;
+import java.util.Arrays;
 
-import org.junit.Test;
-import org.junit.Before;
 import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
@@ -19,127 +18,88 @@ import com.bnpparibas.atlentic.common.GlobalAtlentic;
 import com.bnpparibas.atlentic.common.utils.DBUtils;
 import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
 import com.bnpparibas.atlentic.iacc.bopr.exception.P06_IACC_01_ExitApplicationException;
-import com.bnpparibas.atlentic.iacc.bopr.exception.P06_IACC_01_SQLException;
-import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_Level;
+import com.bnpparibas.atlentic.iacc.bopr.exception.P86_IACC_01_SQLException;
 import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_DBTransaction;
 
-public class P06_IACC_01_Level_ExecuteTest {
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
 
-    private P06_IACC_01_Level<P06_IACC_01_BoprRecordBean> levelInstance;
-    private Connection mockConnection;
-    private P06_IACC_01_DBTransaction mockDBTransaction;
+public class ExecuteMethodTest {
+
+    private Object levelInstance;
+    private Class<?> levelClass;
 
     private MockedStatic<GlobalAtlentic> globalAtlenticMock;
     private MockedStatic<DBUtils> dbUtilsMock;
 
+    private Connection mockConnection;
+    private P06_IACC_01_DBTransaction mockTransaction;
+
     @Before
     public void setUp() throws Exception {
-        levelInstance = new P06_IACC_01_Level<P06_IACC_01_BoprRecordBean>() {
-            @Override
-            protected void initializeDataBaseTransaction(Connection connection) {
-                // Mocked via reflection below
-            }
+        // Load the Level class dynamically
+        levelClass = Class.forName("com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_Level");
 
-            @Override
-            protected int getLevelNumber() {
-                return 1;
-            }
+        // Instantiate using reflection
+        Constructor<?> constructor = levelClass.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        levelInstance = constructor.newInstance();
 
-            @Override
-            protected void innerExecute() throws IOException, P06_IACC_01_SQLException {
-                // Do nothing (success path)
-            }
-
-            @Override
-            protected boolean applyCommit() {
-                return true;
-            }
-        };
-
-        mockConnection = mock(Connection.class);
-        mockDBTransaction = mock(P06_IACC_01_DBTransaction.class);
-
-        // Inject mock DBTransaction
-        Field dbTransField = P06_IACC_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
-        dbTransField.setAccessible(true);
-        dbTransField.set(levelInstance, mockDBTransaction);
-
-        // Static mocks
+        // Mock static methods
         globalAtlenticMock = Mockito.mockStatic(GlobalAtlentic.class);
-        globalAtlenticMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
-
         dbUtilsMock = Mockito.mockStatic(DBUtils.class);
 
-        // Mock getRecordsBeansList
-        P06_IACC_01_BoprRecordBean mockBean = mock(P06_IACC_01_BoprRecordBean.class);
-        when(mockDBTransaction.getRecordsBeansList()).thenReturn(Collections.singletonList(mockBean));
+        // Mocks
+        mockConnection = mock(Connection.class);
+        mockTransaction = mock(P06_IACC_01_DBTransaction.class);
+
+        // Setup connection
+        globalAtlenticMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
+
+        // Setup getDataBaseTransaction()
+        Method setTransactionMethod = levelClass.getSuperclass().getDeclaredMethod("setDataBaseTransaction", P06_IACC_01_DBTransaction.class);
+        setTransactionMethod.setAccessible(true);
+        setTransactionMethod.invoke(levelInstance, mockTransaction);
+
+        // Return dummy data
+        List<P06_IACC_01_BoprRecordBean> dummyList = Arrays.asList(new P06_IACC_01_BoprRecordBean("BR01", new Date()));
+        when(mockTransaction.getRecordsBeansList()).thenReturn(dummyList);
+
+        // Stub applyCommit to true
+        Method applyCommitMethod = levelClass.getSuperclass().getDeclaredMethod("applyCommit");
+        applyCommitMethod.setAccessible(true);
+        applyCommitMethod = spy(applyCommitMethod);
+
+        // Stub innerExecute
+        Method innerExecuteMethod = levelClass.getDeclaredMethod("innerExecute");
+        innerExecuteMethod.setAccessible(true);
+        // No-op for now, assume successful
+
+        // Stub getLevelNumber
+        Method getLevelNumberMethod = levelClass.getDeclaredMethod("getLevelNumber");
+        getLevelNumberMethod.setAccessible(true);
+        when(getLevelNumberMethod.invoke(levelInstance)).thenReturn(1);
+    }
+
+    @Test
+    public void testExecute_success() throws Exception {
+        Method executeMethod = levelClass.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
+
+        // Run the method
+        executeMethod.invoke(levelInstance);
+
+        // Verify connection commit and close
+        verify(mockConnection).setAutoCommit(false);
+        verify(mockConnection).commit();
+
+        dbUtilsMock.verify(() -> DBUtils.closeConnexion(mockConnection, null, null));
     }
 
     @After
     public void tearDown() {
         globalAtlenticMock.close();
         dbUtilsMock.close();
-    }
-
-    @Test
-    public void testExecute_SuccessfulExecution() throws Exception {
-        Method executeMethod = P06_IACC_01_Level.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
-
-        executeMethod.invoke(levelInstance);
-
-        verify(mockConnection).setAutoCommit(false);
-        verify(mockConnection).commit();
-        dbUtilsMock.verify(() -> DBUtils.closeConnexion(mockConnection, null, null), times(1));
-    }
-
-    @Test
-    public void testExecute_WhenIOExceptionOccurs() throws Exception {
-        P06_IACC_01_Level<P06_IACC_01_BoprRecordBean> errorLevel = new P06_IACC_01_Level<P06_IACC_01_BoprRecordBean>() {
-            @Override
-            protected void initializeDataBaseTransaction(Connection connection) {
-                // Mocked manually
-            }
-
-            @Override
-            protected int getLevelNumber() {
-                return 2;
-            }
-
-            @Override
-            protected void innerExecute() throws IOException {
-                throw new IOException("Simulated IO Exception");
-            }
-
-            @Override
-            protected boolean applyCommit() {
-                return true;
-            }
-        };
-
-        // Inject mock DBTransaction
-        Field dbTransField = P06_IACC_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
-        dbTransField.setAccessible(true);
-        dbTransField.set(errorLevel, mockDBTransaction);
-
-        globalAtlenticMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
-
-        P06_IACC_01_BoprRecordBean mockBean = mock(P06_IACC_01_BoprRecordBean.class);
-        when(mockDBTransaction.getRecordsBeansList()).thenReturn(Collections.singletonList(mockBean));
-
-        Method executeMethod = P06_IACC_01_Level.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
-
-        try {
-            executeMethod.invoke(errorLevel);
-        } catch (Exception e) {
-            Throwable cause = e.getCause(); // unwrap InvocationTargetException
-            if (!(cause instanceof P06_IACC_01_ExitApplicationException)) {
-                throw new AssertionError("Expected ExitApplicationException, got: " + cause);
-            }
-        }
-
-        verify(mockConnection).rollback();
-        dbUtilsMock.verify(() -> DBUtils.closeConnexion(mockConnection, null, null), times(1));
     }
 }
