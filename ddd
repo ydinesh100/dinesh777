@@ -1,41 +1,121 @@
 package com.bnpparibas.atlentic.iacc.bopr.level.test;
 
-import static org.mockito.Mockito.*;
-import static org.junit.Assert.*;
-
-import java.lang.reflect.Method;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.io.IOException;
-import java.util.Collections;
+import com.bnpparibas.atlentic.common.GlobalAtlentic;
+import com.bnpparibas.atlentic.common.utils.DBUtils;
+import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
+import com.bnpparibas.atlentic.iacc.bopr.exception.P06_IACC_01_ExitApplicationException;
+import com.bnpparibas.atlentic.iacc.bopr.exception.P06_IACC_01_SQLException;
+import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_DBTransaction;
+import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_Level;
 
 import org.junit.*;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
-import com.bnpparibas.atlentic.common.GlobalAtlentic;
-import com.bnpparibas.atlentic.common.utils.DBUtils;
-import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
-import com.bnpparibas.atlentic.iacc.bopr.exception.P06_IACC_01_ExitApplicationException;
-import com.bnpparibas.atlentic.iacc.bopr.exception.P86_IACC_01_SQLException;
-import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_DBTransaction;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.Collections;
 
-import java.util.List;
+import static org.mockito.Mockito.*;
 
-public class P06_IACC_01_LevelExecuteTest {
+public class P06_IACC_01_LevelTest {
 
-    private MockedStatic<GlobalAtlentic> globalAtlenticMock;
-    private MockedStatic<DBUtils> dbUtilsMock;
-
-    private Connection mockConnection;
+    private TestLevel testLevel;
     private P06_IACC_01_DBTransaction mockTransaction;
+    private Connection mockConnection;
 
-    // Concrete test class extending your level class
-    public static class TestLevel extends com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_Level {
+    @Before
+    public void setUp() throws Exception {
+        mockTransaction = mock(P06_IACC_01_DBTransaction.class);
+        mockConnection = mock(Connection.class);
+
+        when(mockTransaction.getRecordsBeansList()).thenReturn(Collections.emptyList());
+
+        testLevel = new TestLevel(mockTransaction);
+    }
+
+    @Test
+    public void testExecute_success() throws Exception {
+        try (MockedStatic<GlobalAtlentic> mockedGlobal = Mockito.mockStatic(GlobalAtlentic.class);
+             MockedStatic<DBUtils> mockedDBUtils = Mockito.mockStatic(DBUtils.class)) {
+
+            mockedGlobal.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
+
+            testLevel.execute();
+
+            verify(mockConnection).setAutoCommit(false);
+            verify(mockConnection).commit();
+            verify(mockTransaction).getRecordsBeansList();
+            verify(mockConnection, never()).rollback();
+            mockedDBUtils.verify(() -> DBUtils.closeConnexion(mockConnection, null, null));
+        }
+    }
+
+    @Test
+    public void testExecute_ioExceptionTriggersRollback() throws Exception {
+        testLevel.setThrowIOException(true);
+
+        try (MockedStatic<GlobalAtlentic> mockedGlobal = Mockito.mockStatic(GlobalAtlentic.class);
+             MockedStatic<DBUtils> mockedDBUtils = Mockito.mockStatic(DBUtils.class)) {
+
+            mockedGlobal.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
+
+            try {
+                testLevel.execute();
+                Assert.fail("Expected ExitApplicationException due to IOException");
+            } catch (P06_IACC_01_ExitApplicationException ex) {
+                verify(mockConnection).rollback();
+                mockedDBUtils.verify(() -> DBUtils.closeConnexion(mockConnection, null, null));
+            }
+        }
+    }
+
+    @Test
+    public void testExecute_sqlExceptionDuringCommit() throws Exception {
+        try (MockedStatic<GlobalAtlentic> mockedGlobal = Mockito.mockStatic(GlobalAtlentic.class);
+             MockedStatic<DBUtils> mockedDBUtils = Mockito.mockStatic(DBUtils.class)) {
+
+            mockedGlobal.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
+            doThrow(new SQLException("Commit failed")).when(mockConnection).commit();
+
+            try {
+                testLevel.execute();
+                Assert.fail("Expected ExitApplicationException due to SQLException");
+            } catch (P06_IACC_01_ExitApplicationException ex) {
+                mockedDBUtils.verify(() -> DBUtils.closeConnexion(mockConnection, null, null));
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Concrete test class extending the abstract Level and using reflection
+     * to inject DBTransaction.
+     */
+    private static class TestLevel extends P06_IACC_01_Level {
         private final P06_IACC_01_DBTransaction transaction;
+        private boolean throwIOException = false;
 
         public TestLevel(P06_IACC_01_DBTransaction transaction) {
             this.transaction = transaction;
+            injectDBTransaction(transaction);
+        }
+
+        private void injectDBTransaction(P06_IACC_01_DBTransaction transaction) {
+            try {
+                Field field = P06_IACC_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
+                field.setAccessible(true);
+                field.set(this, transaction);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        public void setThrowIOException(boolean value) {
+            this.throwIOException = value;
         }
 
         @Override
@@ -45,7 +125,7 @@ public class P06_IACC_01_LevelExecuteTest {
 
         @Override
         protected void innerExecute() throws IOException {
-            // Do nothing
+            if (throwIOException) throw new IOException("Simulated IO error");
         }
 
         @Override
@@ -54,79 +134,8 @@ public class P06_IACC_01_LevelExecuteTest {
         }
 
         @Override
-        protected void initializeDataBaseTransaction(Connection connection) {
-            this.setDataBaseTransaction(transaction);
+        protected void initializeDataBaseTransaction(Connection conn) {
+            // Already injected
         }
-    }
-
-    @Before
-    public void setUp() throws Exception {
-        mockConnection = mock(Connection.class);
-        mockTransaction = mock(P06_IACC_01_DBTransaction.class);
-
-        when(mockTransaction.getRecordsBeansList()).thenReturn(Collections.singletonList(new P06_IACC_01_BoprRecordBean()));
-
-        globalAtlenticMock = Mockito.mockStatic(GlobalAtlentic.class);
-        globalAtlenticMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
-
-        dbUtilsMock = Mockito.mockStatic(DBUtils.class);
-    }
-
-    @Test
-    public void testExecute_success() throws Exception {
-        TestLevel level = new TestLevel(mockTransaction);
-
-        Method executeMethod = level.getClass().getMethod("execute");
-        executeMethod.invoke(level);
-
-        verify(mockConnection).setAutoCommit(false);
-        verify(mockConnection).commit();
-        dbUtilsMock.verify(() -> DBUtils.closeConnexion(mockConnection, null, null));
-    }
-
-    @Test
-    public void testExecute_ioExceptionTriggersRollback() throws Exception {
-        // Override innerExecute to throw IOException
-        TestLevel level = new TestLevel(mockTransaction) {
-            @Override
-            protected void innerExecute() throws IOException {
-                throw new IOException("Simulated IO Error");
-            }
-        };
-
-        Method executeMethod = level.getClass().getMethod("execute");
-
-        try {
-            executeMethod.invoke(level);
-            fail("Expected exception not thrown");
-        } catch (Exception e) {
-            Throwable cause = e.getCause();
-            assertTrue(cause instanceof P06_IACC_01_ExitApplicationException);
-            verify(mockConnection).rollback();
-        }
-    }
-
-    @Test
-    public void testExecute_sqlExceptionTriggersRollback() throws Exception {
-        when(mockTransaction.getRecordsBeansList()).thenThrow(new P86_IACC_01_SQLException("SQL Error"));
-
-        TestLevel level = new TestLevel(mockTransaction);
-
-        Method executeMethod = level.getClass().getMethod("execute");
-
-        try {
-            executeMethod.invoke(level);
-            fail("Expected exception not thrown");
-        } catch (Exception e) {
-            Throwable cause = e.getCause();
-            assertTrue(cause instanceof P06_IACC_01_ExitApplicationException);
-            verify(mockConnection).rollback();
-        }
-    }
-
-    @After
-    public void tearDown() {
-        globalAtlenticMock.close();
-        dbUtilsMock.close();
     }
 }
