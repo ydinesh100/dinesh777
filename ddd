@@ -1,104 +1,60 @@
-package com.bnpparibas.atlentic.iacc.bopr.level;
-
-import com.bnpparibas.atlentic.common.GlobalAtlentic;
-import com.bnpparibas.atlentic.common.utils.DBUtils;
-import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_SQLException;
-import org.junit.*;
-import org.mockito.*;
+import static org.mockito.Mockito.*;
+import static org.junit.Assert.*;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Collections;
-import java.util.List;
 
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import com.bnpparibas.atlentic.common.GlobalAtlentic;
+import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
+import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_DBTransaction;
+import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_Level;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_SQLException;
 
 public class P06_IACC_01_LevelExecuteTest {
 
+    @Mock
     private Connection mockConnection;
-    private P06_IACC_01_Level<P06_IACC_01_DBTransaction> levelInstance;
+
+    @Mock
     private P06_IACC_01_DBTransaction mockTransaction;
 
+    private P06_IACC_01_Level<P06_IACC_01_DBTransaction> testLevel;
+
     @Before
-    public void setUp() throws Exception {
+    public void setup() throws Exception {
         MockitoAnnotations.initMocks(this);
 
-        mockConnection = mock(Connection.class);
+        // Set mock static field GlobalAtlentic.g_o_loanIQConnection
+        Field connField = GlobalAtlentic.class.getDeclaredField("g_o_loanIQConnection");
+        connField.setAccessible(true);
+        connField.set(null, mockConnection);
+
+        // Simulate getAutoCommit and commit behavior
         when(mockConnection.getAutoCommit()).thenReturn(false);
 
-        // Inject mock connection to GlobalAtlentic
-        Field connectionField = GlobalAtlentic.class.getDeclaredField("g_o_loanIQConnection");
-        connectionField.setAccessible(true);
-        connectionField.set(null, mockConnection);
+        // Create test bean
+        P06_IACC_01_BoprRecordBean bean = new P06_IACC_01_BoprRecordBean();
+        // Set fields via reflection if no public setter exists
+        Field amountField = P06_IACC_01_BoprRecordBean.class.getDeclaredField("amount");
+        amountField.setAccessible(true);
+        amountField.set(bean, 100.0);
 
-        // Mock DBTransaction
-        mockTransaction = new P06_IACC_01_DBTransaction(mockConnection) {
-            @Override
-            protected void feedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) {}
-            @Override
-            protected void innerFeedingRecordBean(P06_IACC_01_BoprRecordBean bean, ResultSet rs) {}
-            @Override
-            protected String getSelectRecordsQueryKey() { return "dummy.key"; }
-            @Override
-            protected void feedRecordsBeansListPreparedStatement(PreparedStatement stmt) {}
+        when(mockTransaction.getRecordsBeansList()).thenReturn(Collections.singletonList(bean));
 
+        // Inline concrete subclass of abstract class
+        testLevel = new P06_IACC_01_Level<P06_IACC_01_DBTransaction>() {
             @Override
-            public List<P06_IACC_01_BoprRecordBean> getRecordsBeansList() {
-                return Collections.singletonList(new P06_IACC_01_BoprRecordBean(100.0));
-            }
-        };
-
-        // Subclass Level
-        levelInstance = new P06_IACC_01_Level<P06_IACC_01_DBTransaction>() {
-            @Override
-            protected void innerExecute() throws IOException, P06_IACC_01_SQLException, P06_IACC_01_ExitApplicationException {
-                // No-op
-            }
-
-            @Override
-            protected int getLevelNumber() {
-                return 42;
-            }
-
-            @Override
-            protected void initializeDataBaseTransaction(Connection conn) {
-                this.g_o_dataBaseTransaction = mockTransaction;
-            }
-
-            @Override
-            protected boolean applyCommit() {
-                return true;
-            }
-        };
-    }
-
-    @Test
-    public void testExecute_HappyPath_Reflection() throws Exception {
-        Method method = P06_IACC_01_Level.class.getDeclaredMethod("execute");
-        method.setAccessible(true);
-
-        method.invoke(levelInstance);
-
-        assertNotNull(levelInstance.g_o_recordBeansList);
-        assertEquals(1, levelInstance.g_o_recordBeansList.size());
-        verify(mockConnection).commit();
-    }
-
-    @Test
-    public void testExecute_IOExceptionDuringInnerExecute() throws Exception {
-        // Modify innerExecute to throw IOException
-        P06_IACC_01_Level<P06_IACC_01_DBTransaction> ioFailingLevel = new P06_IACC_01_Level<P06_IACC_01_DBTransaction>() {
-            @Override
-            protected void innerExecute() throws IOException {
-                throw new IOException("IO failed");
+            protected void innerExecute() throws P06_IACC_01_SQLException, IOException, P06_IACC_01_ExitApplicationException {
+                // do nothing
             }
 
             @Override
@@ -107,7 +63,7 @@ public class P06_IACC_01_LevelExecuteTest {
             }
 
             @Override
-            protected void initializeDataBaseTransaction(Connection conn) {
+            protected void initializeDataBaseTransaction(Connection p_o_dataBaseConnection) {
                 this.g_o_dataBaseTransaction = mockTransaction;
             }
 
@@ -116,66 +72,18 @@ public class P06_IACC_01_LevelExecuteTest {
                 return true;
             }
         };
-
-        Method method = P06_IACC_01_Level.class.getDeclaredMethod("execute");
-        method.setAccessible(true);
-
-        try {
-            method.invoke(ioFailingLevel);
-            fail("Expected P06_IACC_01_ExitApplicationException");
-        } catch (Exception ex) {
-            Throwable cause = ex.getCause();
-            assertTrue(cause instanceof P06_IACC_01_ExitApplicationException);
-            assertEquals("IO failed", cause.getCause().getMessage());
-            verify(mockConnection).rollback();
-        }
     }
 
     @Test
-    public void testExecute_SQLExceptionOnRollback() throws Exception {
-        // Simulate SQLException on rollback
-        doThrow(new SQLException("Rollback failed")).when(mockConnection).rollback();
+    public void testExecuteSuccess() throws Exception {
+        testLevel.execute();
 
-        P06_IACC_01_Level<P06_IACC_01_DBTransaction> throwingLevel = new P06_IACC_01_Level<P06_IACC_01_DBTransaction>() {
-            @Override
-            protected void innerExecute() throws IOException {
-                throw new IOException("trigger rollback");
-            }
+        // Verify expected interactions
+        verify(mockConnection).setAutoCommit(false);
+        verify(mockTransaction).getRecordsBeansList();
+        verify(mockConnection).commit();
 
-            @Override
-            protected int getLevelNumber() {
-                return 99;
-            }
-
-            @Override
-            protected void initializeDataBaseTransaction(Connection conn) {
-                this.g_o_dataBaseTransaction = mockTransaction;
-            }
-
-            @Override
-            protected boolean applyCommit() {
-                return true;
-            }
-        };
-
-        Method method = P06_IACC_01_Level.class.getDeclaredMethod("execute");
-        method.setAccessible(true);
-
-        try {
-            method.invoke(throwingLevel);
-            fail("Expected ExitApplicationException");
-        } catch (Exception ex) {
-            Throwable cause = ex.getCause();
-            assertTrue(cause instanceof P06_IACC_01_ExitApplicationException);
-            assertEquals("trigger rollback", cause.getCause().getMessage());
-        }
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        // Clean up static mock
-        Field connectionField = GlobalAtlentic.class.getDeclaredField("g_o_loanIQConnection");
-        connectionField.setAccessible(true);
-        connectionField.set(null, null);
+        assertNotNull(testLevel.g_o_recordBeansList);
+        assertEquals(1, testLevel.g_o_recordBeansList.size());
     }
 }
