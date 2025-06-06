@@ -7,150 +7,103 @@ import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Collections;
-import java.util.List;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.Mockito;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.mockito.junit.MockitoJUnitRunner;
 
+import com.bnpparibas.atlentic.common.GlobalAtlentic;
+import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
+import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_Level;
+import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_DBTransaction;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_SQLException;
+
+@RunWith(MockitoJUnitRunner.class)
 public class P06_IACC_01_LevelTest {
 
-    private P06_IACC_01_DBTransaction mockTransaction;
-    private TestLevel testLevel;
+    @Mock
     private Connection mockConnection;
 
+    @Mock
+    private P06_IACC_01_DBTransaction mockTransaction;
+
+    private P06_IACC_01_Level<P06_IACC_01_DBTransaction> testLevel;
+
     @Before
-    public void setUp() throws Exception {
-        // Mock DBTransaction
-        mockTransaction = mock(P06_IACC_01_DBTransaction.class);
+    public void setup() throws Exception {
+        MockitoAnnotations.initMocks(this);
 
-        // Mock getRecordsBeansList() with reflection to allow invocation
-        // Since method is not visible, no need to mock here; will be called reflectively in innerExecute
+        // Mock GlobalAtlentic static call using a spy wrapper
+        Field connectionField = GlobalAtlentic.class.getDeclaredField("g_o_loanIQConnection");
+        connectionField.setAccessible(true);
+        connectionField.set(null, mockConnection);
 
-        // Create instance of test subclass injecting mocked DBTransaction
-        testLevel = new TestLevel(mockTransaction);
+        when(mockConnection.getAutoCommit()).thenReturn(false);
 
-        // Mock connection returned by GlobalAtlentic.getLoanIQConnection()
-        mockConnection = mock(Connection.class);
-        when(mockConnection.setAutoCommit(false)).thenReturn(null);
+        // Define concrete class inline
+        testLevel = new P06_IACC_01_Level<P06_IACC_01_DBTransaction>() {
+            @Override
+            protected void innerExecute() throws P06_IACC_01_SQLException, IOException, P06_IACC_01_ExitApplicationException {
+                // Simulate inner processing
+            }
 
-        // Mock static GlobalAtlentic.getLoanIQConnection() via Mockito.mockStatic or reflection workaround
-        // If not possible, use reflection to override or stub the method in your environment.
+            @Override
+            protected int getLevelNumber() {
+                return 1;
+            }
 
-        // Here, assume you can inject connection into your testLevel or stub GlobalAtlentic call accordingly
+            @Override
+            protected void initializeDataBaseTransaction(Connection p_o_dataBaseConnection) {
+                this.g_o_dataBaseTransaction = mockTransaction;
+            }
+
+            @Override
+            protected boolean applyCommit() {
+                return true;
+            }
+        };
+
+        // Mock data retrieval
+        when(mockTransaction.getRecordsBeansList()).thenReturn(Collections.singletonList(new P06_IACC_01_BoprRecordBean()));
     }
 
     @Test
-    public void testExecuteSuccess() throws Exception {
-        // Arrange
-        // Mock getRecordsBeansList to return empty list when reflectively called inside innerExecute()
-        when(mockTransaction.getRecordsBeansList()).thenReturn(Collections.emptyList());
-
-        // Mock commit behavior
+    public void testExecute_SuccessPath() throws Exception {
+        // Set up commit/rollback behavior
         doNothing().when(mockConnection).commit();
+        doNothing().when(mockConnection).setAutoCommit(false);
 
-        // Inject mockConnection via reflection if needed
-        injectConnection(testLevel, mockConnection);
+        // Reflectively invoke `execute` method
+        Method executeMethod = P06_IACC_01_Level.class.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
 
-        // Act
-        testLevel.execute();
+        // Invoke and assert no exception thrown
+        executeMethod.invoke(testLevel);
 
-        // Assert
-        // Confirm commit was called
+        // Verify interactions
+        verify(mockTransaction).getRecordsBeansList();
         verify(mockConnection).commit();
-        // Confirm g_o_recordBeansList is set to empty list
-        List<?> records = getRecordsList(testLevel);
-        assertNotNull(records);
-        assertTrue(records.isEmpty());
     }
 
     @Test(expected = P06_IACC_01_ExitApplicationException.class)
-    public void testExecuteIOExceptionCausesRollback() throws Exception {
-        // Arrange
-        testLevel.setThrowIOException(true);
+    public void testExecute_ThrowsExitExceptionOnSQLException() throws Exception {
+        when(mockTransaction.getRecordsBeansList()).thenThrow(new P06_IACC_01_SQLException("DB error"));
 
-        doNothing().when(mockConnection).rollback();
+        Method executeMethod = P06_IACC_01_Level.class.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
 
-        injectConnection(testLevel, mockConnection);
-
-        // Act - should throw ExitApplicationException due to IOException inside innerExecute
-        testLevel.execute();
-
-        // Exception expected, no assert needed here
-    }
-
-    // Utility method to inject Connection into your class if needed (adjust field names accordingly)
-    private void injectConnection(Object target, Connection connection) throws Exception {
-        Field connField = target.getClass().getDeclaredField("dbConnection"); // example, adapt if field exists
-        connField.setAccessible(true);
-        connField.set(target, connection);
-    }
-
-    // Utility method to get g_o_recordBeansList field from the tested object
-    @SuppressWarnings("unchecked")
-    private List<P06_IACC_01_BoprRecordBean> getRecordsList(Object target) throws Exception {
-        Field field = target.getClass().getSuperclass().getDeclaredField("g_o_recordBeansList");
-        field.setAccessible(true);
-        return (List<P06_IACC_01_BoprRecordBean>) field.get(target);
-    }
-
-    // Test subclass of your class under test that overrides innerExecute to call getRecordsBeansList via reflection
-    private static class TestLevel extends P06_IACC_01_Level {
-        private final P06_IACC_01_DBTransaction transaction;
-        private boolean throwIOException = false;
-
-        public TestLevel(P06_IACC_01_DBTransaction transaction) {
-            this.transaction = transaction;
-            injectDBTransaction(transaction);
-        }
-
-        private void injectDBTransaction(P06_IACC_01_DBTransaction transaction) {
-            try {
-                Field field = P06_IACC_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
-                field.setAccessible(true);
-                field.set(this, transaction);
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to inject DBTransaction", e);
+        try {
+            executeMethod.invoke(testLevel);
+        } catch (Exception e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof P06_IACC_01_ExitApplicationException) {
+                throw (P06_IACC_01_ExitApplicationException) cause;
             }
-        }
-
-        public void setThrowIOException(boolean value) {
-            this.throwIOException = value;
-        }
-
-        @Override
-        protected int getLevelNumber() {
-            return 1;
-        }
-
-        @Override
-        protected void innerExecute() throws IOException {
-            if (throwIOException) {
-                throw new IOException("Simulated IO error");
-            }
-
-            try {
-                Method method = transaction.getClass().getDeclaredMethod("getRecordsBeansList");
-                method.setAccessible(true);
-                @SuppressWarnings("unchecked")
-                List<P06_IACC_01_BoprRecordBean> records = (List<P06_IACC_01_BoprRecordBean>) method.invoke(transaction);
-
-                Field recordListField = P06_IACC_01_Level.class.getDeclaredField("g_o_recordBeansList");
-                recordListField.setAccessible(true);
-                recordListField.set(this, records);
-            } catch (Exception e) {
-                throw new RuntimeException("Reflection failed in innerExecute()", e);
-            }
-        }
-
-        @Override
-        protected boolean applyCommit() {
-            return true;
-        }
-
-        @Override
-        protected void initializeDataBaseTransaction(Connection conn) {
-            // Already injected
+            throw e;
         }
     }
 }
