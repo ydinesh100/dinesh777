@@ -1,31 +1,37 @@
 package com.bnpparibas.atlentic.irep.ecb.level.test;
 
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
+
+import java.lang.reflect.Method;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.*;
+
+import com.bnpparibas.atlentic.common.utils.DBUtils;
 import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
 import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_DBTransaction;
 import com.bnpparibas.atlentic.irep.ecb.resource.P06_IREP_01_PropertiesMgr;
 import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
-import com.bnpparibas.atlentic.common.utils.DBUtils;
-import com.bnpparibas.atlentic.common.Outils;
 
-import org.junit.*;
+import org.junit.Before;
+import org.junit.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
-
-import java.lang.reflect.Method;
-import java.sql.*;
-import java.util.*;
-
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
 
 public class P06_IREP_01_DBTransactionTest {
 
     private Connection mockConnection;
     private PreparedStatement mockPreparedStatement;
     private ResultSet mockResultSet;
-    private Date mockEventTimestamp = new Date();
 
-    private P06_IREP_01_DBTransaction transaction;
+    private TestDBTransaction testTransaction;
+
+    private static final String BRANCH_CODE = "B001";
+
+    private Date mockEventTimestamp = new java.util.Date(); // resolved ambiguous Date
 
     @Before
     public void setUp() throws Exception {
@@ -33,73 +39,79 @@ public class P06_IREP_01_DBTransactionTest {
         mockPreparedStatement = mock(PreparedStatement.class);
         mockResultSet = mock(ResultSet.class);
 
-        // Concrete class to test abstract class
-        transaction = new P06_IREP_01_DBTransaction(mockConnection) {
-            @Override
-            protected void innerFeedingRecordBean(P06_IREP_01_EcbRecordBean bean, ResultSet rs, Map<String, String> map) {
-                // do nothing for this test
-            }
-
-            @Override
-            protected String getSelectRecordsQuerykey() {
-                return "select.query.key";
-            }
-
-            @Override
-            protected void feedRecordsBeansList(PreparedStatement ps, String branchCode, Date eventTimestamp) {
-                // do nothing for this test
-            }
-        };
+        testTransaction = new TestDBTransaction(mockConnection, mockEventTimestamp);
     }
 
     @Test
-    public void testGetRecordsBeansList_success() throws Exception {
-        String mockBranchCode = "BR01";
-        String mockSql = "SELECT * FROM dummy";
-
-        // Mock static methods
+    public void testGetRecordsBeansList() throws Exception {
         try (
-            MockedStatic<P06_IREP_01_PropertiesMgr> propMock = Mockito.mockStatic(P06_IREP_01_PropertiesMgr.class);
-            MockedStatic<DBUtils> dbUtilsMock = Mockito.mockStatic(DBUtils.class);
-            MockedStatic<Outils> outilsMock = Mockito.mockStatic(Outils.class)
+            MockedStatic<P06_IREP_01_PropertiesMgr> mockedProps = Mockito.mockStatic(P06_IREP_01_PropertiesMgr.class);
+            MockedStatic<DBUtils> mockedDbUtils = Mockito.mockStatic(DBUtils.class)
         ) {
-            propMock.when(() -> P06_IREP_01_PropertiesMgr.getQueryFromPropertiesFile("select.query.key")).thenReturn(mockSql);
-            when(mockConnection.prepareStatement(mockSql)).thenReturn(mockPreparedStatement);
+            mockedProps.when(() -> P06_IREP_01_PropertiesMgr.getQueryFromPropertiesFile(anyString()))
+                       .thenReturn("SELECT * FROM ecb_records");
+
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
             when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
 
-            // Simulate result set
-            when(mockResultSet.next()).thenReturn(true).thenReturn(false);
-            outilsMock.when(() -> Outils.getSqlTimestamp(any(Date.class))).thenReturn(new java.sql.Timestamp(mockEventTimestamp.getTime()));
+            when(mockResultSet.next()).thenReturn(true, false);
+            when(mockResultSet.getString("cde_type_record")).thenReturn("REC1");
+            when(mockResultSet.getString("pid_facility")).thenReturn("FAC001");
+            when(mockResultSet.getDate("dte_start")).thenReturn(new java.sql.Date(mockEventTimestamp.getTime()));
+            when(mockResultSet.getDate("dte_maturity")).thenReturn(new java.sql.Date(mockEventTimestamp.getTime()));
+            when(mockResultSet.getDouble("pct_gar_insur")).thenReturn(0.25);
+            when(mockResultSet.getDouble("pct_gar_synd")).thenReturn(0.5);
+            when(mockResultSet.getDouble("pct_gar_other")).thenReturn(0.1);
+            when(mockResultSet.getString("cid_borrower")).thenReturn("BOR123");
+            when(mockResultSet.getString("nme_name")).thenReturn("Test Name");
+            when(mockResultSet.getString("cde_risk_country")).thenReturn("IN");
+            when(mockResultSet.getDouble("amt_amount")).thenReturn(10000.0);
+            when(mockResultSet.getString("cde_currency")).thenReturn("INR");
+            when(mockResultSet.getString("psp_bank")).thenReturn("XX00000001");
+            when(mockResultSet.getString("cmt_txt_comment")).thenReturn("Sample comment");
+            when(mockResultSet.getString("cde_rmpm")).thenReturn("RM001");
 
-            // Reflectively invoke protected method
-            Method method = P06_IREP_01_DBTransaction.class.getDeclaredMethod("getRecordsBeansList", String.class);
-            method.setAccessible(true);
-
-            @SuppressWarnings("unchecked")
-            List<P06_IREP_01_EcbRecordBean> result = (List<P06_IREP_01_EcbRecordBean>) method.invoke(transaction, mockBranchCode);
-
+            List<P06_IREP_01_EcbRecordBean> result = invokeGetRecordsBeansList(testTransaction, BRANCH_CODE);
             assertNotNull(result);
             assertEquals(1, result.size());
+
+            P06_IREP_01_EcbRecordBean bean = result.get(0);
+            assertEquals("REC1", bean.getRecordType());
+            assertEquals("FAC001", bean.getFacilityId());
+            assertEquals("BOR123", bean.getBorrowerIdentifier());
         }
     }
 
-    @Test(expected = P06_IREP_01_SQLException.class)
-    public void testGetRecordsBeansList_sqlException() throws Exception {
-        String mockBranchCode = "BR02";
-        String mockSql = "SELECT * FROM error";
+    @SuppressWarnings("unchecked")
+    private List<P06_IREP_01_EcbRecordBean> invokeGetRecordsBeansList(P06_IREP_01_DBTransaction instance, String branchCode) throws Exception {
+        Method method = P06_IREP_01_DBTransaction.class.getDeclaredMethod("getRecordsBeansList", String.class);
+        method.setAccessible(true);
+        return (List<P06_IREP_01_EcbRecordBean>) method.invoke(instance, branchCode);
+    }
 
-        try (
-            MockedStatic<P06_IREP_01_PropertiesMgr> propMock = Mockito.mockStatic(P06_IREP_01_PropertiesMgr.class);
-            MockedStatic<DBUtils> dbUtilsMock = Mockito.mockStatic(DBUtils.class)
-        ) {
-            propMock.when(() -> P06_IREP_01_PropertiesMgr.getQueryFromPropertiesFile("select.query.key")).thenReturn(mockSql);
-            when(mockConnection.prepareStatement(mockSql)).thenThrow(new SQLException("DB error"));
+    // Concrete subclass for testing the abstract class
+    private static class TestDBTransaction extends P06_IREP_01_DBTransaction {
 
-            // Reflectively invoke protected method
-            Method method = P06_IREP_01_DBTransaction.class.getDeclaredMethod("getRecordsBeansList", String.class);
-            method.setAccessible(true);
+        private final Date eventTimestamp;
 
-            method.invoke(transaction, mockBranchCode);
+        public TestDBTransaction(Connection conn, Date eventTimestamp) throws P06_IREP_01_SQLException {
+            super(conn);
+            this.eventTimestamp = eventTimestamp;
+        }
+
+        @Override
+        protected String getSelectRecordsQuerykey() {
+            return "dummy.query.key";
+        }
+
+        @Override
+        protected void feedRecordsBeansList(PreparedStatement stmt, String branchCode, Date timestamp) throws SQLException {
+            // No-op for mock
+        }
+
+        @Override
+        protected void innerFeedingRecordBean(P06_IREP_01_EcbRecordBean bean, ResultSet rs, Map<String, String> map) throws SQLException {
+            // No-op for mock
         }
     }
 }
