@@ -1,8 +1,8 @@
-import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
-import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
-import com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
-import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_ExitApplicationException;
-import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
+import com.bopparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
+import com.bopparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
+import com.bopparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
+import com.bopparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_ExitApplicationException;
+import com.bopparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
 import org.junit.*;
 import org.mockito.*;
 
@@ -12,133 +12,122 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Date;
-import java.util.List;
 
 import static org.mockito.Mockito.*;
 
 public class P06_IREP_01_LevelTest {
 
     @Mock
-    private Connection mockConnection;
+    Connection mockConnection;
 
     @Mock
-    private TestTransaction mockTransaction;
+    TestTransaction mockTransaction;
 
-    private TestLevel testLevel;
+    TestLevel level;
 
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
 
-        // Set static fields in P06_IREP_01_Main using reflection
-        setStaticField(P06_IREP_01_Main.class, "g_s_branch", "BE");
+        // Inject static variables via reflection
+        setStaticField(P06_IREP_01_Main.class, "g_s_branch", "BRANCH");
         setStaticField(P06_IREP_01_Main.class, "g_o_eventTimestamp", new Date());
 
-        testLevel = new TestLevel(mockTransaction, true);
+        level = new TestLevel(mockTransaction, mockConnection);
     }
 
     @Test
-    public void testExecute_SuccessfulFlow_Commits() throws Exception {
-        List<P06_IREP_01_EcbRecordBean> dummyRecords = Arrays.asList(mock(P06_IREP_01_EcbRecordBean.class));
-        when(mockTransaction.getRecordsBeansList(anyString(), any())).thenReturn(dummyRecords);
+    public void testExecute_commitsSuccessfully() throws Exception {
+        when(mockTransaction.getRecordsBeansList(anyString(), any()))
+                .thenReturn(Arrays.asList(mock(P06_IREP_01_EcbRecordBean.class)));
 
-        // Inject mock connection
-        testLevel.setMockConnection(mockConnection);
-
-        testLevel.execute();
+        level.execute();
 
         verify(mockConnection).setAutoCommit(false);
-        verify(mockTransaction).getRecordsBeansList(anyString(), any());
         verify(mockConnection).commit();
         verify(mockConnection, never()).rollback();
     }
 
     @Test(expected = P06_IREP_01_ExitApplicationException.class)
-    public void testExecute_ExceptionDuringInnerExecute_RollsBack() throws Exception {
-        when(mockTransaction.getRecordsBeansList(anyString(), any())).thenReturn(Arrays.asList());
-        testLevel = new TestLevel(mockTransaction, true) {
+    public void testExecute_innerExecuteThrows_exceptionHandledAndRollback() throws Exception {
+        level = new TestLevel(mockTransaction, mockConnection) {
             @Override
             protected void innerExecute() throws IOException {
-                throw new IOException("Simulated failure");
+                throw new IOException("Simulated error");
             }
         };
 
-        testLevel.setMockConnection(mockConnection);
+        when(mockTransaction.getRecordsBeansList(anyString(), any()))
+                .thenReturn(Arrays.asList());
 
-        testLevel.execute();
-    }
+        level.execute();
 
-    // --- Helper Classes & Methods ---
-
-    // Concrete implementation of the abstract class for testing
-    private static class TestLevel extends P06_IREP_01_Level<TestTransaction> {
-        private final TestTransaction transaction;
-        private final boolean commit;
-        private Connection connection;
-
-        TestLevel(TestTransaction transaction, boolean commit) {
-            this.transaction = transaction;
-            this.commit = commit;
-        }
-
-        public void setMockConnection(Connection connection) {
-            this.connection = connection;
-        }
-
-        @Override
-        protected void innerExecute() throws P06_IREP_01_SQLException, IOException, P06_IREP_01_ExitApplicationException {
-            // No-op or custom logic
-        }
-
-        @Override
-        protected int getLevelNumber() {
-            return 1;
-        }
-
-        @Override
-        protected void initializeDataBaseTransaction(Connection dbConn) {
-            this.g_o_dataBaseTransaction = this.transaction;
-        }
-
-        @Override
-        protected boolean applyCommit() {
-            return commit;
-        }
-
-        @Override
-        public void execute() throws P06_IREP_01_ExitApplicationException {
-            Connection connToUse = this.connection != null ? this.connection : mock(Connection.class);
-            try {
-                connToUse.setAutoCommit(false);
-                this.initializeDataBaseTransaction(connToUse);
-                this.g_o_recordBeansList = this.getDataBaseTransaction().getRecordsBeansList(
-                        P06_IREP_01_Main.g_s_branch, P06_IREP_01_Main.g_o_eventTimestamp);
-                this.innerExecute();
-                if (this.applyCommit()) {
-                    connToUse.commit();
-                }
-            } catch (IOException | SQLException | P06_IREP_01_SQLException ex) {
-                try {
-                    if (connToUse != null && this.applyCommit()) {
-                        connToUse.rollback();
-                    }
-                } catch (SQLException e) {
-                    throw new P06_IREP_01_ExitApplicationException("Rollback failed", e);
-                }
-                throw new P06_IREP_01_ExitApplicationException("Execution failed", ex);
-            } finally {
-                // no real DB to close here
-            }
-        }
-    }
-
-    // Interface mock
-    interface TestTransaction extends com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_DBTransaction {
+        verify(mockConnection).rollback();
     }
 
     private void setStaticField(Class<?> clazz, String fieldName, Object value) throws Exception {
         Field field = clazz.getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(null, value);
+    }
+
+    // Stub transaction interface
+    interface TestTransaction extends com.bopparibas.atlentic.irep.ecb.level.P06_IREP_01_DBTransaction {}
+
+    // Concrete test implementation
+    class TestLevel extends P06_IREP_01_Level<TestTransaction> {
+        private final TestTransaction tx;
+        private final Connection conn;
+
+        TestLevel(TestTransaction tx, Connection conn) {
+            this.tx = tx;
+            this.conn = conn;
+        }
+
+        @Override
+        protected void initializeDataBaseTransaction(Connection connection) {
+            this.g_o_dataBaseTransaction = tx;
+        }
+
+        @Override
+        protected boolean applyCommit() {
+            return true;
+        }
+
+        @Override
+        protected void innerExecute() throws P06_IREP_01_SQLException {}
+
+        @Override
+        protected int getLevelNumber() {
+            return 42;
+        }
+
+        @Override
+        public void execute() throws P06_IREP_01_ExitApplicationException {
+            // Inject mock connection into the logic
+            Connection actualConn = this.conn;
+
+            try {
+                actualConn.setAutoCommit(false);
+                this.initializeDataBaseTransaction(actualConn);
+                this.g_o_recordBeansList = this.getDataBaseTransaction().getRecordsBeansList(
+                        P06_IREP_01_Main.g_s_branch, P06_IREP_01_Main.g_o_eventTimestamp);
+                this.innerExecute();
+                if (this.applyCommit()) {
+                    actualConn.commit();
+                }
+            } catch (IOException | SQLException | P06_IREP_01_SQLException ex) {
+                try {
+                    if (actualConn != null && this.applyCommit()) {
+                        actualConn.rollback();
+                    }
+                } catch (SQLException sqlEx) {
+                    throw new P06_IREP_01_ExitApplicationException(sqlEx.getMessage(), sqlEx);
+                }
+                throw new P06_IREP_01_ExitApplicationException(ex.getMessage(), ex);
+            } finally {
+                DBUtils.closeConnexion(actualConn, null, null);
+            }
+        }
     }
 }
