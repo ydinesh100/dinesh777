@@ -1,76 +1,86 @@
-@Test
-public void testGetRecordsBeansList_withReflection() throws Exception {
-    final String branchCode = "BR001";
-    final Date eventTimestamp = new Date();
+package com.bnpparibas.atlentic.irep.ecb.level.test;
 
-    // Create a subclass to test the abstract/protected class
-    P06_IREP_01_DBTransaction transaction = new P06_IREP_01_DBTransaction() {};
+import com.bnpparibas.atlentic.common.GlobalAtlentic;
+import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
+import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_DBTransaction;
+import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
+import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_ExitApplicationException;
+import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
 
-    // Inject mock connection into private field
-    Field connField = P06_IREP_01_DBTransaction.class.getDeclaredField("g_o_dataBaseConnection");
-    connField.setAccessible(true);
-    connField.set(transaction, mockConnection);
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 
-    // Prepare mocks
-    when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-    when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
-    when(mockResultSet.next()).thenReturn(true, false);
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.List;
 
-    // Set up ResultSet values
-    when(mockResultSet.getString("cde_type_record")).thenReturn("REC_TYPE");
-    when(mockResultSet.getString("pid_facility")).thenReturn("FAC123");
-    when(mockResultSet.getDate("dte_start")).thenReturn(new java.sql.Date(eventTimestamp.getTime()));
-    when(mockResultSet.getDate("dte_maturity")).thenReturn(new java.sql.Date(eventTimestamp.getTime()));
-    when(mockResultSet.getDouble("pct_gar_insur")).thenReturn(10.0);
-    when(mockResultSet.getDouble("pct_gar_synd")).thenReturn(20.0);
-    when(mockResultSet.getDouble("pct_gar_other")).thenReturn(30.0);
-    when(mockResultSet.getString("cid_borrower")).thenReturn("BORR001");
-    when(mockResultSet.getString("cde_rmpm")).thenReturn("RMP001");
-    when(mockResultSet.getString("nme_name")).thenReturn("Bank Name");
-    when(mockResultSet.getString("cde_risk_country")).thenReturn("FR");
-    when(mockResultSet.getDouble("ant_amount")).thenReturn(1000.0);
-    when(mockResultSet.getString("cde_currency")).thenReturn("EUR");
-    when(mockResultSet.getString("cmt_txt_comment")).thenReturn("Test comment");
-    when(mockResultSet.getString("psp_bank")).thenReturn("987654321");
+import static org.mockito.Mockito.*;
 
-    // Mock static call to properties manager
-    try (MockedStatic<P86_IREP_01_PropertiesMgr> mockedPropsMgr = mockStatic(P86_IREP_01_PropertiesMgr.class)) {
-        mockedPropsMgr.when(() -> P86_IREP_01_PropertiesMgr.getQueryFromPropertiesFile(anyString()))
-                      .thenReturn("SELECT * FROM dummy");
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import org.mockito.runners.MockitoJUnitRunner;
 
-        // Use reflection to call getSelectRecordsQueryKey()
-        Method getQueryKeyMethod = P06_IREP_01_DBTransaction.class.getDeclaredMethod("getSelectRecordsQueryKey");
-        getQueryKeyMethod.setAccessible(true);
+@RunWith(MockitoJUnitRunner.class)
+public class P06_IREP_01_LevelTest {
 
-        // Force it to return dummy key by overriding via reflection
-        // Set up a subclass if needed instead
-        // No-op here since it just feeds to getQueryFromPropertiesFile()
+    private P06_IREP_01_Level<P06_IREP_01_DBTransaction> level;
 
-        // feedRecordsBeansListPreparedStatement() - do nothing
-        Method feedPSMethod = P06_IREP_01_DBTransaction.class.getDeclaredMethod(
-            "feedRecordsBeansListPreparedStatement", PreparedStatement.class, String.class, Date.class);
-        feedPSMethod.setAccessible(true);
+    private Connection mockConnection;
+    private P06_IREP_01_DBTransaction mockTransaction;
 
-        // feedingRecordBean() - call original method via reflection
-        Method feedBeanMethod = P06_IREP_01_DBTransaction.class.getDeclaredMethod(
-            "feedingRecordBean", P06_IREP_01_EcbRecordBean.class, ResultSet.class);
-        feedBeanMethod.setAccessible(true);
+    @Before
+    public void setUp() throws Exception {
+        mockConnection = mock(Connection.class);
+        mockTransaction = mock(P06_IREP_01_DBTransaction.class);
 
-        // Reflectively invoke getRecordsBeansList()
-        Method method = P06_IREP_01_DBTransaction.class.getDeclaredMethod("getRecordsBeansList", String.class, Date.class);
-        method.setAccessible(true);
+        // Create anonymous subclass of abstract class
+        level = new P06_IREP_01_Level<P06_IREP_01_DBTransaction>() {
+            @Override
+            protected void innerExecute() {
+                // no-op
+            }
 
-        // Call method
-        @SuppressWarnings("unchecked")
-        List<P06_IREP_01_EcbRecordBean> result =
-                (List<P06_IREP_01_EcbRecordBean>) method.invoke(transaction, branchCode, eventTimestamp);
+            @Override
+            protected int getLevelNumber() {
+                return 99;
+            }
 
-        // Assert
-        assertNotNull(result);
-        assertEquals(1, result.size());
+            @Override
+            protected void initializeDataBaseTransaction(Connection connection) {
+                // sets mockTransaction manually
+                try {
+                    Field f = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
+                    f.setAccessible(true);
+                    f.set(this, mockTransaction);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }
 
-        P06_IREP_01_EcbRecordBean bean = result.get(0);
-        assertEquals(branchCode, bean.getBranchCode());
-        assertEquals(Outils.getSqlTimestamp(eventTimestamp), bean.getEventTimestamp());
+            @Override
+            protected boolean applyCommit() {
+                return true;
+            }
+        };
+
+        // Prepare mock for getRecordsBeansList
+        when(mockTransaction.getRecordsBeansList(anyString(), any()))
+                .thenReturn(new ArrayList<>());
+    }
+
+    @Test
+    public void testExecute() throws Exception {
+        try (MockedStatic<GlobalAtlentic> globalMock = Mockito.mockStatic(GlobalAtlentic.class)) {
+            globalMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
+
+            level.execute();
+
+            verify(mockConnection).setAutoCommit(false);
+            verify(mockConnection).commit();
+            verify(mockTransaction).getRecordsBeansList(anyString(), any());
+        }
     }
 }
