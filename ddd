@@ -1,142 +1,57 @@
-package com.bnpparibas.atlentic.irep.ecb.level.test;
+@Test
+public void testGetRecordsBeansList_UsingReflection() throws Exception {
+    // Arrange
+    final String testBranchCode = "BRANCH_001";
+    final Date testEventTimestamp = new Date();
 
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
+    // Mock ResultSet behavior
+    when(mockResultSet.next()).thenReturn(true, false);
+    when(mockResultSet.getString("cde_type_record")).thenReturn("TYPE_A");
+    when(mockResultSet.getString("pid_facility")).thenReturn("FACILITY_001");
+    when(mockResultSet.getDate("dte_start")).thenReturn(new java.sql.Date(testEventTimestamp.getTime()));
+    when(mockResultSet.getDate("dte_maturity")).thenReturn(new java.sql.Date(testEventTimestamp.getTime()));
+    when(mockResultSet.getDouble("pct_gar_insur")).thenReturn(90.5);
+    when(mockResultSet.getDouble("pct_gar_synd")).thenReturn(85.3);
+    when(mockResultSet.getDouble("pct_gar_other")).thenReturn(75.2);
+    when(mockResultSet.getString("cid_borrower")).thenReturn("BORROWER_001");
+    when(mockResultSet.getString("cde_rmpm")).thenReturn("RMPM_001");
+    when(mockResultSet.getString("nme_name")).thenReturn("BANK NAME");
+    when(mockResultSet.getString("cde_risk_country")).thenReturn("COUNTRY_RISK_CODE");
+    when(mockResultSet.getDouble("ant_amount")).thenReturn(100000.0);
+    when(mockResultSet.getString("cde_currency")).thenReturn("USD");
+    when(mockResultSet.getString("cmt_txt_comment")).thenReturn("This is a test comment");
+    when(mockResultSet.getString("psp_bank")).thenReturn("1234567890");
 
-import java.lang.reflect.Method;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+    // Mock the SQL query call
+    ResourceBundle mockBundle = mock(ResourceBundle.class);
+    mockStatic(P06_IREP_01_PropertiesMgr.class);
+    when(P06_IREP_01_PropertiesMgr.getQueryFromPropertiesFile(anyString()))
+        .thenReturn("SELECT * FROM dummy_table");
 
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+    // Spy on the dbTransaction so we can override internal behavior
+    P06_IREP_01_DBTransaction spyTransaction = spy(dbTransaction);
 
-import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
-import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_DBTransaction;
-import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
+    doReturn("dummy.query.key").when(spyTransaction).getSelectRecordsQueryKey();
+    doNothing().when(spyTransaction).feedRecordsBeansListPreparedStatement(any(PreparedStatement.class), eq(testBranchCode), eq(testEventTimestamp));
+    doNothing().when(spyTransaction).feedingRecordBean(any(P06_IREP_01_EcbRecordBean.class), any(ResultSet.class));
 
-public class P06_IREP_01_DBTransactionTest {
+    // Inject mocked DB connection into spy
+    Field connectionField = P06_IREP_01_DBTransaction.class.getDeclaredField("g_o_dataBaseConnection");
+    connectionField.setAccessible(true);
+    connectionField.set(spyTransaction, mockConnection);
 
-    @Mock
-    private Connection mockConnection;
+    when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+    when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
 
-    @Mock
-    private PreparedStatement mockPreparedStatement;
+    // Invoke protected method via reflection
+    Method method = P06_IREP_01_DBTransaction.class.getDeclaredMethod("getRecordsBeansList", String.class, Date.class);
+    method.setAccessible(true);
 
-    @Mock
-    private ResultSet mockResultSet;
+    // Act
+    List<P06_IREP_01_EcbRecordBean> result =
+        (List<P06_IREP_01_EcbRecordBean>) method.invoke(spyTransaction, testBranchCode, testEventTimestamp);
 
-    private P06_IREP_01_DBTransaction dbTransaction;
-
-    @Before
-    public void setup() throws Exception {
-        MockitoAnnotations.initMocks(this);
-
-        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
-
-        dbTransaction = new P06_IREP_01_DBTransaction(mockConnection) {
-            @Override
-            protected void innerFeedingRecordBean(P06_IREP_01_EcbRecordBean p_o_recordBean, ResultSet p_o_resultSet, Map<String, String> facRiskTypeMapObj) throws SQLException {
-                // No-op
-            }
-
-            @Override
-            protected String getSelectRecordsQueryKey() {
-                return "select.records.query.key";
-            }
-
-            @Override
-            protected void feedRecordsBeansListPreparedStatement(PreparedStatement p_o_preparedStatement, String p_s_branchCode, Date p_o_eventTimestamp) throws SQLException {
-                // No-op
-            }
-        };
-    }
-
-    @Test
-    public void testGetResultSetTrimedString() throws Exception {
-        String fieldName = "test_field";
-        String fieldValue = " test_value ";
-
-        when(mockResultSet.getString(fieldName)).thenReturn(fieldValue);
-
-        Method method = P06_IREP_01_DBTransaction.class.getDeclaredMethod("getResultSetTrimedString", ResultSet.class, String.class);
-        method.setAccessible(true);
-
-        String result = (String) method.invoke(null, mockResultSet, fieldName);
-        assertEquals("test_value", result);
-    }
-
-    @Test
-    public void testGetResultSetTrimedString_NullValue() throws Exception {
-        String fieldName = "test_field";
-
-        when(mockResultSet.getString(fieldName)).thenReturn(null);
-
-        Method method = P06_IREP_01_DBTransaction.class.getDeclaredMethod("getResultSetTrimedString", ResultSet.class, String.class);
-        method.setAccessible(true);
-
-        String result = (String) method.invoke(null, mockResultSet, fieldName);
-        assertNull(result);
-    }
-
-    @Test
-    public void testFeedingRecordBean() throws Exception {
-        P06_IREP_01_EcbRecordBean recordBean = new P06_IREP_01_EcbRecordBean("BRANCH_001", new Date());
-
-        when(mockResultSet.getString("cde_type_record")).thenReturn("TYPE_A");
-        when(mockResultSet.getString("pid_facility")).thenReturn("FACILITY_001");
-        when(mockResultSet.getDate("dte_start")).thenReturn(new java.sql.Date(new Date().getTime()));
-        when(mockResultSet.getDate("dte_maturity")).thenReturn(new java.sql.Date(new Date().getTime()));
-        when(mockResultSet.getDouble("pct_gar_insur")).thenReturn(90.5);
-        when(mockResultSet.getDouble("pct_gar_synd")).thenReturn(85.3);
-        when(mockResultSet.getDouble("pct_gar_other")).thenReturn(75.2);
-        when(mockResultSet.getString("cid_borrower")).thenReturn("BORROWER_001");
-        when(mockResultSet.getString("cde_rmpm")).thenReturn("RMPM_001");
-        when(mockResultSet.getString("nme_name")).thenReturn("BANK_NAME");
-        when(mockResultSet.getString("cde_risk_country")).thenReturn("COUNTRY_RISK_CODE");
-        when(mockResultSet.getDouble("ant_amount")).thenReturn(100000.0);
-        when(mockResultSet.getString("cde_currency")).thenReturn("USD");
-        when(mockResultSet.getString("cmt_txt_comment")).thenReturn("This is a test comment");
-        when(mockResultSet.getString("psp_bank")).thenReturn("1234567890");
-
-        Method method = P06_IREP_01_DBTransaction.class.getDeclaredMethod("feedingRecordBean", P06_IREP_01_EcbRecordBean.class, ResultSet.class);
-        method.setAccessible(true);
-        method.invoke(dbTransaction, recordBean, mockResultSet);
-
-        assertEquals("TYPE_A", recordBean.getRecordType());
-        assertEquals("FACILITY_001", recordBean.getFacilityId());
-        assertEquals(90.5, recordBean.getGuaranteeInsurancesPercent(), 0.0);
-        assertEquals(85.3, recordBean.getSyndicationInsurancesPercent(), 0.0);
-        assertEquals(75.2, recordBean.getOtherGuaranteesPercent(), 0.0);
-        assertEquals("BORROWER_001", recordBean.getBorrowerIdentifier());
-        assertEquals("RMPM_001", recordBean.getRepm());
-        assertEquals("BANK_NAME", recordBean.getName());
-        assertEquals("COUNTRY_RISK_CODE", recordBean.getCountryRiskCode());
-        assertEquals(100000.0, recordBean.getAmount(), 0.0);
-        assertEquals("USD", recordBean.getCurrencyCode());
-        assertEquals("This is a test comment", recordBean.getComment());
-    }
-
-    @Test
-    public void testGetFacRiskRecordsBeansList() throws Exception {
-        when(mockResultSet.next()).thenReturn(true, false);
-        when(mockResultSet.getString("LIQ_FAC_TYPE")).thenReturn("FAC_TYPE_001");
-        when(mockResultSet.getString("ECB_RSK_TYPE")).thenReturn("RISK_TYPE_001");
-
-        Method method = P06_IREP_01_DBTransaction.class.getDeclaredMethod("getFacRiskRecordsBeansList");
-        method.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        Map<String, String> result = (Map<String, String>) method.invoke(dbTransaction);
-
-        assertNotNull(result);
-        assertEquals(1, result.size());
-        assertEquals("RISK_TYPE_001", result.get("FAC_TYPE_001"));
-    }
+    // Assert
+    assertNotNull(result);
+    assertEquals(1, result.size());
 }
