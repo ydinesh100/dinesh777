@@ -1,55 +1,40 @@
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.sql.Connection;
-import java.util.Collections;
-import java.util.Date;
+import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
+
+import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
+import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
+import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_ExitApplicationException;
+import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
 
 import org.junit.Before;
 import org.junit.Test;
-
-import com.bopparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
-import com.bopparibas.atlentic.irep.ecb.level.P06_IREP_01_DBTransaction;
-import com.bopparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 public class P06_IREP_01_LevelTest {
 
-    private P06_IREP_01_Level<P06_IREP_01_DBTransaction> levelUnderTest;
-    private P06_IREP_01_DBTransaction spyTransaction;
+    private P06_IREP_01_Level<?> levelInstance;
+
+    @Mock
+    private Connection mockConnection;
 
     @Before
     public void setUp() throws Exception {
-        // Create a real instance or mock of DBTransaction (mock here)
-        P06_IREP_01_DBTransaction mockTransaction = mock(P06_IREP_01_DBTransaction.class);
+        MockitoAnnotations.openMocks(this);
 
-        // Spy on the mock so we can intercept method calls
-        spyTransaction = spy(mockTransaction);
-
-        // Use reflection to get the inaccessible method
-        final Method method = P06_IREP_01_DBTransaction.class.getDeclaredMethod("getRecordsBeansList", String.class, Date.class);
-        method.setAccessible(true);
-
-        // Use doAnswer to intercept calls to the spy's getRecordsBeansList (which is inaccessible)
-        doAnswer(invocation -> {
-            String branch = invocation.getArgument(0);
-            Date timestamp = invocation.getArgument(1);
-
-            // Return an empty list or a mocked list as needed
-            return Collections.emptyList();
-        }).when(spyTransaction).getClass()
-          .getDeclaredMethod("getRecordsBeansList", String.class, Date.class)
-          .invoke(anyString(), any(Date.class));
-
-        // Create anonymous subclass of P06_IREP_01_Level
-        levelUnderTest = new P06_IREP_01_Level<P06_IREP_01_DBTransaction>() {
+        // Create a concrete subclass of the abstract class for testing
+        levelInstance = new P06_IREP_01_Level<Object>() {
 
             @Override
-            protected void innerExecute() throws Exception {
-                // test logic here if needed
+            protected void innerExecute() throws P06_IREP_01_SQLException, IOException, P06_IREP_01_ExitApplicationException {
+                // simulate inner execution logic
             }
 
             @Override
@@ -58,14 +43,8 @@ public class P06_IREP_01_LevelTest {
             }
 
             @Override
-            protected void initializeDataBaseTransaction(Connection connection) {
-                try {
-                    Field field = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
-                    field.setAccessible(true);
-                    field.set(this, spyTransaction);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
+            protected void initializeDataBaseTransaction(Connection po_dataBaseConnection) throws P06_IREP_01_SQLException {
+                // simulate init DB transaction
             }
 
             @Override
@@ -73,21 +52,76 @@ public class P06_IREP_01_LevelTest {
                 return true;
             }
         };
+
+        // Use reflection to inject the mock connection if needed (if connection is private in your real class)
+        Field connectionField = P06_IREP_01_Level.class.getDeclaredField("connection");
+        connectionField.setAccessible(true);
+        connectionField.set(levelInstance, mockConnection);
     }
 
     @Test
-    public void testExecute_invokesGetRecordsBeansList() throws Exception {
-        // Call execute (which internally calls the inaccessible method)
-        levelUnderTest.execute();
+    public void testExecuteSuccess() throws Exception {
+        // Mock GlobalAtlentic.getLoanIQConnection to return mockConnection
+        // Assuming GlobalAtlentic.getLoanIQConnection() is static:
+        // You might need PowerMockito for static mocking, but let's assume you can inject connection or mock somehow
 
-        // Now verify getRecordsBeansList called via reflection on spyTransaction
-        Method method = P06_IREP_01_DBTransaction.class.getDeclaredMethod("getRecordsBeansList", String.class, Date.class);
-        method.setAccessible(true);
+        // Spy on levelInstance to verify calls
+        P06_IREP_01_Level<?> spyLevel = spy(levelInstance);
 
-        // Since Mockito can't directly verify inaccessible method calls,
-        // Use reflection to invoke and check or spy can capture interaction in some cases
+        // Mock methods called inside execute
+        doNothing().when(spyLevel).initializeDataBaseTransaction(any(Connection.class));
+        doReturn(new ArrayList<P06_IREP_01_EcbRecordBean>()).when(spyLevel.getDataBaseTransaction()).getRecordsBeansList(anyString(), any());
 
-        // You can just verify spyTransaction is not null and execute ran without exception as basic test
-        assertNotNull(spyTransaction);
+        // Run execute() via reflection since it might be private
+        Method executeMethod = P06_IREP_01_Level.class.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
+        executeMethod.invoke(spyLevel);
+
+        // Verify commit called on connection
+        verify(mockConnection).commit();
+
+        // Verify innerExecute was called
+        verify(spyLevel).innerExecute();
+    }
+
+    @Test
+    public void testExecuteRollbackOnException() throws Exception {
+        // Create a spy to throw exception in innerExecute to force rollback
+        P06_IREP_01_Level<?> spyLevel = spy(levelInstance);
+
+        doThrow(new IOException("Forced Exception")).when(spyLevel).innerExecute();
+        doNothing().when(spyLevel).initializeDataBaseTransaction(any(Connection.class));
+        doReturn(true).when(spyLevel).applyCommit();
+
+        Method executeMethod = P06_IREP_01_Level.class.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
+
+        try {
+            executeMethod.invoke(spyLevel);
+            fail("Exception expected");
+        } catch (Exception e) {
+            // Expected: invocation target exception wraps actual exception
+            // You can unwrap and assert if needed
+            Throwable cause = e.getCause();
+            assertTrue(cause instanceof P06_IREP_01_ExitApplicationException);
+        }
+
+        // Verify rollback called
+        verify(mockConnection).rollback();
+    }
+
+    @Test
+    public void testGetDataBaseTransaction() throws Exception {
+        // Set the private field g_o_dataBaseTransaction via reflection and test getter
+        Object dummyDbTransaction = new Object();
+        Field dbTransactionField = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
+        dbTransactionField.setAccessible(true);
+        dbTransactionField.set(levelInstance, dummyDbTransaction);
+
+        Method getter = P06_IREP_01_Level.class.getDeclaredMethod("getDataBaseTransaction");
+        getter.setAccessible(true);
+        Object result = getter.invoke(levelInstance);
+
+        assertEquals(dummyDbTransaction, result);
     }
 }
