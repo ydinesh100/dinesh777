@@ -1,15 +1,14 @@
+package com.bopparibas.atlentic.irep.ecb.level;
+
 import com.bnpparibas.atlentic.common.GlobalAtlentic;
 import com.bnpparibas.atlentic.common.utils.DBUtils;
 import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
-import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_DBTransaction;
-import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
 import com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
 import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_ExitApplicationException;
 import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
 
 import org.junit.*;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
+import org.mockito.*;
 
 import java.io.IOException;
 import java.sql.Connection;
@@ -22,36 +21,32 @@ public class P06_IREP_01_LevelTest {
 
     private Connection mockConnection;
     private TestTransaction mockTransaction;
-    private P06_IREP_01_Level<TestTransaction> levelInstance;
-    private List<P06_IREP_01_EcbRecordBean> dummyRecordBeans;
+    private P06_IREP_01_Level<TestTransaction> level;
 
-    private MockedStatic<GlobalAtlentic> globalAtlenticMock;
-    private MockedStatic<DBUtils> dbUtilsMock;
+    private List<P06_IREP_01_EcbRecordBean> fakeBeans;
 
     @Before
-    public void setup() throws Exception {
+    public void setUp() throws Exception {
         mockConnection = mock(Connection.class);
         mockTransaction = mock(TestTransaction.class);
+        fakeBeans = new ArrayList<>();
 
-        dummyRecordBeans = new ArrayList<>();
+        // Static mocks
+        Mockito.mockStatic(GlobalAtlentic.class).when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
+        Mockito.mockStatic(DBUtils.class);
 
-        // Mock static methods
-        globalAtlenticMock = Mockito.mockStatic(GlobalAtlentic.class);
-        globalAtlanticMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
-
-        dbUtilsMock = Mockito.mockStatic(DBUtils.class);
-
-        // Stub static fields
+        // Required static fields
         P06_IREP_01_Main.g_s_branch = "BR001";
         P06_IREP_01_Main.g_o_eventTimestamp = new Date();
 
-        when(mockTransaction.getRecordsBeansList(anyString(), any())).thenReturn(dummyRecordBeans);
+        // Stub method
+        when(mockTransaction.getRecordsBeansList(anyString(), any())).thenReturn(fakeBeans);
 
-        // Create a concrete implementation of the abstract class
-        levelInstance = new P06_IREP_01_Level<TestTransaction>() {
+        // Concrete instance of abstract class
+        level = new P06_IREP_01_Level<TestTransaction>() {
             @Override
-            protected void innerExecute() {
-                // no-op
+            protected void innerExecute() throws P06_IREP_01_SQLException, IOException, P06_IREP_01_ExitApplicationException {
+                // no-op for test
             }
 
             @Override
@@ -71,27 +66,40 @@ public class P06_IREP_01_LevelTest {
         };
     }
 
-    @After
-    public void tearDown() {
-        globalAtlenticMock.close();
-        dbUtilsMock.close();
+    @Test
+    public void testExecute_successfulFlow() throws Exception {
+        level.execute();
+
+        verify(mockConnection).setAutoCommit(false);
+        verify(mockTransaction).getRecordsBeansList(anyString(), any());
+        verify(mockConnection).commit();
+        verifyStatic(DBUtils.class);
+        DBUtils.closeConnexion(eq(mockConnection), isNull(), isNull());
     }
 
     @Test
-    public void testExecute_shouldRunSuccessfully() throws Exception {
-        // Act
-        levelInstance.execute();
+    public void testExecute_withException_shouldRollback() throws Exception {
+        when(mockTransaction.getRecordsBeansList(anyString(), any())).thenThrow(new SQLException("DB error"));
 
-        // Assert
-        verify(mockConnection).setAutoCommit(false);
-        verify(mockTransaction).getRecordsBeansList(eq("BR001"), any(Date.class));
-        verify(mockConnection).commit();
-        dbUtilsMock.verify(() -> DBUtils.closeConnexion(eq(mockConnection), isNull(), isNull()));
+        try {
+            level.execute();
+            Assert.fail("Expected exception");
+        } catch (P06_IREP_01_ExitApplicationException ex) {
+            // expected
+        }
+
+        verify(mockConnection).rollback();
+        verifyStatic(DBUtils.class);
+        DBUtils.closeConnexion(eq(mockConnection), isNull(), isNull());
     }
 
-    // Create a test-specific interface that satisfies the generic bound
-    public interface TestTransaction extends P06_IREP_01_DBTransaction {
-        List<P06_IREP_01_EcbRecordBean> getRecordsBeansList(String branch, Date timestamp)
-                throws P06_IREP_01_SQLException;
+    // Simple concrete class for mocking the abstract transaction
+    public static class TestTransaction extends P06_IREP_01_DBTransaction {
+        @Override
+        public List<P06_IREP_01_EcbRecordBean> getRecordsBeansList(String branch, Date timestamp) {
+            return Collections.emptyList();
+        }
+
+        // Implement other abstract methods if required
     }
 }
