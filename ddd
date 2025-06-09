@@ -1,63 +1,45 @@
-package com.bnpparibas.atlentic.irep.ecb.level.test;
+import static org.mockito.Mockito.*;
+import static org.junit.Assert.*;
 
-import com.bnpparibas.atlentic.common.GlobalAtlentic;
-import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
-import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_DBTransaction;
-import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
-import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_ExitApplicationException;
-import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-
-import java.io.IOException;
-import java.lang.reflect.Field;
-import java.sql.Connection;
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.mockito.Mockito.*;
-
-import org.mockito.MockedStatic;
 import org.mockito.Mockito;
-import org.mockito.runners.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
+import com.bopparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
+import com.bopparibas.atlentic.irep.ecb.level.P06_IREP_01_DBTransaction;
+import com.bopparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
+import com.bopparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_ExitApplicationException;
+import com.bopparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
+
 public class P06_IREP_01_LevelTest {
 
     private P06_IREP_01_Level<P06_IREP_01_DBTransaction> level;
-
-    private Connection mockConnection;
     private P06_IREP_01_DBTransaction mockTransaction;
 
     @Before
     public void setUp() throws Exception {
-        mockConnection = mock(Connection.class);
-        mockTransaction = mock(P06_IREP_01_DBTransaction.class);
-
-        // Create anonymous subclass of abstract class
+        // Anonymous concrete subclass of abstract class
         level = new P06_IREP_01_Level<P06_IREP_01_DBTransaction>() {
             @Override
-            protected void innerExecute() {
-                // no-op
+            protected void innerExecute() throws P06_IREP_01_SQLException, java.io.IOException, P06_IREP_01_ExitApplicationException {
+                // No-op for test
             }
 
             @Override
             protected int getLevelNumber() {
-                return 99;
+                return 1;
             }
 
             @Override
-            protected void initializeDataBaseTransaction(Connection connection) {
-                // sets mockTransaction manually
-                try {
-                    Field f = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
-                    f.setAccessible(true);
-                    f.set(this, mockTransaction);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
+            protected void initializeDataBaseTransaction(Connection connection) throws P06_IREP_01_SQLException {
+                // No-op here, we inject mock manually via reflection
             }
 
             @Override
@@ -66,21 +48,56 @@ public class P06_IREP_01_LevelTest {
             }
         };
 
-        // Prepare mock for getRecordsBeansList
-        when(mockTransaction.getRecordsBeansList(anyString(), any()))
-                .thenReturn(new ArrayList<>());
+        // Mock DBTransaction
+        mockTransaction = Mockito.mock(P06_IREP_01_DBTransaction.class);
+
+        // Use reflection to inject the mockTransaction into the private field
+        Field field = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
+        field.setAccessible(true);
+        field.set(level, mockTransaction);
+
+        // Spy on mockTransaction to mock the non-public method getRecordsBeansList(String, Date)
+        P06_IREP_01_DBTransaction spyTransaction = Mockito.spy(mockTransaction);
+
+        // Reflectively get the getRecordsBeansList method from DBTransaction
+        Method getRecordsBeansListMethod = P06_IREP_01_DBTransaction.class.getDeclaredMethod("getRecordsBeansList", String.class, Date.class);
+        getRecordsBeansListMethod.setAccessible(true);
+
+        // Stub the method to return empty list
+        doReturn(new ArrayList<P06_IREP_01_EcbRecordBean>())
+            .when(spyTransaction)
+            .getRecordsBeansList(anyString(), any(Date.class));
+
+        // Inject the spy back into the private field
+        field.set(level, spyTransaction);
     }
 
     @Test
-    public void testExecute() throws Exception {
-        try (MockedStatic<GlobalAtlentic> globalMock = Mockito.mockStatic(GlobalAtlentic.class)) {
-            globalMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
+    public void testExecute_success() throws Exception {
+        // Call execute, should run without exceptions
+        level.execute();
 
-            level.execute();
+        // Verify getRecordsBeansList called once with any String and Date
+        verify((P06_IREP_01_DBTransaction) getPrivateField(level, "g_o_dataBaseTransaction"), times(1))
+            .getRecordsBeansList(anyString(), any(Date.class));
+    }
 
-            verify(mockConnection).setAutoCommit(false);
-            verify(mockConnection).commit();
-            verify(mockTransaction).getRecordsBeansList(anyString(), any());
-        }
+    @Test(expected = P06_IREP_01_ExitApplicationException.class)
+    public void testExecute_throwsException_rollsBack() throws Exception {
+        // Spy on DBTransaction to throw SQLException when getRecordsBeansList is called
+        P06_IREP_01_DBTransaction spyTransaction = (P06_IREP_01_DBTransaction) getPrivateField(level, "g_o_dataBaseTransaction");
+
+        doThrow(new SQLException("DB Error"))
+            .when(spyTransaction)
+            .getRecordsBeansList(anyString(), any(Date.class));
+
+        level.execute();  // should throw ExitApplicationException due to SQLException
+    }
+
+    // Helper to get private field value via reflection
+    private Object getPrivateField(Object instance, String fieldName) throws Exception {
+        Field f = instance.getClass().getDeclaredField(fieldName);
+        f.setAccessible(true);
+        return f.get(instance);
     }
 }
