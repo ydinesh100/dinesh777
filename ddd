@@ -1,20 +1,17 @@
 @Test
-public void testExecute_whenExceptionOccurs_shouldHitCatchBlock() throws Exception {
-    // Mock exception from GlobalAtlentic.getLoanIQConnection
+public void testExecute_withException_shouldEnterCatchBlock() throws Exception {
+    // Arrange
+    P06_IREP_01_Level<?> levelUnderTest = new P06_IREP_01_LevelTestSubclass();
+
     MockedStatic<GlobalAtlentic> globalMock = Mockito.mockStatic(GlobalAtlentic.class);
     globalMock.when(GlobalAtlentic::getLoanIQConnection)
-              .thenThrow(new RuntimeException("Simulated DB connection failure"));
-
-    // Inject mock DBTransaction
-    Field field = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
-    field.setAccessible(true);
-    field.set(levelUnderTest, mockTransaction);
+              .thenThrow(new SQLException("Simulated connection error"));
 
     try {
-        levelUnderTest.execute();
+        levelUnderTest.execute(); // ✅ method now recognized
     } catch (P06_IREP_01_ExitApplicationException e) {
-        // Expected if rethrown or custom logic exists
+        // Expected exception
     }
 
-    globalMock.close(); // Clean up static mock
+    globalMock.close();
 }
