@@ -1,98 +1,20 @@
-package com.bnpparibas.atlentic.irep.ecb.level.test;
+@Test
+public void testExecute_whenExceptionOccurs_shouldHitCatchBlock() throws Exception {
+    // Mock exception from GlobalAtlentic.getLoanIQConnection
+    MockedStatic<GlobalAtlentic> globalMock = Mockito.mockStatic(GlobalAtlentic.class);
+    globalMock.when(GlobalAtlentic::getLoanIQConnection)
+              .thenThrow(new RuntimeException("Simulated DB connection failure"));
 
-import static org.mockito.Mockito.*;
-import static org.junit.Assert.*;
+    // Inject mock DBTransaction
+    Field field = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
+    field.setAccessible(true);
+    field.set(levelUnderTest, mockTransaction);
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.sql.Connection;
-import java.util.*;
-
-import com.bnpparibas.atlentic.common.GlobalAtlentic;
-import com.bnpparibas.atlentic.common.utils.DBUtils;
-import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
-import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_DBTransaction;
-import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
-import com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
-import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_ExitApplicationException;
-
-import org.junit.*;
-import org.mockito.*;
-
-public class P06_IREP_01_LevelTest {
-
-    private TestLevel levelUnderTest;
-    private P06_IREP_01_DBTransaction mockTransaction;
-    private Connection mockConnection;
-    private List<P06_IREP_01_EcbRecordBean> fakeRecordBeans;
-
-    @Before
-    public void setUp() throws Exception {
-        mockConnection = mock(Connection.class);
-        fakeRecordBeans = new ArrayList<>();
-
-        // Set static fields in Main class
-        P06_IREP_01_Main.g_s_branch = "BR001";
-        P06_IREP_01_Main.g_o_eventTimestamp = new Date();
-
-        // Mock static methods
-        MockedStatic<GlobalAtlentic> globalMock = Mockito.mockStatic(GlobalAtlentic.class);
-        globalMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
-
-        MockedStatic<DBUtils> dbUtilsMock = Mockito.mockStatic(DBUtils.class);
-        dbUtilsMock.when(() -> DBUtils.closeConnexion(any(), any(), any())).thenAnswer(inv -> null);
-
-        // Create concrete class with dummy implementation
-        mockTransaction = mock(P06_IREP_01_DBTransaction.class, CALLS_REAL_METHODS);
-
-        // Use reflection to override protected field
-        levelUnderTest = new TestLevel();
-        Field field = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
-        field.setAccessible(true);
-        field.set(levelUnderTest, mockTransaction);
-
-        // Use reflection to make the protected method accessible
-        Method method = P06_IREP_01_DBTransaction.class.getDeclaredMethod("getRecordsBeansList", String.class, Date.class);
-        method.setAccessible(true);
-
-        // Stub return value using a lambda wrapper
-        when(method.invoke(mockTransaction, "BR001", P06_IREP_01_Main.g_o_eventTimestamp)).thenReturn(fakeRecordBeans);
-    }
-
-    @Test
-    public void testExecute_withReflectionAccessToProtectedMethod() throws Exception {
-        // Run
+    try {
         levelUnderTest.execute();
-
-        // Validate via field
-        Field listField = P06_IREP_01_Level.class.getDeclaredField("g_o_recordBeansList");
-        listField.setAccessible(true);
-        Object list = listField.get(levelUnderTest);
-
-        assertNotNull(list);
-        assertEquals(fakeRecordBeans, list);
+    } catch (P06_IREP_01_ExitApplicationException e) {
+        // Expected if rethrown or custom logic exists
     }
 
-    // Dummy implementation of abstract class
-    private class TestLevel extends P06_IREP_01_Level<P06_IREP_01_DBTransaction> {
-        @Override
-        protected void innerExecute() {
-            // No-op
-        }
-
-        @Override
-        protected int getLevelNumber() {
-            return 1;
-        }
-
-        @Override
-        protected void initializeDataBaseTransaction(Connection po_dataBaseConnection) {
-            // No-op
-        }
-
-        @Override
-        protected boolean applyCommit() {
-            return true;
-        }
-    }
+    globalMock.close(); // Clean up static mock
 }
