@@ -2,47 +2,57 @@ package com.bnpparibas.atlentic.irep.ecb.level.test;
 
 import static org.mockito.Mockito.*;
 
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.sql.Connection;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.*;
 
 import com.bnpparibas.atlentic.common.GlobalAtlentic;
+import com.bnpparibas.atlentic.common.utils.DBUtils;
 import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
 import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_DBTransaction;
 import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
 import com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
 import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_ExitApplicationException;
+import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
+import org.junit.*;
+import org.mockito.*;
 
 public class P06_IREP_01_LevelTest {
 
-    private P06_IREP_01_Level<P06_IREP_01_DBTransaction> level;
-    private Connection mockConnection;
+    private P06_IREP_01_Level<P06_IREP_01_DBTransaction> levelInstance;
     private P06_IREP_01_DBTransaction mockTransaction;
+    private Connection mockConnection;
+    private List<P06_IREP_01_EcbRecordBean> fakeRecordBeans;
 
     @Before
     public void setUp() throws Exception {
-        mockConnection = mock(Connection.class);
         mockTransaction = mock(P06_IREP_01_DBTransaction.class);
+        mockConnection = mock(Connection.class);
+        fakeRecordBeans = new ArrayList<>();
 
-        // Stub getRecordsBeansList (via reflection)
-        List<P06_IREP_01_EcbRecordBean> fakeList = new ArrayList<>();
-        when(mockTransaction.getClass()
-                .getDeclaredMethod("getRecordsBeansList", String.class, Date.class)
-                .invoke(mockTransaction, anyString(), any(Date.class)))
-                .thenReturn(fakeList);
+        // Mock static methods: GlobalAtlentic.getLoanIQConnection() and DBUtils.closeConnexion()
+        MockedStatic<GlobalAtlentic> globalAtlenticMock = Mockito.mockStatic(GlobalAtlentic.class);
+        globalAtlenticMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
 
-        // Testable subclass of abstract Level
-        level = new P06_IREP_01_Level<P06_IREP_01_DBTransaction>() {
+        MockedStatic<DBUtils> dbUtilsMock = Mockito.mockStatic(DBUtils.class);
+
+        // Set up dummy static values used in execute()
+        P06_IREP_01_Main.g_s_branch = "BR001";
+        P06_IREP_01_Main.g_o_eventTimestamp = new Date();
+
+        // Stub getRecordsBeansList()
+        doReturn(fakeRecordBeans).when(mockTransaction).getRecordsBeansList(anyString(), any(Date.class));
+
+        // Anonymous subclass of abstract Level class
+        levelInstance = new P06_IREP_01_Level<P06_IREP_01_DBTransaction>() {
             @Override
-            protected void innerExecute() {
-                // no-op
+            protected void innerExecute() throws P06_IREP_01_SQLException, IOException, P06_IREP_01_ExitApplicationException {
+                // do nothing
             }
 
             @Override
@@ -51,14 +61,8 @@ public class P06_IREP_01_LevelTest {
             }
 
             @Override
-            protected void initializeDataBaseTransaction(Connection conn) {
-                try {
-                    Field f = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
-                    f.setAccessible(true);
-                    f.set(this, mockTransaction);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
+            protected void initializeDataBaseTransaction(Connection connection) {
+                this.g_o_dataBaseTransaction = mockTransaction;
             }
 
             @Override
@@ -66,26 +70,16 @@ public class P06_IREP_01_LevelTest {
                 return true;
             }
         };
-
-        // Set static fields in Main class
-        Field branchField = P06_IREP_01_Main.class.getDeclaredField("g_s_branch");
-        branchField.setAccessible(true);
-        branchField.set(null, "BRANCH");
-
-        Field timestampField = P06_IREP_01_Main.class.getDeclaredField("g_o_eventTimestamp");
-        timestampField.setAccessible(true);
-        timestampField.set(null, new Date());
     }
 
     @Test
-    public void testExecute_successfulFlow() throws Exception {
-        try (MockedStatic<GlobalAtlentic> mockedStatic = Mockito.mockStatic(GlobalAtlentic.class)) {
-            mockedStatic.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
+    public void testExecute_shouldRunSuccessfully() throws Exception {
+        // Call the method under test
+        levelInstance.execute();
 
-            level.execute();
-
-            verify(mockConnection).setAutoCommit(false);
-            verify(mockConnection).commit();
-        }
+        // Verify that methods were invoked as expected
+        verify(mockConnection).setAutoCommit(false);
+        verify(mockTransaction).getRecordsBeansList(anyString(), any(Date.class));
+        verify(mockConnection).commit();
     }
 }
