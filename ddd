@@ -1,57 +1,76 @@
 @Test
-public void testGetRecordsBeansList_UsingReflection() throws Exception {
-    // Arrange
-    final String testBranchCode = "BRANCH_001";
-    final Date testEventTimestamp = new Date();
+public void testGetRecordsBeansList_withReflection() throws Exception {
+    final String branchCode = "BR001";
+    final Date eventTimestamp = new Date();
 
-    // Mock ResultSet behavior
-    when(mockResultSet.next()).thenReturn(true, false);
-    when(mockResultSet.getString("cde_type_record")).thenReturn("TYPE_A");
-    when(mockResultSet.getString("pid_facility")).thenReturn("FACILITY_001");
-    when(mockResultSet.getDate("dte_start")).thenReturn(new java.sql.Date(testEventTimestamp.getTime()));
-    when(mockResultSet.getDate("dte_maturity")).thenReturn(new java.sql.Date(testEventTimestamp.getTime()));
-    when(mockResultSet.getDouble("pct_gar_insur")).thenReturn(90.5);
-    when(mockResultSet.getDouble("pct_gar_synd")).thenReturn(85.3);
-    when(mockResultSet.getDouble("pct_gar_other")).thenReturn(75.2);
-    when(mockResultSet.getString("cid_borrower")).thenReturn("BORROWER_001");
-    when(mockResultSet.getString("cde_rmpm")).thenReturn("RMPM_001");
-    when(mockResultSet.getString("nme_name")).thenReturn("BANK NAME");
-    when(mockResultSet.getString("cde_risk_country")).thenReturn("COUNTRY_RISK_CODE");
-    when(mockResultSet.getDouble("ant_amount")).thenReturn(100000.0);
-    when(mockResultSet.getString("cde_currency")).thenReturn("USD");
-    when(mockResultSet.getString("cmt_txt_comment")).thenReturn("This is a test comment");
-    when(mockResultSet.getString("psp_bank")).thenReturn("1234567890");
+    // Create a subclass to test the abstract/protected class
+    P06_IREP_01_DBTransaction transaction = new P06_IREP_01_DBTransaction() {};
 
-    // Mock the SQL query call
-    ResourceBundle mockBundle = mock(ResourceBundle.class);
-    mockStatic(P06_IREP_01_PropertiesMgr.class);
-    when(P06_IREP_01_PropertiesMgr.getQueryFromPropertiesFile(anyString()))
-        .thenReturn("SELECT * FROM dummy_table");
+    // Inject mock connection into private field
+    Field connField = P06_IREP_01_DBTransaction.class.getDeclaredField("g_o_dataBaseConnection");
+    connField.setAccessible(true);
+    connField.set(transaction, mockConnection);
 
-    // Spy on the dbTransaction so we can override internal behavior
-    P06_IREP_01_DBTransaction spyTransaction = spy(dbTransaction);
-
-    doReturn("dummy.query.key").when(spyTransaction).getSelectRecordsQueryKey();
-    doNothing().when(spyTransaction).feedRecordsBeansListPreparedStatement(any(PreparedStatement.class), eq(testBranchCode), eq(testEventTimestamp));
-    doNothing().when(spyTransaction).feedingRecordBean(any(P06_IREP_01_EcbRecordBean.class), any(ResultSet.class));
-
-    // Inject mocked DB connection into spy
-    Field connectionField = P06_IREP_01_DBTransaction.class.getDeclaredField("g_o_dataBaseConnection");
-    connectionField.setAccessible(true);
-    connectionField.set(spyTransaction, mockConnection);
-
+    // Prepare mocks
     when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
     when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+    when(mockResultSet.next()).thenReturn(true, false);
 
-    // Invoke protected method via reflection
-    Method method = P06_IREP_01_DBTransaction.class.getDeclaredMethod("getRecordsBeansList", String.class, Date.class);
-    method.setAccessible(true);
+    // Set up ResultSet values
+    when(mockResultSet.getString("cde_type_record")).thenReturn("REC_TYPE");
+    when(mockResultSet.getString("pid_facility")).thenReturn("FAC123");
+    when(mockResultSet.getDate("dte_start")).thenReturn(new java.sql.Date(eventTimestamp.getTime()));
+    when(mockResultSet.getDate("dte_maturity")).thenReturn(new java.sql.Date(eventTimestamp.getTime()));
+    when(mockResultSet.getDouble("pct_gar_insur")).thenReturn(10.0);
+    when(mockResultSet.getDouble("pct_gar_synd")).thenReturn(20.0);
+    when(mockResultSet.getDouble("pct_gar_other")).thenReturn(30.0);
+    when(mockResultSet.getString("cid_borrower")).thenReturn("BORR001");
+    when(mockResultSet.getString("cde_rmpm")).thenReturn("RMP001");
+    when(mockResultSet.getString("nme_name")).thenReturn("Bank Name");
+    when(mockResultSet.getString("cde_risk_country")).thenReturn("FR");
+    when(mockResultSet.getDouble("ant_amount")).thenReturn(1000.0);
+    when(mockResultSet.getString("cde_currency")).thenReturn("EUR");
+    when(mockResultSet.getString("cmt_txt_comment")).thenReturn("Test comment");
+    when(mockResultSet.getString("psp_bank")).thenReturn("987654321");
 
-    // Act
-    List<P06_IREP_01_EcbRecordBean> result =
-        (List<P06_IREP_01_EcbRecordBean>) method.invoke(spyTransaction, testBranchCode, testEventTimestamp);
+    // Mock static call to properties manager
+    try (MockedStatic<P86_IREP_01_PropertiesMgr> mockedPropsMgr = mockStatic(P86_IREP_01_PropertiesMgr.class)) {
+        mockedPropsMgr.when(() -> P86_IREP_01_PropertiesMgr.getQueryFromPropertiesFile(anyString()))
+                      .thenReturn("SELECT * FROM dummy");
 
-    // Assert
-    assertNotNull(result);
-    assertEquals(1, result.size());
+        // Use reflection to call getSelectRecordsQueryKey()
+        Method getQueryKeyMethod = P06_IREP_01_DBTransaction.class.getDeclaredMethod("getSelectRecordsQueryKey");
+        getQueryKeyMethod.setAccessible(true);
+
+        // Force it to return dummy key by overriding via reflection
+        // Set up a subclass if needed instead
+        // No-op here since it just feeds to getQueryFromPropertiesFile()
+
+        // feedRecordsBeansListPreparedStatement() - do nothing
+        Method feedPSMethod = P06_IREP_01_DBTransaction.class.getDeclaredMethod(
+            "feedRecordsBeansListPreparedStatement", PreparedStatement.class, String.class, Date.class);
+        feedPSMethod.setAccessible(true);
+
+        // feedingRecordBean() - call original method via reflection
+        Method feedBeanMethod = P06_IREP_01_DBTransaction.class.getDeclaredMethod(
+            "feedingRecordBean", P06_IREP_01_EcbRecordBean.class, ResultSet.class);
+        feedBeanMethod.setAccessible(true);
+
+        // Reflectively invoke getRecordsBeansList()
+        Method method = P06_IREP_01_DBTransaction.class.getDeclaredMethod("getRecordsBeansList", String.class, Date.class);
+        method.setAccessible(true);
+
+        // Call method
+        @SuppressWarnings("unchecked")
+        List<P06_IREP_01_EcbRecordBean> result =
+                (List<P06_IREP_01_EcbRecordBean>) method.invoke(transaction, branchCode, eventTimestamp);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.size());
+
+        P06_IREP_01_EcbRecordBean bean = result.get(0);
+        assertEquals(branchCode, bean.getBranchCode());
+        assertEquals(Outils.getSqlTimestamp(eventTimestamp), bean.getEventTimestamp());
+    }
 }
