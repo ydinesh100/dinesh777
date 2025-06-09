@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+import com.bnpparibas.atlentic.common.GlobalAtlentic;
 import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
 import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_DBTransaction;
 import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
@@ -22,29 +23,28 @@ import org.mockito.Mockito;
 
 public class P06_IREP_01_LevelTest {
 
+    private P06_IREP_01_Level<P06_IREP_01_DBTransaction> level;
     private Connection mockConnection;
-
-    private P06_IREP_01_Level<P06_IREP_01_DBTransaction> levelUnderTest;
 
     @Before
     public void setUp() throws Exception {
-        // Mock JDBC Connection
         mockConnection = mock(Connection.class);
 
-        // Create a real subclass of the DBTransaction with visible method
+        // Override DBTransaction with visible getRecordsBeansList
         P06_IREP_01_DBTransaction dbTransaction = new P06_IREP_01_DBTransaction() {
             @Override
-            protected List<P06_IREP_01_EcbRecordBean> getRecordsBeansList(String branch, Date timestamp)
+            protected List<P06_IREP_01_EcbRecordBean> getRecordsBeansList(String branch, Date date)
                     throws P06_IREP_01_SQLException {
                 return new ArrayList<>();
             }
         };
 
-        // Create a concrete implementation of Level
-        levelUnderTest = new P06_IREP_01_Level<P06_IREP_01_DBTransaction>() {
+        // Create testable subclass of abstract Level
+        level = new P06_IREP_01_Level<P06_IREP_01_DBTransaction>() {
 
             @Override
-            protected void innerExecute() {
+            protected void innerExecute()
+                    throws P06_IREP_01_SQLException, java.io.IOException, P06_IREP_01_ExitApplicationException {
                 // No-op for test
             }
 
@@ -54,11 +54,11 @@ public class P06_IREP_01_LevelTest {
             }
 
             @Override
-            protected void initializeDataBaseTransaction(Connection connection) {
+            protected void initializeDataBaseTransaction(Connection conn) {
                 try {
-                    Field field = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
-                    field.setAccessible(true);
-                    field.set(this, dbTransaction);
+                    Field f = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
+                    f.setAccessible(true);
+                    f.set(this, dbTransaction);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
@@ -70,10 +70,10 @@ public class P06_IREP_01_LevelTest {
             }
         };
 
-        // Set static fields in Main using reflection
+        // Set static fields in Main class
         Field branchField = P06_IREP_01_Main.class.getDeclaredField("g_s_branch");
         branchField.setAccessible(true);
-        branchField.set(null, "TEST_BRANCH");
+        branchField.set(null, "BRANCH");
 
         Field timestampField = P06_IREP_01_Main.class.getDeclaredField("g_o_eventTimestamp");
         timestampField.setAccessible(true);
@@ -81,14 +81,11 @@ public class P06_IREP_01_LevelTest {
     }
 
     @Test
-    public void testExecute_Success() throws Exception {
-        try (MockedStatic<com.bnpparibas.atlentic.common.GlobalAtlentic> mockedStatic =
-                     Mockito.mockStatic(com.bnpparibas.atlentic.common.GlobalAtlentic.class)) {
+    public void testExecute_successfulFlow() throws Exception {
+        try (MockedStatic<GlobalAtlentic> mockedStatic = Mockito.mockStatic(GlobalAtlentic.class)) {
+            mockedStatic.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
 
-            mockedStatic.when(com.bnpparibas.atlentic.common.GlobalAtlentic::getLoanIQConnection)
-                        .thenReturn(mockConnection);
-
-            levelUnderTest.execute();
+            level.execute();
 
             verify(mockConnection).setAutoCommit(false);
             verify(mockConnection).commit();
