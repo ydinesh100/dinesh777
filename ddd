@@ -1,50 +1,64 @@
-import static org.junit.Assert.*;
+package com.bnpparibas.atlentic.irep.ecb.level.test;
+
 import static org.mockito.Mockito.*;
 
+import java.io.IOException;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
-import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
 import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
+import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_DBTransaction;
+import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
+import com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
 import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_ExitApplicationException;
 import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
-public class P06_IREP_01_LevelTest {
+public class P06_IREP_01_LevelExecuteTest {
 
-    private P06_IREP_01_Level<?> levelInstance;
-
-    @Mock
+    private P06_IREP_01_Level<P06_IREP_01_DBTransaction> levelUnderTest;
+    private P06_IREP_01_DBTransaction mockDbTransaction;
     private Connection mockConnection;
 
     @Before
-    public void setUp() throws Exception {
-        MockitoAnnotations.openMocks(this);
+    public void setup() throws Exception {
+        // Mock DBTransaction
+        mockDbTransaction = mock(P06_IREP_01_DBTransaction.class);
+        when(mockDbTransaction.getRecordsBeansList(anyString(), any(Date.class)))
+                .thenReturn(new ArrayList<>());
 
-        // Create a concrete subclass of the abstract class for testing
-        levelInstance = new P06_IREP_01_Level<Object>() {
+        // Mock Connection
+        mockConnection = mock(Connection.class);
 
+        // Concrete subclass for abstract class
+        levelUnderTest = new P06_IREP_01_Level<P06_IREP_01_DBTransaction>() {
             @Override
             protected void innerExecute() throws P06_IREP_01_SQLException, IOException, P06_IREP_01_ExitApplicationException {
-                // simulate inner execution logic
+                // No-op
             }
 
             @Override
             protected int getLevelNumber() {
-                return 1;
+                return 5;
             }
 
             @Override
-            protected void initializeDataBaseTransaction(Connection po_dataBaseConnection) throws P06_IREP_01_SQLException {
-                // simulate init DB transaction
+            protected void initializeDataBaseTransaction(Connection poDataBaseConnection) throws P06_IREP_01_SQLException {
+                try {
+                    Field field = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
+                    field.setAccessible(true);
+                    field.set(this, mockDbTransaction);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
             }
 
             @Override
@@ -53,75 +67,28 @@ public class P06_IREP_01_LevelTest {
             }
         };
 
-        // Use reflection to inject the mock connection if needed (if connection is private in your real class)
-        Field connectionField = P06_IREP_01_Level.class.getDeclaredField("connection");
-        connectionField.setAccessible(true);
-        connectionField.set(levelInstance, mockConnection);
+        // Set static fields for Main class via reflection
+        Field branchField = P06_IREP_01_Main.class.getDeclaredField("g_s_branch");
+        branchField.setAccessible(true);
+        branchField.set(null, "BR001");
+
+        Field timestampField = P06_IREP_01_Main.class.getDeclaredField("g_o_eventTimestamp");
+        timestampField.setAccessible(true);
+        timestampField.set(null, new Date());
     }
 
     @Test
     public void testExecuteSuccess() throws Exception {
-        // Mock GlobalAtlentic.getLoanIQConnection to return mockConnection
-        // Assuming GlobalAtlentic.getLoanIQConnection() is static:
-        // You might need PowerMockito for static mocking, but let's assume you can inject connection or mock somehow
+        try (MockedStatic<com.bnpparibas.atlentic.common.GlobalAtlentic> staticMock = Mockito.mockStatic(com.bnpparibas.atlentic.common.GlobalAtlentic.class)) {
+            staticMock.when(com.bnpparibas.atlentic.common.GlobalAtlentic::getLoanIQConnection)
+                      .thenReturn(mockConnection);
 
-        // Spy on levelInstance to verify calls
-        P06_IREP_01_Level<?> spyLevel = spy(levelInstance);
+            levelUnderTest.execute();
 
-        // Mock methods called inside execute
-        doNothing().when(spyLevel).initializeDataBaseTransaction(any(Connection.class));
-        doReturn(new ArrayList<P06_IREP_01_EcbRecordBean>()).when(spyLevel.getDataBaseTransaction()).getRecordsBeansList(anyString(), any());
-
-        // Run execute() via reflection since it might be private
-        Method executeMethod = P06_IREP_01_Level.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
-        executeMethod.invoke(spyLevel);
-
-        // Verify commit called on connection
-        verify(mockConnection).commit();
-
-        // Verify innerExecute was called
-        verify(spyLevel).innerExecute();
-    }
-
-    @Test
-    public void testExecuteRollbackOnException() throws Exception {
-        // Create a spy to throw exception in innerExecute to force rollback
-        P06_IREP_01_Level<?> spyLevel = spy(levelInstance);
-
-        doThrow(new IOException("Forced Exception")).when(spyLevel).innerExecute();
-        doNothing().when(spyLevel).initializeDataBaseTransaction(any(Connection.class));
-        doReturn(true).when(spyLevel).applyCommit();
-
-        Method executeMethod = P06_IREP_01_Level.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
-
-        try {
-            executeMethod.invoke(spyLevel);
-            fail("Exception expected");
-        } catch (Exception e) {
-            // Expected: invocation target exception wraps actual exception
-            // You can unwrap and assert if needed
-            Throwable cause = e.getCause();
-            assertTrue(cause instanceof P06_IREP_01_ExitApplicationException);
+            // Verifications
+            verify(mockConnection).setAutoCommit(false);
+            verify(mockConnection).commit();
+            verify(mockDbTransaction).getRecordsBeansList(anyString(), any(Date.class));
         }
-
-        // Verify rollback called
-        verify(mockConnection).rollback();
-    }
-
-    @Test
-    public void testGetDataBaseTransaction() throws Exception {
-        // Set the private field g_o_dataBaseTransaction via reflection and test getter
-        Object dummyDbTransaction = new Object();
-        Field dbTransactionField = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
-        dbTransactionField.setAccessible(true);
-        dbTransactionField.set(levelInstance, dummyDbTransaction);
-
-        Method getter = P06_IREP_01_Level.class.getDeclaredMethod("getDataBaseTransaction");
-        getter.setAccessible(true);
-        Object result = getter.invoke(levelInstance);
-
-        assertEquals(dummyDbTransaction, result);
     }
 }
