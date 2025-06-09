@@ -14,7 +14,6 @@ import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_DBTransaction;
 import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
 import com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
 import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_ExitApplicationException;
-import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -25,27 +24,25 @@ public class P06_IREP_01_LevelTest {
 
     private P06_IREP_01_Level<P06_IREP_01_DBTransaction> level;
     private Connection mockConnection;
+    private P06_IREP_01_DBTransaction mockTransaction;
 
     @Before
     public void setUp() throws Exception {
         mockConnection = mock(Connection.class);
+        mockTransaction = mock(P06_IREP_01_DBTransaction.class);
 
-        // Override DBTransaction with visible getRecordsBeansList
-        P06_IREP_01_DBTransaction dbTransaction = new P06_IREP_01_DBTransaction() {
-            @Override
-            protected List<P06_IREP_01_EcbRecordBean> getRecordsBeansList(String branch, Date date)
-                    throws P06_IREP_01_SQLException {
-                return new ArrayList<>();
-            }
-        };
+        // Stub getRecordsBeansList (via reflection)
+        List<P06_IREP_01_EcbRecordBean> fakeList = new ArrayList<>();
+        when(mockTransaction.getClass()
+                .getDeclaredMethod("getRecordsBeansList", String.class, Date.class)
+                .invoke(mockTransaction, anyString(), any(Date.class)))
+                .thenReturn(fakeList);
 
-        // Create testable subclass of abstract Level
+        // Testable subclass of abstract Level
         level = new P06_IREP_01_Level<P06_IREP_01_DBTransaction>() {
-
             @Override
-            protected void innerExecute()
-                    throws P06_IREP_01_SQLException, java.io.IOException, P06_IREP_01_ExitApplicationException {
-                // No-op for test
+            protected void innerExecute() {
+                // no-op
             }
 
             @Override
@@ -58,7 +55,7 @@ public class P06_IREP_01_LevelTest {
                 try {
                     Field f = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
                     f.setAccessible(true);
-                    f.set(this, dbTransaction);
+                    f.set(this, mockTransaction);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
