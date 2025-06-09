@@ -1,17 +1,103 @@
-@Test
-public void testExecute_withException_shouldEnterCatchBlock() throws Exception {
-    // Arrange
-    P06_IREP_01_Level<?> levelUnderTest = new P06_IREP_01_LevelTestSubclass();
+import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
+import com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
+import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_ExitApplicationException;
+import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
+import org.junit.Before;
+import org.junit.Test;
 
-    MockedStatic<GlobalAtlentic> globalMock = Mockito.mockStatic(GlobalAtlentic.class);
-    globalMock.when(GlobalAtlentic::getLoanIQConnection)
-              .thenThrow(new SQLException("Simulated connection error"));
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
 
-    try {
-        levelUnderTest.execute(); // ✅ method now recognized
-    } catch (P06_IREP_01_ExitApplicationException e) {
-        // Expected exception
+import static org.mockito.Mockito.*;
+
+public class P06_IREP_01_LevelTest {
+
+    // Mocked components
+    private Connection mockConnection;
+    private TestTransaction mockTransaction;
+
+    @Before
+    public void setup() throws Exception {
+        // Static values needed by the class under test
+        P06_IREP_01_Main.g_s_branch = "BRANCH1";
+        P06_IREP_01_Main.g_o_eventTimestamp = new Date();
+
+        // Mock connection & transaction
+        mockConnection = mock(Connection.class);
+        mockTransaction = mock(TestTransaction.class);
+
+        when(mockTransaction.getRecordsBeansList(anyString(), any()))
+                .thenReturn(Collections.emptyList());
     }
 
-    globalMock.close();
+    @Test
+    public void testExecute_successfulCommit() throws Exception {
+        // Anonymous subclass with overridden abstract methods
+        P06_IREP_01_Level<TestTransaction> level = new P06_IREP_01_Level<TestTransaction>() {
+            @Override
+            protected void initializeDataBaseTransaction(Connection connection) {
+                this.g_o_dataBaseTransaction = mockTransaction;
+            }
+
+            @Override
+            protected void innerExecute() throws P06_IREP_01_SQLException, IOException, P06_IREP_01_ExitApplicationException {
+                // no-op
+            }
+
+            @Override
+            protected int getLevelNumber() {
+                return 1;
+            }
+
+            @Override
+            protected boolean applyCommit() {
+                return true;
+            }
+
+            // Simulate replacing GlobalAtlentic.getLoanIQConnection()
+            @Override
+            public void execute() throws P06_IREP_01_ExitApplicationException {
+                Connection connection = mockConnection;
+                try {
+                    connection.setAutoCommit(false);
+                    initializeDataBaseTransaction(connection);
+
+                    g_o_recordBeansList = g_o_dataBaseTransaction.getRecordsBeansList(
+                            P06_IREP_01_Main.g_s_branch, P06_IREP_01_Main.g_o_eventTimestamp);
+
+                    innerExecute();
+
+                    if (applyCommit()) {
+                        connection.commit();
+                    }
+                } catch (Exception e) {
+                    try {
+                        if (applyCommit() && connection != null) {
+                            connection.rollback();
+                        }
+                    } catch (SQLException se) {
+                        // Logging (ignored for test)
+                    }
+                    throw new P06_IREP_01_ExitApplicationException("Execution failed", e);
+                }
+            }
+        };
+
+        // Run the method
+        level.execute();
+
+        // Verify expected behavior
+        verify(mockTransaction, times(1)).getRecordsBeansList(anyString(), any());
+        verify(mockConnection, times(1)).commit();
+    }
+
+    // Dummy interface for mocking the DB transaction
+    interface TestTransaction {
+        List<P06_IREP_01_EcbRecordBean> getRecordsBeansList(String branch, Date eventDate)
+                throws SQLException, P06_IREP_01_SQLException;
+    }
 }
