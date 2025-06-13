@@ -1,105 +1,25 @@
-package com.bopparibas.atlentic.irep.ecb.level;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
-import com.bnpparibas.atlentic.common.GlobalAtlentic;
-import com.bnpparibas.atlentic.common.utils.DBUtils;
-import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
-import com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
-import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_ExitApplicationException;
-import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
+public class ObjectFactoryTest {
 
-import org.junit.*;
-import org.mockito.*;
+    private ObjectFactory objectFactory;
 
-import java.io.IOException;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.*;
-
-import static org.mockito.Mockito.*;
-
-public class P06_IREP_01_LevelTest {
-
-    private Connection mockConnection;
-    private TestTransaction mockTransaction;
-    private P06_IREP_01_Level<TestTransaction> level;
-
-    private List<P06_IREP_01_EcbRecordBean> fakeBeans;
-
-    @Before
-    public void setUp() throws Exception {
-        mockConnection = mock(Connection.class);
-        mockTransaction = mock(TestTransaction.class);
-        fakeBeans = new ArrayList<>();
-
-        // Static mocks
-        Mockito.mockStatic(GlobalAtlentic.class).when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
-        Mockito.mockStatic(DBUtils.class);
-
-        // Required static fields
-        P06_IREP_01_Main.g_s_branch = "BR001";
-        P06_IREP_01_Main.g_o_eventTimestamp = new Date();
-
-        // Stub method
-        when(mockTransaction.getRecordsBeansList(anyString(), any())).thenReturn(fakeBeans);
-
-        // Concrete instance of abstract class
-        level = new P06_IREP_01_Level<TestTransaction>() {
-            @Override
-            protected void innerExecute() throws P06_IREP_01_SQLException, IOException, P06_IREP_01_ExitApplicationException {
-                // no-op for test
-            }
-
-            @Override
-            protected int getLevelNumber() {
-                return 1;
-            }
-
-            @Override
-            protected void initializeDataBaseTransaction(Connection connection) {
-                this.g_o_dataBaseTransaction = mockTransaction;
-            }
-
-            @Override
-            protected boolean applyCommit() {
-                return true;
-            }
-        };
+    @BeforeEach
+    public void setUp() {
+        objectFactory = new ObjectFactory();
     }
 
     @Test
-    public void testExecute_successfulFlow() throws Exception {
-        level.execute();
-
-        verify(mockConnection).setAutoCommit(false);
-        verify(mockTransaction).getRecordsBeansList(anyString(), any());
-        verify(mockConnection).commit();
-        verifyStatic(DBUtils.class);
-        DBUtils.closeConnexion(eq(mockConnection), isNull(), isNull());
+    public void testCreateConnections() {
+        Connections connections = objectFactory.createConnections();
+        assertNotNull(connections, "createConnections() should not return null");
     }
 
     @Test
-    public void testExecute_withException_shouldRollback() throws Exception {
-        when(mockTransaction.getRecordsBeansList(anyString(), any())).thenThrow(new SQLException("DB error"));
-
-        try {
-            level.execute();
-            Assert.fail("Expected exception");
-        } catch (P06_IREP_01_ExitApplicationException ex) {
-            // expected
-        }
-
-        verify(mockConnection).rollback();
-        verifyStatic(DBUtils.class);
-        DBUtils.closeConnexion(eq(mockConnection), isNull(), isNull());
-    }
-
-    // Simple concrete class for mocking the abstract transaction
-    public static class TestTransaction extends P06_IREP_01_DBTransaction {
-        @Override
-        public List<P06_IREP_01_EcbRecordBean> getRecordsBeansList(String branch, Date timestamp) {
-            return Collections.emptyList();
-        }
-
-        // Implement other abstract methods if required
+    public void testCreateConnectionsConnection() {
+        Connections.Connection connection = objectFactory.createConnectionsConnection();
+        assertNotNull(connection, "createConnectionsConnection() should not return null");
     }
 }
