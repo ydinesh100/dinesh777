@@ -1,54 +1,48 @@
-import org.junit.jupiter.api.Test;
+package com.bnpparibas.atlentic.irep.ecb.level2.adapter;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-public class ObjectFactoryReflectionTest {
+class P06_IREP_01_DoubleAdapterTest {
 
     @Test
-    public void testConstructorUsingReflection() {
-        try {
-            Constructor<?> constructor = Class.forName("ObjectFactory").getDeclaredConstructor();
-            constructor.setAccessible(true);
-            Object factory = constructor.newInstance();
-            assertNotNull(factory);
-        } catch (Exception e) {
-            e.printStackTrace();  // 🔴 Print full root cause
-            fail("Exception during constructor test: " + e.getMessage());
-        }
+    void testMarshal() {
+        String result = P06_IREP_01_DoubleAdapter.marshal(1234567.89);
+        // In Locale.FRANCE, decimal separator is ',' and thousand separator is space or non-breaking space.
+        assertTrue(result.contains(",89"), "Decimal part should be separated by ','");
+        assertFalse(result.contains("\u00A0"), "Should not contain non-breaking spaces after replaceAll");
     }
 
     @Test
-    public void testCreateConnectionsUsingReflection() {
-        try {
-            Class<?> clazz = Class.forName("ObjectFactory");
-            Object factory = clazz.getDeclaredConstructor().newInstance();
-            Method method = clazz.getDeclaredMethod("createConnections");
-            method.setAccessible(true);
-            Object result = method.invoke(factory);
-            assertNotNull(result);
-            System.out.println("createConnections returned: " + result.getClass().getName());
-        } catch (Exception e) {
-            e.printStackTrace();  // 🔴 Print full root cause
-            fail("Exception during createConnections test: " + e.getMessage());
-        }
+    void testMarshalMinimumFractionDigits() {
+        String result = P06_IREP_01_DoubleAdapter.marshal(1234.5);
+        assertTrue(result.endsWith(",50"), "Should format with 2 fraction digits");
     }
 
     @Test
-    public void testCreateConnectionsConnectionUsingReflection() {
-        try {
-            Class<?> clazz = Class.forName("ObjectFactory");
-            Object factory = clazz.getDeclaredConstructor().newInstance();
-            Method method = clazz.getDeclaredMethod("createConnectionsConnection");
-            method.setAccessible(true);
-            Object result = method.invoke(factory);
-            assertNotNull(result);
-            System.out.println("createConnectionsConnection returned: " + result.getClass().getName());
-        } catch (Exception e) {
-            e.printStackTrace();  // 🔴 Print full root cause
-            fail("Exception during createConnectionsConnection test: " + e.getMessage());
-        }
+    void testUnmarshal() {
+        double value = P06_IREP_01_DoubleAdapter.unmarshal("1234,56");
+        assertEquals(1234.56, value, 0.0001);
+    }
+
+    @Test
+    void testUnmarshalIntegerValue() {
+        double value = P06_IREP_01_DoubleAdapter.unmarshal("789");
+        assertEquals(789.0, value, 0.0001);
+    }
+
+    @Test
+    void testUnmarshalWithThousandSeparatorLikeString() {
+        double value = P06_IREP_01_DoubleAdapter.unmarshal("1.234,78".replace(".", ""));
+        assertEquals(1234.78, value, 0.0001);
+    }
+
+    @Test
+    void testMarshalAndUnmarshalConsistency() {
+        double original = 9876.54;
+        String marshaled = P06_IREP_01_DoubleAdapter.marshal(original);
+        double unmarshaled = P06_IREP_01_DoubleAdapter.unmarshal(marshaled);
+        assertEquals(original, unmarshaled, 0.01, "Marshal and unmarshal should preserve value approximately");
     }
 }
