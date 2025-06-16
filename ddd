@@ -1,156 +1,58 @@
-@Before
-public void setUp() throws Exception {
-    mockConnection = mock(Connection.class);
-    Constructor<P06_IACC_01_Level208Transaction> constructor =
-            P06_IACC_01_Level208Transaction.class.getDeclaredConstructor(Connection.class);
-    constructor.setAccessible(true);
-    transaction = constructor.newInstance(mockConnection);
-}
+package com.bnpparibas.atlentic.iacc.bopr.level2;
 
-@Test
-public void testInnerFeedingRecordBean() throws Exception {
-    // Arrange
-    P06_IACC_01_BoprRecordBean bean = new P06_IACC_01_BoprRecordBean();
-
-    ResultSet mockResultSet = mock(ResultSet.class);
-    when(mockResultSet.getDouble("ant_cashflow")).thenReturn(1000.25);
-    when(mockResultSet.getObject("ant_cashflow_brn_ccy")).thenReturn(2500.75);
-    when(mockResultSet.getDouble("ant_cashflow_brn_ccy")).thenReturn(2500.75);
-
-    Constructor<P06_IACC_01_Level208Transaction> constructor =
-            P06_IACC_01_Level208Transaction.class.getDeclaredConstructor(Connection.class);
-    constructor.setAccessible(true);
-    P06_IACC_01_Level208Transaction transaction = constructor.newInstance(mock(Connection.class));
-
-    // Act
-    Method method = P06_IACC_01_Level208Transaction.class
-            .getDeclaredMethod("innerFeedingRecordBean", P06_IACC_01_BoprRecordBean.class, ResultSet.class);
-    method.setAccessible(true);
-    method.invoke(transaction, bean, mockResultSet);
-
-    // Assert
-    assertEquals(1000.25, bean.getAmount(), 0.001);  // precision delta for double comparison
-    assertEquals(2500.75, bean.getAmountInBranchCurrency(), 0.001);
-}
-
-
-
-
-
-
-
-
-
-
-
-package com.bnpparibas.atlentic.iacc.bopr.level2.test;
-
-import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level208Transaction;
 import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_SQLException;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.ResultSet;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.*;
 
-public class P06_IACC_01_Level208TransactionTest {
+public class P06_IACC_01_Level2DBTransactionTest {
 
-    private Connection mockConnection;
-    private P06_IACC_01_Level208Transaction transaction;
+    private P06_IACC_01_Level2DBTransaction instance;
 
     @Before
     public void setUp() throws Exception {
-        mockConnection = mock(Connection.class);
-        transaction = new P06_IACC_01_Level208Transaction(mockConnection);
+        Constructor<P06_IACC_01_Level2DBTransaction> constructor =
+                P06_IACC_01_Level2DBTransaction.class.getDeclaredConstructor(Connection.class);
+        constructor.setAccessible(true);
+        instance = constructor.newInstance((Connection) null); // mock or null for unit test
     }
 
     @Test
     public void testInnerFeedingRecordBean() throws Exception {
-        P06_IACC_01_BoprRecordBean bean = new P06_IACC_01_BoprRecordBean("BRANCH", new Timestamp(System.currentTimeMillis()));
+        // Mock ResultSet
         ResultSet mockResultSet = mock(ResultSet.class);
-
         when(mockResultSet.getDouble("ant_cashflow")).thenReturn(1000.25);
-        when(mockResultSet.getObject("ant_cashflow_brn_ccy")).thenReturn(800.50);
-        when(mockResultSet.getDouble("ant_cashflow_brn_ccy")).thenReturn(800.50);
+        when(mockResultSet.getObject("ant_cashflow_brn_ccy")).thenReturn(1); // not null
+        when(mockResultSet.getDouble("ant_cashflow_brn_ccy")).thenReturn(2000.75);
 
-        Method method = P06_IACC_01_Level208Transaction.class.getDeclaredMethod(
-                "innerFeedingRecordBean", P06_IACC_01_BoprRecordBean.class, ResultSet.class);
+        // Create Bean via Reflection
+        Constructor<P06_IACC_01_BoprRecordBean> beanConstructor =
+                P06_IACC_01_BoprRecordBean.class.getDeclaredConstructor();
+        beanConstructor.setAccessible(true);
+        P06_IACC_01_BoprRecordBean bean = beanConstructor.newInstance();
+
+        // Invoke protected method
+        Method method = P06_IACC_01_Level2DBTransaction.class
+                .getDeclaredMethod("innerFeedingRecordBean", P06_IACC_01_BoprRecordBean.class, ResultSet.class);
         method.setAccessible(true);
-        method.invoke(transaction, bean, mockResultSet);
+        method.invoke(instance, bean, mockResultSet);
 
-        assertEquals(1000.25, bean.getAmount(), 0.001);
-        assertEquals(800.50, bean.getAmountInBranchCurrency(), 0.001);
-    }
+        // Access values using reflection (if no getter available)
+        Method getAmountMethod = bean.getClass().getMethod("getAmount");
+        Method getAmountInBranchCurrencyMethod = bean.getClass().getMethod("getAmountInBranchCurrency");
 
-    @Test
-    public void testGetBranchCurrency() throws Exception {
-        PreparedStatement mockStatement = mock(PreparedStatement.class);
-        ResultSet mockResultSet = mock(ResultSet.class);
+        double amount = (Double) getAmountMethod.invoke(bean);
+        double branchCurrency = (Double) getAmountInBranchCurrencyMethod.invoke(bean);
 
-        when(mockConnection.prepareStatement(anyString())).thenReturn(mockStatement);
-        when(mockStatement.executeQuery()).thenReturn(mockResultSet);
-        when(mockResultSet.next()).thenReturn(true);
-        when(mockResultSet.getString("cde_branch_ccy")).thenReturn("EUR");
-
-        Method method = P06_IACC_01_Level208Transaction.class.getDeclaredMethod("getBranchCurrency");
-        method.setAccessible(true);
-        String currency = (String) method.invoke(transaction);
-
-        assertEquals("EUR", currency);
-    }
-
-    @Test
-    public void testGetSelectRecordsQueryKey() throws Exception {
-        Method method = P06_IACC_01_Level208Transaction.class.getDeclaredMethod("getSelectRecordsQueryKey");
-        method.setAccessible(true);
-        String key = (String) method.invoke(transaction);
-        assertEquals("select.records.from.atl", key);
-    }
-
-    @Test
-    public void testFeedRecordsBeansListPreparedStatement() throws Exception {
-        PreparedStatement mockPreparedStatement = mock(PreparedStatement.class);
-
-        Method method = P06_IACC_01_Level208Transaction.class.getDeclaredMethod(
-                "feedRecordsBeansListPreparedStatement", PreparedStatement.class);
-        method.setAccessible(true);
-
-        method.invoke(transaction, mockPreparedStatement);
-        verify(mockPreparedStatement, times(1)).setString(eq(1), anyString());
-        verify(mockPreparedStatement, times(1)).setTimestamp(eq(2), any());
-    }
-
-    @Test
-    public void testFeedingRecordBean() throws Exception {
-        ResultSet mockResultSet = mock(ResultSet.class);
-        P06_IACC_01_BoprRecordBean bean = new P06_IACC_01_BoprRecordBean("BR", new Timestamp(System.currentTimeMillis()));
-
-        when(mockResultSet.getString("pid_deal")).thenReturn("D001");
-        when(mockResultSet.getString("pid facility")).thenReturn("F001");
-        when(mockResultSet.getString("rid outstanding")).thenReturn("O001");
-        when(mockResultSet.getString("id event")).thenReturn("E001");
-        when(mockResultSet.getString("cde_event")).thenReturn("EVT");
-        when(mockResultSet.getString("rid_cashflow")).thenReturn("CF001");
-        when(mockResultSet.getString("cde_direction")).thenReturn("IN");
-        when(mockResultSet.getString("cde_country")).thenReturn("FR");
-        when(mockResultSet.getDate("dte_effective")).thenReturn(Date.valueOf("2025-06-01"));
-        when(mockResultSet.getString("cde_currency")).thenReturn("EUR");
-        when(mockResultSet.getString("cde_sender_service")).thenReturn("SVC");
-        when(mockResultSet.getString("cde_operation_reference")).thenReturn("OPR001");
-        when(mockResultSet.getObject("ant_cashflow")).thenReturn(1000.0);
-        when(mockResultSet.getDouble("ant_cashflow")).thenReturn(1000.0);
-
-        Method method = P06_IACC_01_Level208Transaction.class.getDeclaredMethod(
-                "feedingRecordBean", P06_IACC_01_BoprRecordBean.class, ResultSet.class);
-        method.setAccessible(true);
-        method.invoke(transaction, bean, mockResultSet);
-
-        assertEquals("D001", bean.getDealId());
-        assertEquals("OPR001", bean.getOperationReference());
+        assertEquals(1000.25, amount, 0.001);
+        assertEquals(2000.75, branchCurrency, 0.001);
     }
 }
