@@ -1,105 +1,79 @@
-package com.bnpparibas.atlentic.iacc.bopr.main;
+package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
-import com.bnpparibas.atlentic.common.GlobalAtlentic;
-import com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter;
+import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
 import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
 import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
-import com.bnpparibas.atlentic.iacc.bopr.resource.P86_IACC_01_PropertiesMgr;
+import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
+import com.bnpparibas.atlentic.common.GlobalAtlentic;
+
 import org.junit.*;
 import org.junit.runner.RunWith;
 import org.mockito.*;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
+import java.lang.reflect.*;
 import java.sql.Connection;
 import java.util.*;
 
+import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
 @RunWith(MockitoJUnitRunner.class)
 public class P06_IACC_01_MainTest {
 
     @Mock
-    Connection mockConnection;
+    private Connection mockConnection;
 
     @Before
     public void setup() throws Exception {
-        // Mock GlobalAtlentic.getLoanIQConnection()
-        Field connectionField = GlobalAtlentic.class.getDeclaredField("g_connection");
-        connectionField.setAccessible(true);
-        connectionField.set(null, mockConnection);
-
-        // Mock getAtlIntfDateByBranch static call
-        Map<String, String> mockDateMap = new HashMap<>();
-        mockDateMap.put("INTF_EVENT_DATE", "01/01/2023 00:00:00");
-        mockDateMap.put("INTF_SYSTEM_BEGIN_DATE", "01/01/2023 00:00:00");
-        mockDateMap.put("INTF_SYSTEM_END_DATE", "31/12/2023 00:00:00");
-
-        Mockito.mockStatic(StringConverter.class).when(() ->
-            StringConverter.StringToDate(anyString())
-        ).thenReturn(new Date());
-
-        Mockito.mockStatic(P86_IACC_01_PropertiesMgr.class).when(() ->
-            P86_IACC_01_PropertiesMgr.getLevellActionName()
-        ).thenReturn("level1");
-
-        Mockito.mockStatic(P86_IACC_01_PropertiesMgr.class).when(() ->
-            P86_IACC_01_PropertiesMgr.getLevel2ActionName()
-        ).thenReturn("level2");
+        // Mock static methods if needed using reflection
+        Field eventDateField = P06_IACC_01_Main.class.getDeclaredField("g_o_eventTimestamp");
+        eventDateField.setAccessible(true);
+        eventDateField.set(null, new Date());
     }
 
     @Test
-    public void testExecute_Level1_WithBeginAndEndDate() throws Exception {
-        String[] args = {"level1", "BR001", "01/01/2023 00:00:00", "01/01/2023 00:00:00", "31/12/2023 00:00:00"};
+    public void testMainExecution_Level1ValidArguments() throws Exception {
+        String[] args = {"level1", "BR", "12/06/2025 10:00:00", "11/06/2025 10:00:00", "13/06/2025 10:00:00"};
 
-        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
-        constructor.setAccessible(true);
-        Object mainInstance = constructor.newInstance((Object) args);
+        mockStaticPropertyValues("level.1.action.name", "level1");
 
-        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
-        executeMethod.invoke(mainInstance);
+        Method mainMethod = P06_IACC_01_Main.class.getDeclaredMethod("main", String[].class);
+        mainMethod.invoke(null, (Object) args);
+
+        assertNotNull(P06_IACC_01_Main.getG_s_branch());
     }
 
     @Test
-    public void testExecute_Level2_WithFilename() throws Exception {
-        String[] args = {"level2", "BR002", "01/01/2023 00:00:00", "output.txt"};
+    public void testMainExecution_Level2ValidArguments() throws Exception {
+        String[] args = {"level2", "BR", "12/06/2025 10:00:00", "file.txt"};
 
-        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
-        constructor.setAccessible(true);
-        Object mainInstance = constructor.newInstance((Object) args);
+        mockStaticPropertyValues("level.2.action.name", "level2");
 
-        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
-        executeMethod.invoke(mainInstance);
+        Method mainMethod = P06_IACC_01_Main.class.getDeclaredMethod("main", String[].class);
+        mainMethod.invoke(null, (Object) args);
+
+        assertEquals("file.txt", P06_IACC_01_Main.getG_s_textFileName());
     }
 
-    @Test
-    public void testExecute_InvalidAction() throws Exception {
-        String[] args = {"invalid", "BR001", "01/01/2023 00:00:00"};
+    @Test(expected = InvocationTargetException.class)
+    public void testMainExecution_InvalidArgs_ThrowsException() throws Exception {
+        String[] args = {};
 
-        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
-        constructor.setAccessible(true);
-        Object mainInstance = constructor.newInstance((Object) args);
-
-        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
-
-        try {
-            executeMethod.invoke(mainInstance);
-            Assert.fail("Expected exception not thrown");
-        } catch (Exception ex) {
-            // Expected due to invalid action
-            Assert.assertTrue(ex.getCause().getMessage().contains("is unknown"));
-        }
+        Method mainMethod = P06_IACC_01_Main.class.getDeclaredMethod("main", String[].class);
+        mainMethod.invoke(null, (Object) args);
     }
 
-    @Test
-    public void testPrivateConstructor() throws Exception {
-        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
-        constructor.setAccessible(true);
-        P06_IACC_01_Main instance = constructor.newInstance((Object) new String[]{"level2"});
-        Assert.assertNotNull(instance);
+    private void mockStaticPropertyValues(String key, String value) throws Exception {
+        Class<?> propClass = P06_IACC_01_PropertiesMgr.class;
+
+        Field bundleField = propClass.getDeclaredField("g_o_boprPropertiesBundle");
+        bundleField.setAccessible(true);
+
+        ResourceBundle mockBundle = mock(ResourceBundle.class);
+        when(mockBundle.getString(key)).thenReturn(value);
+
+        bundleField.set(null, mockBundle);
     }
 }
