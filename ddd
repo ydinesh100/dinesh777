@@ -7,6 +7,35 @@ public void setUp() throws Exception {
     transaction = constructor.newInstance(mockConnection);
 }
 
+@Test
+public void testInnerFeedingRecordBean() throws Exception {
+    // Arrange
+    P06_IACC_01_BoprRecordBean bean = new P06_IACC_01_BoprRecordBean();
+
+    ResultSet mockResultSet = mock(ResultSet.class);
+    when(mockResultSet.getDouble("ant_cashflow")).thenReturn(1000.25);
+    when(mockResultSet.getObject("ant_cashflow_brn_ccy")).thenReturn(2500.75);
+    when(mockResultSet.getDouble("ant_cashflow_brn_ccy")).thenReturn(2500.75);
+
+    Constructor<P06_IACC_01_Level208Transaction> constructor =
+            P06_IACC_01_Level208Transaction.class.getDeclaredConstructor(Connection.class);
+    constructor.setAccessible(true);
+    P06_IACC_01_Level208Transaction transaction = constructor.newInstance(mock(Connection.class));
+
+    // Act
+    Method method = P06_IACC_01_Level208Transaction.class
+            .getDeclaredMethod("innerFeedingRecordBean", P06_IACC_01_BoprRecordBean.class, ResultSet.class);
+    method.setAccessible(true);
+    method.invoke(transaction, bean, mockResultSet);
+
+    // Assert
+    assertEquals(1000.25, bean.getAmount(), 0.001);  // precision delta for double comparison
+    assertEquals(2500.75, bean.getAmountInBranchCurrency(), 0.001);
+}
+
+
+
+
 
 
 
