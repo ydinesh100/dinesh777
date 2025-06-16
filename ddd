@@ -1,3 +1,19 @@
+@Before
+public void setUp() throws Exception {
+    mockConnection = mock(Connection.class);
+    Constructor<P06_IACC_01_Level208Transaction> constructor =
+            P06_IACC_01_Level208Transaction.class.getDeclaredConstructor(Connection.class);
+    constructor.setAccessible(true);
+    transaction = constructor.newInstance(mockConnection);
+}
+
+
+
+
+
+
+
+
 package com.bnpparibas.atlentic.iacc.bopr.level2.test;
 
 import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level208Transaction;
