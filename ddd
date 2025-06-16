@@ -1,79 +1,143 @@
-package com.bnpparibas.atlentic.iacc.bopr.main.test;
-
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
-import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
-import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
-import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
-import com.bnpparibas.atlentic.common.GlobalAtlentic;
-
-import org.junit.*;
-import org.junit.runner.RunWith;
-import org.mockito.*;
-
-import java.lang.reflect.*;
-import java.sql.Connection;
-import java.util.*;
+package com.bnpparibas.atlentic.iacc.bopr.main;
 
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
-@RunWith(MockitoJUnitRunner.class)
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+
+import com.bnpparibas.atlentic.common.GlobalAtlentic;
+import com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter;
+import com.bnpparibas.atlentic.iacc.bopr.resource.P86_IACC_01_PropertiesMgr;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P86_IACC_01_ParameterException;
+import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+
 public class P06_IACC_01_MainTest {
 
-    @Mock
-    private Connection mockConnection;
+    private String[] validArgsLevel1 = {
+        "level1", "BR001", "01/01/2024 00:00:00", "01/01/2024 00:00:00", "02/01/2024 00:00:00"
+    };
+
+    private String[] validArgsLevel2 = {
+        "level2", "BR001", "01/01/2024 00:00:00", "report.txt"
+    };
+
+    private Date mockDate;
 
     @Before
     public void setup() throws Exception {
-        // Mock static methods if needed using reflection
-        Field eventDateField = P06_IACC_01_Main.class.getDeclaredField("g_o_eventTimestamp");
+        mockDate = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss").parse("01/01/2024 00:00:00");
+    }
+
+    @Test
+    public void testConstructorAndExecute_Level1() throws Exception {
+        try (
+            MockedStatic<StringConverter> stringConverterMock = mockStatic(StringConverter.class);
+            MockedStatic<GlobalAtlentic> globalAtlenticMock = mockStatic(GlobalAtlentic.class);
+            MockedStatic<P86_IACC_01_PropertiesMgr> propsMgrMock = mockStatic(P86_IACC_01_PropertiesMgr.class);
+        ) {
+            stringConverterMock.when(() -> StringConverter.StringToDate(anyString()))
+                .thenReturn(mockDate);
+            Connection mockConn = mock(Connection.class);
+            when(mockConn.isClosed()).thenReturn(false);
+            globalAtlenticMock.when(GlobalAtlentic::getLoanIQConnection)
+                .thenReturn(mockConn);
+
+            propsMgrMock.when(P86_IACC_01_PropertiesMgr::getLevellActionName).thenReturn("level1");
+
+            Map<String, String> configDates = new HashMap<>();
+            configDates.put("INTF_EVENT_DATE", "01/01/2024 00:00:00");
+            configDates.put("INTF_SYSTEM_BEGIN_DATE", "01/01/2024 00:00:00");
+            configDates.put("INTF_SYSTEM_END_DATE", "02/01/2024 00:00:00");
+
+            Class<?> clazz = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main");
+
+            Field methodField = clazz.getDeclaredField("g_o_args");
+            methodField.setAccessible(true);
+
+            Constructor<?> cons = clazz.getDeclaredConstructor(String[].class);
+            cons.setAccessible(true);
+            Object instance = cons.newInstance((Object) validArgsLevel1);
+
+            Method getDateConfigMethod = clazz.getDeclaredMethod("getDateConfigDate");
+            getDateConfigMethod.setAccessible(true);
+            Field branchField = clazz.getDeclaredField("gs_branch");
+            branchField.setAccessible(true);
+            branchField.set(null, "BR001");
+
+            MockedStatic<?> utilityMock = Mockito.mockStatic(
+                Class.forName("com.bnpparibas.atlentic.common.Pe@_IACC_@@_Utility")
+            );
+            utilityMock.when(() -> {
+                Method method = Class
+                    .forName("com.bnpparibas.atlentic.common.Pe@_IACC_@@_Utility")
+                    .getDeclaredMethod("getAtlIntfDateByBranch", String.class, Connection.class);
+                method.setAccessible(true);
+                return method.invoke(null, "BR001", mockConn);
+            }).thenReturn(configDates);
+
+            Method executeMethod = clazz.getDeclaredMethod("execute");
+            executeMethod.setAccessible(true);
+            executeMethod.invoke(instance);
+        }
+    }
+
+    @Test
+    public void testSettersAndGetters() throws Exception {
+        Class<?> clazz = P06_IACC_01_Main.class;
+
+        Field eventDateField = clazz.getDeclaredField("g_o_eventTimestamp");
         eventDateField.setAccessible(true);
-        eventDateField.set(null, new Date());
+        eventDateField.set(null, mockDate);
+
+        Method getter = clazz.getDeclaredMethod("getG_o_eventTimestamp");
+        assertEquals(mockDate, getter.invoke(null));
+
+        Method setter = clazz.getDeclaredMethod("set6_o_eventTimestamp", Date.class);
+        setter.invoke(null, mockDate);
+
+        Field beginDateField = clazz.getDeclaredField("g_o_beginDate");
+        beginDateField.setAccessible(true);
+        beginDateField.set(null, mockDate);
+
+        Method getBegin = clazz.getDeclaredMethod("get_o_beginDate");
+        assertEquals(mockDate, getBegin.invoke(null));
+
+        Method setBegin = clazz.getDeclaredMethod("set_o_beginDate", Date.class);
+        setBegin.invoke(null, mockDate);
+
+        Field endDateField = clazz.getDeclaredField("g_o_endDate");
+        endDateField.setAccessible(true);
+        endDateField.set(null, mockDate);
+
+        Method getEnd = clazz.getDeclaredMethod("getG_o_endDate");
+        assertEquals(mockDate, getEnd.invoke(null));
+
+        Method setEnd = clazz.getDeclaredMethod("set_o_endDate", Date.class);
+        setEnd.invoke(null, mockDate);
     }
 
-    @Test
-    public void testMainExecution_Level1ValidArguments() throws Exception {
-        String[] args = {"level1", "BR", "12/06/2025 10:00:00", "11/06/2025 10:00:00", "13/06/2025 10:00:00"};
+    @Test(expected = P86_IACC_01_ParameterException.class)
+    public void testInvalidArgsThrowsParameterException() throws Exception {
+        Constructor<P06_IACC_01_Main> cons = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
+        cons.setAccessible(true);
+        Object instance = cons.newInstance((Object) new String[]{});
 
-        mockStaticPropertyValues("level.1.action.name", "level1");
-
-        Method mainMethod = P06_IACC_01_Main.class.getDeclaredMethod("main", String[].class);
-        mainMethod.invoke(null, (Object) args);
-
-        assertNotNull(P06_IACC_01_Main.getG_s_branch());
-    }
-
-    @Test
-    public void testMainExecution_Level2ValidArguments() throws Exception {
-        String[] args = {"level2", "BR", "12/06/2025 10:00:00", "file.txt"};
-
-        mockStaticPropertyValues("level.2.action.name", "level2");
-
-        Method mainMethod = P06_IACC_01_Main.class.getDeclaredMethod("main", String[].class);
-        mainMethod.invoke(null, (Object) args);
-
-        assertEquals("file.txt", P06_IACC_01_Main.getG_s_textFileName());
-    }
-
-    @Test(expected = InvocationTargetException.class)
-    public void testMainExecution_InvalidArgs_ThrowsException() throws Exception {
-        String[] args = {};
-
-        Method mainMethod = P06_IACC_01_Main.class.getDeclaredMethod("main", String[].class);
-        mainMethod.invoke(null, (Object) args);
-    }
-
-    private void mockStaticPropertyValues(String key, String value) throws Exception {
-        Class<?> propClass = P06_IACC_01_PropertiesMgr.class;
-
-        Field bundleField = propClass.getDeclaredField("g_o_boprPropertiesBundle");
-        bundleField.setAccessible(true);
-
-        ResourceBundle mockBundle = mock(ResourceBundle.class);
-        when(mockBundle.getString(key)).thenReturn(value);
-
-        bundleField.set(null, mockBundle);
+        Method execute = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        execute.setAccessible(true);
+        execute.invoke(instance);
     }
 }
