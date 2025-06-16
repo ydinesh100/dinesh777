@@ -1,58 +1,30 @@
-package com.bnpparibas.atlentic.iacc.bopr.level2;
+@Test
+public void testFeedRecordsBeansListPreparedStatement() throws Exception {
+    // Setup test data
+    String branch = "BRANCH";
+    Timestamp beginDate = new Timestamp(System.currentTimeMillis());
+    Timestamp endDate = new Timestamp(System.currentTimeMillis());
 
-import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.Mockito;
+    // Set the private fields via getters/setters or reflection
+    P06_IACC_01_Main main = new P06_IACC_01_Main();
+    main.setG_s_branch(branch); // assuming you have a public setter
+    main.setG_o_begindate(beginDate);
+    main.setG_o_endDate(endDate);
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
-import java.sql.Connection;
-import java.sql.ResultSet;
+    // Mock PreparedStatement
+    PreparedStatement mockPreparedStatement = mock(PreparedStatement.class);
 
-import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.*;
+    // Use reflection to call the private method
+    Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod(
+        "feedRecordsBeansListPreparedStatement", PreparedStatement.class);
+    method.setAccessible(true);
+    
+    // Instance of the class that contains the method
+    P06_IACC_01_Level1DBTransaction dbTransaction = new P06_IACC_01_Level1DBTransaction(main);
+    
+    // Invoke the method with the mock PreparedStatement
+    method.invoke(dbTransaction, mockPreparedStatement);
 
-public class P06_IACC_01_Level2DBTransactionTest {
-
-    private P06_IACC_01_Level2DBTransaction instance;
-
-    @Before
-    public void setUp() throws Exception {
-        Constructor<P06_IACC_01_Level2DBTransaction> constructor =
-                P06_IACC_01_Level2DBTransaction.class.getDeclaredConstructor(Connection.class);
-        constructor.setAccessible(true);
-        instance = constructor.newInstance((Connection) null); // mock or null for unit test
-    }
-
-    @Test
-    public void testInnerFeedingRecordBean() throws Exception {
-        // Mock ResultSet
-        ResultSet mockResultSet = mock(ResultSet.class);
-        when(mockResultSet.getDouble("ant_cashflow")).thenReturn(1000.25);
-        when(mockResultSet.getObject("ant_cashflow_brn_ccy")).thenReturn(1); // not null
-        when(mockResultSet.getDouble("ant_cashflow_brn_ccy")).thenReturn(2000.75);
-
-        // Create Bean via Reflection
-        Constructor<P06_IACC_01_BoprRecordBean> beanConstructor =
-                P06_IACC_01_BoprRecordBean.class.getDeclaredConstructor();
-        beanConstructor.setAccessible(true);
-        P06_IACC_01_BoprRecordBean bean = beanConstructor.newInstance();
-
-        // Invoke protected method
-        Method method = P06_IACC_01_Level2DBTransaction.class
-                .getDeclaredMethod("innerFeedingRecordBean", P06_IACC_01_BoprRecordBean.class, ResultSet.class);
-        method.setAccessible(true);
-        method.invoke(instance, bean, mockResultSet);
-
-        // Access values using reflection (if no getter available)
-        Method getAmountMethod = bean.getClass().getMethod("getAmount");
-        Method getAmountInBranchCurrencyMethod = bean.getClass().getMethod("getAmountInBranchCurrency");
-
-        double amount = (Double) getAmountMethod.invoke(bean);
-        double branchCurrency = (Double) getAmountInBranchCurrencyMethod.invoke(bean);
-
-        assertEquals(1000.25, amount, 0.001);
-        assertEquals(2000.75, branchCurrency, 0.001);
-    }
+    // Verify the correct call on PreparedStatement
+    verify(mockPreparedStatement).setTimestamp(3, Outlits.getSqlTimestamp(main.getG_o_endDate()));
 }
