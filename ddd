@@ -1,30 +1,105 @@
-@Test
-public void testFeedRecordsBeansListPreparedStatement() throws Exception {
-    // Setup test data
-    String branch = "BRANCH";
-    Timestamp beginDate = new Timestamp(System.currentTimeMillis());
-    Timestamp endDate = new Timestamp(System.currentTimeMillis());
+package com.bnpparibas.atlentic.iacc.bopr.main;
 
-    // Set the private fields via getters/setters or reflection
-    P06_IACC_01_Main main = new P06_IACC_01_Main();
-    main.setG_s_branch(branch); // assuming you have a public setter
-    main.setG_o_begindate(beginDate);
-    main.setG_o_endDate(endDate);
+import com.bnpparibas.atlentic.common.GlobalAtlentic;
+import com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter;
+import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
+import com.bnpparibas.atlentic.iacc.bopr.resource.P86_IACC_01_PropertiesMgr;
+import org.junit.*;
+import org.junit.runner.RunWith;
+import org.mockito.*;
 
-    // Mock PreparedStatement
-    PreparedStatement mockPreparedStatement = mock(PreparedStatement.class);
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.sql.Connection;
+import java.util.*;
 
-    // Use reflection to call the private method
-    Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod(
-        "feedRecordsBeansListPreparedStatement", PreparedStatement.class);
-    method.setAccessible(true);
-    
-    // Instance of the class that contains the method
-    P06_IACC_01_Level1DBTransaction dbTransaction = new P06_IACC_01_Level1DBTransaction(main);
-    
-    // Invoke the method with the mock PreparedStatement
-    method.invoke(dbTransaction, mockPreparedStatement);
+import static org.mockito.Mockito.*;
 
-    // Verify the correct call on PreparedStatement
-    verify(mockPreparedStatement).setTimestamp(3, Outlits.getSqlTimestamp(main.getG_o_endDate()));
+@RunWith(MockitoJUnitRunner.class)
+public class P06_IACC_01_MainTest {
+
+    @Mock
+    Connection mockConnection;
+
+    @Before
+    public void setup() throws Exception {
+        // Mock GlobalAtlentic.getLoanIQConnection()
+        Field connectionField = GlobalAtlentic.class.getDeclaredField("g_connection");
+        connectionField.setAccessible(true);
+        connectionField.set(null, mockConnection);
+
+        // Mock getAtlIntfDateByBranch static call
+        Map<String, String> mockDateMap = new HashMap<>();
+        mockDateMap.put("INTF_EVENT_DATE", "01/01/2023 00:00:00");
+        mockDateMap.put("INTF_SYSTEM_BEGIN_DATE", "01/01/2023 00:00:00");
+        mockDateMap.put("INTF_SYSTEM_END_DATE", "31/12/2023 00:00:00");
+
+        Mockito.mockStatic(StringConverter.class).when(() ->
+            StringConverter.StringToDate(anyString())
+        ).thenReturn(new Date());
+
+        Mockito.mockStatic(P86_IACC_01_PropertiesMgr.class).when(() ->
+            P86_IACC_01_PropertiesMgr.getLevellActionName()
+        ).thenReturn("level1");
+
+        Mockito.mockStatic(P86_IACC_01_PropertiesMgr.class).when(() ->
+            P86_IACC_01_PropertiesMgr.getLevel2ActionName()
+        ).thenReturn("level2");
+    }
+
+    @Test
+    public void testExecute_Level1_WithBeginAndEndDate() throws Exception {
+        String[] args = {"level1", "BR001", "01/01/2023 00:00:00", "01/01/2023 00:00:00", "31/12/2023 00:00:00"};
+
+        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
+        constructor.setAccessible(true);
+        Object mainInstance = constructor.newInstance((Object) args);
+
+        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
+        executeMethod.invoke(mainInstance);
+    }
+
+    @Test
+    public void testExecute_Level2_WithFilename() throws Exception {
+        String[] args = {"level2", "BR002", "01/01/2023 00:00:00", "output.txt"};
+
+        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
+        constructor.setAccessible(true);
+        Object mainInstance = constructor.newInstance((Object) args);
+
+        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
+        executeMethod.invoke(mainInstance);
+    }
+
+    @Test
+    public void testExecute_InvalidAction() throws Exception {
+        String[] args = {"invalid", "BR001", "01/01/2023 00:00:00"};
+
+        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
+        constructor.setAccessible(true);
+        Object mainInstance = constructor.newInstance((Object) args);
+
+        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
+
+        try {
+            executeMethod.invoke(mainInstance);
+            Assert.fail("Expected exception not thrown");
+        } catch (Exception ex) {
+            // Expected due to invalid action
+            Assert.assertTrue(ex.getCause().getMessage().contains("is unknown"));
+        }
+    }
+
+    @Test
+    public void testPrivateConstructor() throws Exception {
+        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
+        constructor.setAccessible(true);
+        P06_IACC_01_Main instance = constructor.newInstance((Object) new String[]{"level2"});
+        Assert.assertNotNull(instance);
+    }
 }
