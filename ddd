@@ -1,135 +1,126 @@
-package com.bnpparibas.atlentic.iacc.bopr.main.test;
+package com.bnpparibas.atlentic.iacc.bopr.main;
 
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_PropertiesMgr;
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_ParameterException;
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_ExitApplicationException;
-import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_Level1;
-import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_Level2;
-import com.bnpparibas.atlentic.common.StringConverter;
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
+
+import com.bnpparibas.atlentic.common.GlobalAtlentic;
+import com.bnpparibas.atlentic.common.P06_IACC_01_Utility;
+import com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter;
+import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
+import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
 
 import org.junit.*;
 import org.mockito.MockedStatic;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
+import java.lang.reflect.*;
+import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-
-import static org.mockito.Mockito.*;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
 public class P06_IACC_01_MainTest {
 
-    private MockedStatic<P06_IACC_01_PropertiesMgr> mockProps;
-    private MockedStatic<StringConverter> mockConverter;
-    private MockedStatic<P06_IACC_01_Level1> mockLevel1;
-    private MockedStatic<P06_IACC_01_Level2> mockLevel2;
-
-    private P06_IACC_01_Main mainInstance;
+    private MockedStatic<P06_IACC_01_PropertiesMgr> propsMock;
+    private MockedStatic<StringConverter> converterMock;
+    private MockedStatic<GlobalAtlentic> globalMock;
+    private MockedStatic<P06_IACC_01_Utility> utilMock;
 
     @Before
-    public void setUp() throws Exception {
-        mockProps = mockStatic(P06_IACC_01_PropertiesMgr.class);
-        mockConverter = mockStatic(StringConverter.class);
-        mockLevel1 = mockStatic(P06_IACC_01_Level1.class);
-        mockLevel2 = mockStatic(P06_IACC_01_Level2.class);
+    public void setup() throws SQLException {
+        propsMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
+        converterMock = mockStatic(StringConverter.class);
+        globalMock = mockStatic(GlobalAtlentic.class);
+        utilMock = mockStatic(P06_IACC_01_Utility.class);
 
-        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor();
-        constructor.setAccessible(true);
-        mainInstance = constructor.newInstance();
+        // Default property actions
+        propsMock.when(P06_IACC_01_PropertiesMgr::getLevellActionName).thenReturn("LVL1");
+        propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("LVL2");
+
+        // Default converter returns non-null
+        converterMock.when(() -> StringConverter.StringToDate(anyString()))
+                     .thenAnswer(inv -> new Date());
+
+        // Mock DB connection & config map
+        Connection fakeConnection = mock(Connection.class);
+        globalMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(fakeConnection);
+        Map<String, String> cfg = new HashMap<>();
+        cfg.put("INTF_EVENT_DATE", "01/01/2023");
+        cfg.put("INTF_SYSTEM_BEGIN_DATE", "01/01/2023");
+        cfg.put("INTF_SYSTEM_END_DATE", "02/01/2023");
+        utilMock.when(() -> P06_IACC_01_Utility.getAtlIntfDateByBranch(eq("BEFOR"), any()))
+                .thenReturn(cfg);
     }
 
     @After
     public void tearDown() {
-        mockProps.close();
-        mockConverter.close();
-        mockLevel1.close();
-        mockLevel2.close();
+        propsMock.close();
+        converterMock.close();
+        globalMock.close();
+        utilMock.close();
     }
 
-    private void setArgs(String[] args) throws Exception {
-        Field argsField = P06_IACC_01_Main.class.getDeclaredField("g_o_args");
-        argsField.setAccessible(true);
-        argsField.set(mainInstance, args);
-    }
-
-    private void invokeExecute() throws Exception {
-        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
-        executeMethod.invoke(mainInstance);
+    private void invokeExecute(String... args) throws Exception {
+        P06_IACC_01_Main inst = new P06_IACC_01_Main(args);
+        Method m = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        m.setAccessible(true);
+        m.invoke(inst);
     }
 
     @Test
-    public void testExecute_Level1_WithDates() throws Exception {
-        String[] args = {"level1Action", "BRANCH1", "01/01/2025", "01/01/2024", "01/02/2024"};
-        setArgs(args);
-
-        mockProps.when(P06_IACC_01_PropertiesMgr::getLevelAction).thenReturn("level1Action");
-        mockConverter.when(() -> StringConverter.StringToDate(anyString())).thenReturn(new Date());
-        mockLevel1.when(() -> new P06_IACC_01_Level1().execute()).thenReturn(null);
-
-        invokeExecute();
+    public void testLevel1_WithExplicitDates() throws Exception {
+        String[] args = {"LVL1", "BR1", "03/03/2025", "01/01/2025", "02/01/2025"};
+        invokeExecute(args);
+        assertEquals("BR1", getStaticString("g_s_branch"));
     }
 
     @Test
-    public void testExecute_Level1_DefaultDates() throws Exception {
-        String[] args = {"level1Action", "BRANCH1", "01/01/2025"};
-        setArgs(args);
-
-        mockProps.when(P06_IACC_01_PropertiesMgr::getLevelAction).thenReturn("level1Action");
-
-        Map<String, String> mockDateMap = new HashMap<>();
-        mockDateMap.put("INTF_EVENT_DATE", "01/01/2025");
-        mockDateMap.put("INTF_SYSTEM_BEGIN_DATE", "01/01/2024");
-        mockDateMap.put("INTF_SYSTEM_END_DATE", "01/02/2024");
-
-        Method setDateConfigDate = P06_IACC_01_Main.class.getDeclaredMethod("setDateConfigDate", Map.class);
-        setDateConfigDate.setAccessible(true);
-        setDateConfigDate.invoke(null, mockDateMap);
-
-        mockConverter.when(() -> StringConverter.StringToDate(anyString())).thenReturn(new Date());
-        mockLevel1.when(() -> new P06_IACC_01_Level1().execute()).thenReturn(null);
-
-        invokeExecute();
+    public void testLevel1_UsingConfigDates() throws Exception {
+        String[] args = {"LVL1"};
+        invokeExecute(args);
+        // Branch should default to "BEFOR"
+        assertEquals("BEFOR", getStaticString("g_s_branch"));
     }
 
     @Test
-    public void testExecute_Level2_WithFile() throws Exception {
-        String[] args = {"level2Action", "BRANCH1", "01/01/2025", "file.txt"};
-        setArgs(args);
-
-        mockProps.when(P06_IACC_01_PropertiesMgr::getDirection).thenReturn("level2Action");
-        mockConverter.when(() -> StringConverter.StringToDate(anyString())).thenReturn(new Date());
-        mockLevel2.when(() -> new P06_IACC_01_Level2().execute()).thenReturn(null);
-
-        invokeExecute();
+    public void testLevel2_WithoutTextFile() throws Exception {
+        String[] args = {"LVL2", "BRX", "05/05/2025"};
+        invokeExecute(args);
+        assertEquals("BRX", getStaticString("g_s_branch"));
+        assertNull(P06_IACC_01_Main.getTextFileName());
     }
 
     @Test
-    public void testExecute_Level2_WithoutFile() throws Exception {
-        String[] args = {"level2Action", "BRANCH1", "01/01/2025"};
-        setArgs(args);
+    public void testLevel2_WithTextFile() throws Exception {
+        String[] args = {"LVL2", "BRX", "05/05/2025", "txt.dat"};
+        invokeExecute(args);
+        assertEquals("txt.dat", P06_IACC_01_Main.getTextFileName());
+    }
 
-        mockProps.when(P06_IACC_01_PropertiesMgr::getDirection).thenReturn("level2Action");
-        mockConverter.when(() -> StringConverter.StringToDate(anyString())).thenReturn(new Date());
-        mockLevel2.when(() -> new P06_IACC_01_Level2().execute()).thenReturn(null);
-
+    @Test(expected = InvocationTargetException.class)
+    public void testMissingArgs_ThrowsException() throws Exception {
         invokeExecute();
     }
 
-    @Test(expected = Exception.class)
-    public void testExecute_InvalidLevel() throws Exception {
-        String[] args = {"invalidAction", "BRANCH1", "01/01/2025"};
-        setArgs(args);
+    @Test(expected = InvocationTargetException.class)
+    public void testUnknownAction_ThrowsParameterException() throws Exception {
+        String[] args = {"UNKNOWN", "BR1", "01/01/2025"};
+        invokeExecute(args);
+    }
 
-        mockProps.when(P06_IACC_01_PropertiesMgr::getLevelAction).thenReturn("level1Action");
-        mockProps.when(P06_IACC_01_PropertiesMgr::getDirection).thenReturn("level2Action");
+    @Test(expected = InvocationTargetException.class)
+    public void testInvalidDateFormat_Throws() throws Exception {
+        converterMock.when(() -> StringConverter.StringToDate("BAD")).thenReturn(null);
+        String[] args = {"LVL1", "B", "BAD"};
+        invokeExecute(args);
+    }
 
-        mockConverter.when(() -> StringConverter.StringToDate(anyString())).thenReturn(new Date());
-
-        invokeExecute();
+    // Helper to read private static fields via reflection
+    private String getStaticString(String fieldName) throws Exception {
+        Field f = P06_IACC_01_Main.class.getDeclaredField(fieldName);
+        f.setAccessible(true);
+        return (String) f.get(null);
     }
 }
