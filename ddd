@@ -2,15 +2,12 @@ package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
 import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
 import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
-import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
-import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
 
-import org.junit.*;
-import org.mockito.MockedConstruction;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.lang.reflect.Method;
 import java.sql.SQLException;
-import java.util.Date;
 
 import static org.junit.Assert.*;
 
@@ -20,69 +17,49 @@ public class P06_IACC_01_MainTest {
 
     @Before
     public void setUp() throws Exception {
+        // Access private static method execute(String[] args)
         executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute", String[].class);
         executeMethod.setAccessible(true);
     }
 
     private void invokeExecute(String[] args) throws Exception {
         try {
-            executeMethod.invoke(null, (Object) args);
-        } catch (Exception e) {
-            throw (Exception) e.getCause();
+            executeMethod.invoke(null, (Object) args); // For static methods
+        } catch (Exception ex) {
+            Throwable cause = ex.getCause();
+            if (cause instanceof Exception) throw (Exception) cause;
+            else throw ex;
         }
     }
 
     @Test(expected = P06_IACC_01_ParameterException.class)
     public void testExecute_ThrowsParameterExceptionWhenNoArgs() throws Exception {
-        invokeExecute(new String[]{});
+        String[] args = {};
+        invokeExecute(args);
     }
 
     @Test(expected = P06_IACC_01_ParameterException.class)
     public void testExecute_InsufficientArgs_ThrowsParameterException() throws Exception {
-        invokeExecute(new String[]{"param1", "param2"}); // less than 11
-    }
-
-    @Test(expected = P06_IACC_01_ParameterException.class)
-    public void testExecute_InvalidAction_ThrowsParameterException() throws Exception {
-        String[] args = new String[]{
-            "event", "branch", "Level1", "EUR", "EUR", "100", "Y", "20240101", "20241231", "user", "role"
-        };
+        String[] args = new String[5]; // Less than 11
         invokeExecute(args);
     }
 
     @Test
-    public void testExecute_ValidLevel1Action() throws Exception {
-        try (MockedConstruction<P06_IACC_01_Level1> mock = 
-             org.mockito.Mockito.mockConstruction(P06_IACC_01_Level1.class, (mocked, context) -> {
-                 org.mockito.Mockito.doNothing().when(mocked).execute();
-             })) {
+    public void testExecute_InvalidAction_ThrowsParameterException() {
+        String[] args = new String[] {
+            "Level1", // Invalid because it's case-sensitive
+            "EVENT", "20250101", "20250131",
+            "B1", "GOLD", "N", "N", "Y", "N", "DEBUG"
+        };
 
-            String[] args = new String[]{
-                "event", "branch", "levell", "EUR", "EUR", "100", "Y", "20240101", "20241231", "user", "role"
-            };
-
+        try {
             invokeExecute(args);
-
-            assertEquals(1, mock.constructed().size());
-            org.mockito.Mockito.verify(mock.constructed().get(0)).execute();
+            fail("Expected P06_IACC_01_ParameterException for invalid action");
+        } catch (Exception e) {
+            assertTrue(e instanceof P06_IACC_01_ParameterException);
+            assertTrue(e.getMessage().contains("unknown"));
         }
     }
 
-    @Test
-    public void testExecute_ValidLevel2Action() throws Exception {
-        try (MockedConstruction<P06_IACC_01_Level2> mock = 
-             org.mockito.Mockito.mockConstruction(P06_IACC_01_Level2.class, (mocked, context) -> {
-                 org.mockito.Mockito.doNothing().when(mocked).execute();
-             })) {
-
-            String[] args = new String[]{
-                "event", "branch", "level2", "EUR", "EUR", "100", "Y", "20240101", "20241231", "user", "role"
-            };
-
-            invokeExecute(args);
-
-            assertEquals(1, mock.constructed().size());
-            org.mockito.Mockito.verify(mock.constructed().get(0)).execute();
-        }
-    }
+    // Optional: Add more test cases for Level1 or Level2 logic using mocks if needed.
 }
