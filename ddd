@@ -1,17 +1,6 @@
-
-@Test
-public void testExecute_Level1_With5Params() throws Exception {
-    String[] args = {"LEVEL1", "BRANCH", "01/01/2024", "01/01/2023", "31/12/2023"};
-
-    // ✅ Correct method name here
-    mockedProps.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("LEVEL1");
-    mockedStringConverter.when(() -> StringConverter.StringToDate(anyString())).thenReturn(new Date());
-
-    P06_IACC_01_Level1 mockLevel1 = mock(P06_IACC_01_Level1.class);
-    doNothing().when(mockLevel1).execute();
-
-    MockedStatic<P06_IACC_01_Level1> level1Static = mockStatic(P06_IACC_01_Level1.class);
-    level1Static.when(P06_IACC_01_Level1::new).thenReturn(mockLevel1);
+@Test(expected = P06_IACC_01_ParameterException.class)
+public void testExecute_InvalidParamLength() throws Exception {
+    String[] args = {};
 
     Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
     constructor.setAccessible(true);
@@ -19,7 +8,18 @@ public void testExecute_Level1_With5Params() throws Exception {
 
     Method method = P06_IACC_01_Main.class.getDeclaredMethod("execute");
     method.setAccessible(true);
-    method.invoke(mainObj);
 
-    level1Static.close();
+    try {
+        method.invoke(mainObj);
+        fail("Expected ParameterException was not thrown");
+    } catch (Exception ex) {
+        // Unwrap the cause from reflection
+        Throwable cause = ex.getCause();
+        if (cause instanceof P06_IACC_01_ParameterException) {
+            throw (P06_IACC_01_ParameterException) cause;
+        } else {
+            // If some other exception is thrown, fail the test with details
+            fail("Unexpected exception thrown: " + ex);
+        }
+    }
 }
