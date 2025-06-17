@@ -1,86 +1,112 @@
-import static org.junit.Assert.assertEquals;
+package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
+
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.sql.Connection;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.junit.Test;
+import org.mockito.MockedStatic;
 
-public class P06_IACC_01_MainTest {
+import com.bnpparibas.atlentic.common.GlobalAtlentic;
+import com.bnpparibas.atlentic.common.Pea_IACC_00_Utility;
+import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
+import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
+
+public class P86_IACC_01_MainTest {
 
     @Test
-    public void testSetG_o_eventTimestamp() throws Exception {
-        Date testDate = new Date();
-        P06_IACC_01_Main.setG_o_eventTimestamp(testDate);
+    public void testConstructor() throws Exception {
+        String[] args = new String[]{"levell", "branch", "01/01/2023 12:00:00", "01/01/2023 00:00:00", "01/01/2023 23:59:59"};
+        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
+        constructor.setAccessible(true);
+        Object mainClass = constructor.newInstance((Object) args);
 
-        Field field = P06_IACC_01_Main.class.getDeclaredField("g_o_eventTimestamp");
-        field.setAccessible(true);
+        Field argsField = P06_IACC_01_Main.class.getDeclaredField("g_o_args");
+        argsField.setAccessible(true);
+        String[] actualArgs = (String[]) argsField.get(mainClass);
 
-        assertEquals(testDate, field.get(null));
+        assertArrayEquals(args, actualArgs);
     }
 
     @Test
-    public void testGetG_o_eventTimestamp() throws Exception {
+    public void testGetSetG_s_branch() throws Exception {
+        Field branchField = P06_IACC_01_Main.class.getDeclaredField("g_s_branch");
+        branchField.setAccessible(true);
+        branchField.set(null, "testBranch");
+        assertEquals("testBranch", P06_IACC_01_Main.getG_s_branch());
+    }
+
+    @Test
+    public void testGetSetG_s_textFileName() throws Exception {
+        Field textFileNameField = P06_IACC_01_Main.class.getDeclaredField("g_s_textFileName");
+        textFileNameField.setAccessible(true);
+        textFileNameField.set(null, "testFile.txt");
+        assertEquals("testFile.txt", P06_IACC_01_Main.getG_s_textFileName());
+    }
+
+    @Test
+    public void testGetSetG_o_eventTimestamp() throws Exception {
         Date testDate = new Date();
+        P06_IACC_01_Main.setG_o_eventTimestamp(testDate);
 
-        Field field = P06_IACC_01_Main.class.getDeclaredField("g_o_eventTimestamp");
-        field.setAccessible(true);
-        field.set(null, testDate);
-
+        Field eventTimestampField = P06_IACC_01_Main.class.getDeclaredField("g_o_eventTimestamp");
+        eventTimestampField.setAccessible(true);
+        assertEquals(testDate, eventTimestampField.get(null));
         assertEquals(testDate, P06_IACC_01_Main.getG_o_eventTimestamp());
     }
 
     @Test
-    public void testSetG_o_beginDate() throws Exception {
+    public void testGetSetG_o_beginDate() throws Exception {
         Date testDate = new Date();
         P06_IACC_01_Main.setG_o_beginDate(testDate);
 
-        Field field = P06_IACC_01_Main.class.getDeclaredField("g_o_beginDate");
-        field.setAccessible(true);
-
-        assertEquals(testDate, field.get(null));
-    }
-
-    @Test
-    public void testGetG_o_beginDate() throws Exception {
-        Date testDate = new Date();
-
-        Field field = P06_IACC_01_Main.class.getDeclaredField("g_o_beginDate");
-        field.setAccessible(true);
-        field.set(null, testDate);
-
+        Field beginDateField = P06_IACC_01_Main.class.getDeclaredField("g_o_beginDate");
+        beginDateField.setAccessible(true);
+        assertEquals(testDate, beginDateField.get(null));
         assertEquals(testDate, P06_IACC_01_Main.getG_o_beginDate());
     }
 
     @Test
-    public void testSetG_o_endDate() throws Exception {
+    public void testGetSetG_o_endDate() throws Exception {
         Date testDate = new Date();
         P06_IACC_01_Main.setG_o_endDate(testDate);
 
-        Field field = P06_IACC_01_Main.class.getDeclaredField("g_o_endDate");
-        field.setAccessible(true);
-
-        assertEquals(testDate, field.get(null));
-    }
-
-    @Test
-    public void testGetG_o_endDate() throws Exception {
-        Date testDate = new Date();
-
-        Field field = P06_IACC_01_Main.class.getDeclaredField("g_o_endDate");
-        field.setAccessible(true);
-        field.set(null, testDate);
-
+        Field endDateField = P06_IACC_01_Main.class.getDeclaredField("g_o_endDate");
+        endDateField.setAccessible(true);
+        assertEquals(testDate, endDateField.get(null));
         assertEquals(testDate, P06_IACC_01_Main.getG_o_endDate());
     }
 
     @Test
-    public void testSetTextFileName() throws Exception {
-        String testFileName = "testFile.txt";
+    public void testGetDateConfigDate() throws Exception {
+        Method getDateConfigDateMethod = P06_IACC_01_Main.class.getDeclaredMethod("getDateConfigDate");
+        getDateConfigDateMethod.setAccessible(true);
 
-        Field field = P06_IACC_01_Main.class.getDeclaredField("g_s_textFileName");
-        field.setAccessible(true);
-        field.set(null, testFileName);
+        Connection mockConnection = mock(Connection.class);
+        Map<String, String> mockDateConfig = new HashMap<>();
+        mockDateConfig.put("INTF_EVENT_DATE", "01/01/2023 12:00:00");
+        mockDateConfig.put("INTF_SYSTEM_BEGIN_DATE", "01/01/2023 00:00:00");
+        mockDateConfig.put("INTF_SYSTEM_END_DATE", "01/01/2023 23:59:59");
 
-        assertEquals("testFile.txt", field.get(null));
+        try (
+            MockedStatic<GlobalAtlentic> mockedGlobalAtlentic = mockStatic(GlobalAtlentic.class);
+            MockedStatic<Pea_IACC_00_Utility> mockedUtility = mockStatic(Pea_IACC_00_Utility.class)
+        ) {
+            mockedGlobalAtlentic.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
+            mockedUtility.when(() -> Pea_IACC_00_Utility.getAtlIntfDateByBranch(anyString(), any(Connection.class)))
+                         .thenReturn(mockDateConfig);
+
+            @SuppressWarnings("unchecked")
+            Map<String, String> result = (Map<String, String>) getDateConfigDateMethod.invoke(null);
+            assertEquals(mockDateConfig, result);
+        }
     }
 }
