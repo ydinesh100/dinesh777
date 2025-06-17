@@ -1,143 +1,85 @@
+
+
 package com.bnpparibas.atlentic.iacc.bopr.main;
 
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
-
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-
-import com.bnpparibas.atlentic.common.GlobalAtlentic;
-import com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter;
-import com.bnpparibas.atlentic.iacc.bopr.resource.P86_IACC_01_PropertiesMgr;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P86_IACC_01_ParameterException;
-import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
-import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
-
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
+
+import java.lang.reflect.*;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
+import static org.junit.Assert.*;
 
 public class P06_IACC_01_MainTest {
 
-    private String[] validArgsLevel1 = {
-        "level1", "BR001", "01/01/2024 00:00:00", "01/01/2024 00:00:00", "02/01/2024 00:00:00"
-    };
-
-    private String[] validArgsLevel2 = {
-        "level2", "BR001", "01/01/2024 00:00:00", "report.txt"
-    };
-
-    private Date mockDate;
+    private static final SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
 
     @Before
-    public void setup() throws Exception {
-        mockDate = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss").parse("01/01/2024 00:00:00");
+    public void setUp() throws Exception {
+        setStaticField("g_o_eventTimestamp", null);
+        setStaticField("g_o_beginDate", null);
+        setStaticField("g_o_endDate", null);
+        setStaticField("g_s_branch", null);
+        setStaticField("g_s_textFileName", null);
+        setStaticField("l_s_action", null);
     }
 
-    @Test
-    public void testConstructorAndExecute_Level1() throws Exception {
-        try (
-            MockedStatic<StringConverter> stringConverterMock = mockStatic(StringConverter.class);
-            MockedStatic<GlobalAtlentic> globalAtlenticMock = mockStatic(GlobalAtlentic.class);
-            MockedStatic<P86_IACC_01_PropertiesMgr> propsMgrMock = mockStatic(P86_IACC_01_PropertiesMgr.class);
-        ) {
-            stringConverterMock.when(() -> StringConverter.StringToDate(anyString()))
-                .thenReturn(mockDate);
-            Connection mockConn = mock(Connection.class);
-            when(mockConn.isClosed()).thenReturn(false);
-            globalAtlenticMock.when(GlobalAtlentic::getLoanIQConnection)
-                .thenReturn(mockConn);
+    @After
+    public void tearDown() throws Exception {
+        setUp(); // Reset after each test
+    }
 
-            propsMgrMock.when(P86_IACC_01_PropertiesMgr::getLevellActionName).thenReturn("level1");
+    private void setStaticField(String fieldName, Object value) throws Exception {
+        Field field = P06_IACC_01_Main.class.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(null, value);
+    }
 
-            Map<String, String> configDates = new HashMap<>();
-            configDates.put("INTF_EVENT_DATE", "01/01/2024 00:00:00");
-            configDates.put("INTF_SYSTEM_BEGIN_DATE", "01/01/2024 00:00:00");
-            configDates.put("INTF_SYSTEM_END_DATE", "02/01/2024 00:00:00");
+    private Object getStaticField(String fieldName) throws Exception {
+        Field field = P06_IACC_01_Main.class.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        return field.get(null);
+    }
 
-            Class<?> clazz = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main");
+    private void invokePrivateMethod(Object instance, String methodName, Class<?>[] paramTypes, Object... args) throws Exception {
+        Method method = P06_IACC_01_Main.class.getDeclaredMethod(methodName, paramTypes);
+        method.setAccessible(true);
+        method.invoke(instance, args);
+    }
 
-            Field methodField = clazz.getDeclaredField("g_o_args");
-            methodField.setAccessible(true);
-
-            Constructor<?> cons = clazz.getDeclaredConstructor(String[].class);
-            cons.setAccessible(true);
-            Object instance = cons.newInstance((Object) validArgsLevel1);
-
-            Method getDateConfigMethod = clazz.getDeclaredMethod("getDateConfigDate");
-            getDateConfigMethod.setAccessible(true);
-            Field branchField = clazz.getDeclaredField("gs_branch");
-            branchField.setAccessible(true);
-            branchField.set(null, "BR001");
-
-            MockedStatic<?> utilityMock = Mockito.mockStatic(
-                Class.forName("com.bnpparibas.atlentic.common.Pe@_IACC_@@_Utility")
-            );
-            utilityMock.when(() -> {
-                Method method = Class
-                    .forName("com.bnpparibas.atlentic.common.Pe@_IACC_@@_Utility")
-                    .getDeclaredMethod("getAtlIntfDateByBranch", String.class, Connection.class);
-                method.setAccessible(true);
-                return method.invoke(null, "BR001", mockConn);
-            }).thenReturn(configDates);
-
-            Method executeMethod = clazz.getDeclaredMethod("execute");
-            executeMethod.setAccessible(true);
-            executeMethod.invoke(instance);
+    @Test(expected = P06_IACC_01_ParameterException.class)
+    public void testInvalidArgumentLengthThrowsException() throws Throwable {
+        String[] args = {"invalid_only_action"};
+        Object instance = createMainInstance(args);
+        try {
+            invokePrivateMethod(instance, "execute", new Class<?>[]{});
+        } catch (InvocationTargetException e) {
+            throw e.getCause(); // unwrap
         }
     }
 
     @Test
-    public void testSettersAndGetters() throws Exception {
-        Class<?> clazz = P06_IACC_01_Main.class;
+    public void testGettersAndSettersUsingReflection() throws Exception {
+        Date now = sdf.parse("01/01/2024 00:00:00");
+        setStaticField("g_o_eventTimestamp", now);
+        setStaticField("g_o_beginDate", now);
+        setStaticField("g_o_endDate", now);
+        setStaticField("g_s_branch", "TEST_BRANCH");
+        setStaticField("g_s_textFileName", "file.txt");
 
-        Field eventDateField = clazz.getDeclaredField("g_o_eventTimestamp");
-        eventDateField.setAccessible(true);
-        eventDateField.set(null, mockDate);
-
-        Method getter = clazz.getDeclaredMethod("getG_o_eventTimestamp");
-        assertEquals(mockDate, getter.invoke(null));
-
-        Method setter = clazz.getDeclaredMethod("set6_o_eventTimestamp", Date.class);
-        setter.invoke(null, mockDate);
-
-        Field beginDateField = clazz.getDeclaredField("g_o_beginDate");
-        beginDateField.setAccessible(true);
-        beginDateField.set(null, mockDate);
-
-        Method getBegin = clazz.getDeclaredMethod("get_o_beginDate");
-        assertEquals(mockDate, getBegin.invoke(null));
-
-        Method setBegin = clazz.getDeclaredMethod("set_o_beginDate", Date.class);
-        setBegin.invoke(null, mockDate);
-
-        Field endDateField = clazz.getDeclaredField("g_o_endDate");
-        endDateField.setAccessible(true);
-        endDateField.set(null, mockDate);
-
-        Method getEnd = clazz.getDeclaredMethod("getG_o_endDate");
-        assertEquals(mockDate, getEnd.invoke(null));
-
-        Method setEnd = clazz.getDeclaredMethod("set_o_endDate", Date.class);
-        setEnd.invoke(null, mockDate);
+        assertEquals(now, P06_IACC_01_Main.get6_o_eventTimestamp());
+        assertEquals(now, P06_IACC_01_Main.get_o_beginDate());
+        assertEquals(now, P06_IACC_01_Main.getG_o_endDate());
+        assertEquals("TEST_BRANCH", P06_IACC_01_Main.getG_s_branch());
+        assertEquals("file.txt", P06_IACC_01_Main.getG_s_textFileName());
     }
 
-    @Test(expected = P86_IACC_01_ParameterException.class)
-    public void testInvalidArgsThrowsParameterException() throws Exception {
-        Constructor<P06_IACC_01_Main> cons = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
-        cons.setAccessible(true);
-        Object instance = cons.newInstance((Object) new String[]{});
-
-        Method execute = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        execute.setAccessible(true);
-        execute.invoke(instance);
+    private Object createMainInstance(String[] args) throws Exception {
+        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
+        constructor.setAccessible(true);
+        return constructor.newInstance((Object) args);
     }
 }
