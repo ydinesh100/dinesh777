@@ -1,5 +1,5 @@
 private static void showUsage() {
-    String usageText = """
+    String usage = """
         Usage: <level> <branch> <event_date> [<begin_date> <end_date>] [file_name]
         \twhere:
         \t\tlevel: 2 possible values: level1/level2
@@ -9,5 +9,7 @@ private static void showUsage() {
         \t\tend_date: end date, DD/MM/YYYY hh:mi:ss formatted (for level 1)
         \t\tfile_name: report file name (for level 2)
         """;
-    LOG.info(usageText);
+    for (String line : usage.split("\\R")) {
+        LOG.info(line); // log each line separately
+    }
 }
