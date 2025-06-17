@@ -1,79 +1,97 @@
 import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
 import com.bnpparibas.atlentic.iacc.bopr.util.P06_IACC_01_PropertiesMgr;
 import com.bnpparibas.framework.util.StringConverter;
-import org.junit.*;
+import org.junit.Before;
+import org.junit.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
 
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.anyString;
 
 public class P06_IACC_01_MainTest {
 
-    private String[] args;
-    private Object mainInstance;
+    private P06_IACC_01_Main mainInstance;
 
     @Before
     public void setUp() throws Exception {
-        args = new String[] {"level1Action", "branchX", "01/06/2024", "01/06/2024", "02/06/2024"};
-        Class<?> clazz = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main");
-        mainInstance = sun.reflect.ReflectionFactory.getReflectionFactory()
-                .newConstructorForSerialization(clazz, Object.class.getDeclaredConstructor())
-                .newInstance();
-        // Set the g_o_args field
-        java.lang.reflect.Field argsField = clazz.getDeclaredField("g_o_args");
+        // Use Reflection to create instance
+        Constructor<P06_IACC_01_Main> constructor =
+                P06_IACC_01_Main.class.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        mainInstance = constructor.newInstance();
+    }
+
+    @Test
+    public void testExecute_level1_withBeginEndDates() throws Exception {
+        String[] args = {"level1Action", "BRANCH1", "01/06/2024", "01/06/2024", "02/06/2024"};
+        setArgs(args);
+
+        try (
+                MockedStatic<P06_IACC_01_PropertiesMgr> mockProp = Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class);
+                MockedStatic<StringConverter> mockStr = Mockito.mockStatic(StringConverter.class)
+        ) {
+            // Stub static methods
+            mockProp.when(P06_IACC_01_PropertiesMgr::getLevel1Action).thenReturn("level1Action");
+
+            Date date = new Date();
+            mockStr.when(() -> StringConverter.StringToDate(anyString())).thenReturn(date);
+
+            invokeExecute();
+        }
+    }
+
+    @Test
+    public void testExecute_level2_withoutFile() throws Exception {
+        String[] args = {"level2Action", "BRANCH1"};
+        setArgs(args);
+
+        try (
+                MockedStatic<P06_IACC_01_PropertiesMgr> mockProp = Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class);
+                MockedStatic<StringConverter> mockStr = Mockito.mockStatic(StringConverter.class)
+        ) {
+            mockProp.when(P06_IACC_01_PropertiesMgr::getLevel2Action).thenReturn("level2Action");
+
+            Date date = new Date();
+            mockStr.when(() -> StringConverter.StringToDate(anyString())).thenReturn(date);
+
+            invokeExecute();
+        }
+    }
+
+    @Test
+    public void testExecute_level2_withFile() throws Exception {
+        String[] args = {"level2Action", "BRANCH1", "01/06/2024", "testFile.txt"};
+        setArgs(args);
+
+        try (
+                MockedStatic<P06_IACC_01_PropertiesMgr> mockProp = Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class);
+                MockedStatic<StringConverter> mockStr = Mockito.mockStatic(StringConverter.class)
+        ) {
+            mockProp.when(P06_IACC_01_PropertiesMgr::getLevel2Action).thenReturn("level2Action");
+
+            Date date = new Date();
+            mockStr.when(() -> StringConverter.StringToDate(anyString())).thenReturn(date);
+
+            invokeExecute();
+        }
+    }
+
+    // Utility: Set g_o_args field using reflection
+    private void setArgs(String[] args) throws Exception {
+        Field argsField = P06_IACC_01_Main.class.getDeclaredField("g_o_args");
         argsField.setAccessible(true);
         argsField.set(mainInstance, args);
     }
 
-    @Test
-    public void testExecute_level1_withDates() throws Exception {
-        try (
-            MockedStatic<P06_IACC_01_PropertiesMgr> propMock = Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class);
-            MockedStatic<StringConverter> strConvMock = Mockito.mockStatic(StringConverter.class)
-        ) {
-            // Mock static methods
-            propMock.when(P06_IACC_01_PropertiesMgr::getLevel1Action).thenReturn("level1Action");
-
-            Date date = new Date();
-            strConvMock.when(() -> StringConverter.StringToDate(anyString())).thenReturn(date);
-
-            // Reflectively invoke execute
-            Method executeMethod = mainInstance.getClass().getDeclaredMethod("execute");
-            executeMethod.setAccessible(true);
-            executeMethod.invoke(mainInstance);
-
-            // Assertions can be added if fields are accessible or logs can be verified
-        }
-    }
-
-    @Test
-    public void testExecute_level2_withoutFileName() throws Exception {
-        args = new String[] {"level2Action", "branchX"};
-        setArgs(args);
-
-        try (
-            MockedStatic<P06_IACC_01_PropertiesMgr> propMock = Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class);
-            MockedStatic<StringConverter> strConvMock = Mockito.mockStatic(StringConverter.class)
-        ) {
-            propMock.when(P06_IACC_01_PropertiesMgr::getLevel2Action).thenReturn("level2Action");
-
-            Date date = new Date();
-            strConvMock.when(() -> StringConverter.StringToDate(anyString())).thenReturn(date);
-
-            Method executeMethod = mainInstance.getClass().getDeclaredMethod("execute");
-            executeMethod.setAccessible(true);
-            executeMethod.invoke(mainInstance);
-        }
-    }
-
-    private void setArgs(String[] testArgs) throws Exception {
-        java.lang.reflect.Field argsField = mainInstance.getClass().getDeclaredField("g_o_args");
-        argsField.setAccessible(true);
-        argsField.set(mainInstance, testArgs);
+    // Utility: Call private execute() method
+    private void invokeExecute() throws Exception {
+        Method execute = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        execute.setAccessible(true);
+        execute.invoke(mainInstance);
     }
 }
