@@ -1,15 +1,10 @@
 private static void showUsage() {
-    String usage = """
-        Usage: <level> <branch> <event_date> [<begin_date> <end_date>] [file_name]
-        \twhere:
-        \t\tlevel: 2 possible values: level1/level2
-        \t\tbranch: branch name
-        \t\tevent_date: processing date, DD/MM/YYYY hh:mi:ss formatted
-        \t\tbegin_date: begin date, DD/MM/YYYY hh:mi:ss formatted (for level 1)
-        \t\tend_date: end date, DD/MM/YYYY hh:mi:ss formatted (for level 1)
-        \t\tfile_name: report file name (for level 2)
-        """;
-    for (String line : usage.split("\\R")) {
-        LOG.info(line); // log each line separately
-    }
+    LOG.info("Usage: <level> <branch> <event_date> [<begin_date> <end_date>] [file_name]");
+    LOG.info("\twhere:");
+    LOG.info("\t\tlevel: 2 possible values: level1/level2");
+    LOG.info("\t\tbranch: branch name");
+    LOG.info("\t\tevent_date: processing date, DD/MM/YYYY hh:mi:ss formatted");
+    LOG.info("\t\tbegin_date: begin date, DD/MM/YYYY hh:mi:ss formatted (for level 1)");
+    LOG.info("\t\tend_date: end date, DD/MM/YYYY hh:mi:ss formatted (for level 1)");
+    LOG.info("\t\tfile_name: report file name (for level 2)");
 }
