@@ -1,15 +1,138 @@
-import java.lang.reflect.Constructor;
+package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
-@Before
-public void setUp() throws Exception {
-    Constructor<P06_IACC_01_Main> ctor = P06_IACC_01_Main.class.getDeclaredConstructor();
-    ctor.setAccessible(true);
-    mainInstance = ctor.newInstance();
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
-    Field argsField = P06_IACC_01_Main.class.getDeclaredField("g_o_args");
-    argsField.setAccessible(true);
-    argsField.set(mainInstance, new String[]{"LEVEL1", "BR01", "2025-06-17", "2025-06-01", "2025-06-18"});
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.Date;
 
-    executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-    executeMethod.setAccessible(true);
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.MockedStatic;
+
+import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
+import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
+import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_ParameterException;
+import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_PropertiesMgr;
+
+public class P06_IACC_01_MainTest {
+
+    private Method executeMethod;
+    private Field argsField;
+
+    private MockedStatic<P06_IACC_01_PropertiesMgr> propertiesMgrMock;
+    private MockedStatic<P06_IACC_01_Level1> level1StaticMock;
+    private MockedStatic<P06_IACC_01_Level2> level2StaticMock;
+
+    @Before
+    public void setUp() throws Exception {
+        // Access the private execute() method with no parameters (your code says no-arg)
+        executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
+
+        // Access private static args array field to set input args
+        argsField = P06_IACC_01_Main.class.getDeclaredField("g_o_args");
+        argsField.setAccessible(true);
+
+        // Mock static methods of PropertiesMgr
+        propertiesMgrMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
+    }
+
+    @After
+    public void tearDown() {
+        if (propertiesMgrMock != null) {
+            propertiesMgrMock.close();
+        }
+        if (level1StaticMock != null) {
+            level1StaticMock.close();
+        }
+        if (level2StaticMock != null) {
+            level2StaticMock.close();
+        }
+    }
+
+    private void setArgs(String... args) throws Exception {
+        argsField.set(null, args);
+    }
+
+    @Test
+    public void testExecute_Level1Action_ValidArgs_CallsLevel1Execute() throws Exception {
+        // Arrange
+        setArgs("LEVEL1_ACTION", "BRANCH", "2025-06-01", "2025-06-01", "2025-06-30");
+
+        // Mock property returns
+        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName)
+                         .thenReturn("LEVEL1_ACTION");
+        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName)
+                         .thenReturn("LEVEL2_ACTION");
+
+        // Mock Level1 constructor and execute method
+        P06_IACC_01_Level1 level1Mock = mock(P06_IACC_01_Level1.class);
+        level1StaticMock = mockStatic(P06_IACC_01_Level1.class);
+        level1StaticMock.when(() -> new P06_IACC_01_Level1()).thenReturn(level1Mock);
+
+        doNothing().when(level1Mock).execute();
+
+        // Act
+        executeMethod.invoke(null);
+
+        // Assert - verify execute called once
+        verify(level1Mock, times(1)).execute();
+    }
+
+    @Test
+    public void testExecute_Level2Action_ValidArgs_CallsLevel2Execute() throws Exception {
+        // Arrange
+        setArgs("LEVEL2_ACTION", "BRANCH", "2025-06-01", "textfile.txt");
+
+        // Mock property returns
+        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName)
+                         .thenReturn("LEVEL1_ACTION");
+        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName)
+                         .thenReturn("LEVEL2_ACTION");
+
+        // Mock Level2 constructor and execute method
+        P06_IACC_01_Level2 level2Mock = mock(P06_IACC_01_Level2.class);
+        level2StaticMock = mockStatic(P06_IACC_01_Level2.class);
+        level2StaticMock.when(() -> new P06_IACC_01_Level2()).thenReturn(level2Mock);
+
+        doNothing().when(level2Mock).execute();
+
+        // Act
+        executeMethod.invoke(null);
+
+        // Assert - verify execute called once
+        verify(level2Mock, times(1)).execute();
+    }
+
+    @Test(expected = P06_IACC_01_ParameterException.class)
+    public void testExecute_InvalidAction_ThrowsParameterException() throws Exception {
+        // Arrange
+        setArgs("INVALID_ACTION");
+
+        // Mock property returns
+        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName)
+                         .thenReturn("LEVEL1_ACTION");
+        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName)
+                         .thenReturn("LEVEL2_ACTION");
+
+        try {
+            // Act
+            executeMethod.invoke(null);
+            fail("Expected P06_IACC_01_ParameterException");
+        } catch (Exception e) {
+            // Because invoke wraps exceptions in InvocationTargetException, unwrap it:
+            Throwable cause = e.getCause();
+            if (cause instanceof P06_IACC_01_ParameterException) {
+                throw (P06_IACC_01_ParameterException) cause;
+            } else {
+                throw e;
+            }
+        }
+    }
+
+    // Additional tests for invalid dates, missing args, etc can be added similarly
 }
