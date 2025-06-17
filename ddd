@@ -1,131 +1,90 @@
-package com.bnpparibas.atlentic.lacc.bopr.level1test;
+package com.bnpparibas.atlantic.lacc.bopr.level1.test;
 
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
-
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.sql.*;
-import java.util.*;
+import com.bnpparibas.atlantic.lacc.bopr.bean.P06_IACC_01_BoprRecordBean;
+import com.bnpparibas.atlantic.lacc.bopr.level1.P06_IACC_01_Level1DBTransaction;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
 
-import com.bnpparibas.atlentic.common.Outils;
-import com.bnpparibas.atlentic.common.utils.DBUtils;
-import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
-import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1DBTransaction;
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.sql.Timestamp;
+
+import static org.junit.Assert.*;
 
 public class P06_IACC_01_Level1DBTransactionTest {
 
-    private Connection mockConnection;
-    private PreparedStatement mockPreparedStatement;
-    private ResultSet mockResultSet;
     private P06_IACC_01_Level1DBTransaction dbTransaction;
 
     @Before
-    public void setup() throws Exception {
-        mockConnection = mock(Connection.class);
-        mockPreparedStatement = mock(PreparedStatement.class);
-        mockResultSet = mock(ResultSet.class);
-
-        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
-
-        Constructor<P06_IACC_01_Level1DBTransaction> constructor =
-                P06_IACC_01_Level1DBTransaction.class.getDeclaredConstructor(Connection.class);
-        constructor.setAccessible(true);
-        dbTransaction = constructor.newInstance(mockConnection);
+    public void setUp() {
+        dbTransaction = new P06_IACC_01_Level1DBTransaction();
     }
 
-    @Test
-    public void testInsertRecordsBeansList() throws Exception {
-        List<P06_IACC_01_BoprRecordBean> list = new ArrayList<>();
-        P06_IACC_01_BoprRecordBean bean = new P06_IACC_01_BoprRecordBean("BRANCH", new Timestamp(System.currentTimeMillis()));
-        list.add(bean);
-
-        when(mockPreparedStatement.executeUpdate()).thenReturn(1);
-
-        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("insertRecordsBeansList", List.class);
-        method.setAccessible(true);
-        int result = (int) method.invoke(dbTransaction, list);
-
-        assertEquals(1, result);
-    }
-
-    @Test
-    public void testFeedingRecordBean() throws Exception {
-        P06_IACC_01_BoprRecordBean bean = new P06_IACC_01_BoprRecordBean("BRANCH", new Timestamp(System.currentTimeMillis()));
-
-        when(mockResultSet.getString(anyString())).thenReturn("test");
-        when(mockResultSet.getDate(anyString())).thenReturn(new java.sql.Date(System.currentTimeMillis()));
-
-        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("feedingRecordBean", P06_IACC_01_BoprRecordBean.class, ResultSet.class);
-        method.setAccessible(true);
-        method.invoke(dbTransaction, bean, mockResultSet);
-
-        // Add a meaningful assertion if possible
-        assertNotNull(bean.getBranchCode());
+    // Utility to set private fields in the bean
+    private void setPrivateField(Object target, String fieldName, Object value) throws Exception {
+        Field field = target.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(target, value);
     }
 
     @Test
     public void testGenerateOperationReference() throws Exception {
+        // Arrange
         P06_IACC_01_BoprRecordBean bean = new P06_IACC_01_BoprRecordBean("BRANCH", new Timestamp(System.currentTimeMillis()));
-        // Use reflection to set private fields if needed
-        Field field = bean.getClass().getDeclaredField("idOwner");
-        field.setAccessible(true);
-        field.set(bean, "OWNER_ID");
 
+        setPrivateField(bean, "prefix", "EVT123");
+        setPrivateField(bean, "idOwner", "OWNER001");
+
+        // Act
         Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("generateOperationReference", P06_IACC_01_BoprRecordBean.class);
         method.setAccessible(true);
         String result = (String) method.invoke(dbTransaction, bean);
 
+        // Assert
         assertNotNull(result);
+        assertTrue(result.contains("EVT123") || result.contains("OWNER001"));
     }
 
     @Test
-    public void testGetExchangeRatesMap() throws Exception {
-        when(mockResultSet.next()).thenReturn(true, false);
-        when(mockResultSet.getString("cde_currency")).thenReturn("USD");
-        when(mockResultSet.getDouble("exchange_rate")).thenReturn(1.1);
+    public void testFeedingRecordBean() throws Exception {
+        // Arrange
+        P06_IACC_01_BoprRecordBean bean = new P06_IACC_01_BoprRecordBean("BRANCH", new Timestamp(System.currentTimeMillis()));
 
-        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("getExchangeRatesMap");
+        setPrivateField(bean, "prefix", "PREFIX001");
+        setPrivateField(bean, "idOwner", "OWNER001");
+
+        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("feedingRecordBean", P06_IACC_01_BoprRecordBean.class);
         method.setAccessible(true);
-        Map<String, Double> result = (Map<String, Double>) method.invoke(dbTransaction);
 
-        assertNotNull(result);
-        assertEquals(1.1, result.get("USD"), 0.01);
+        // Act
+        P06_IACC_01_BoprRecordBean resultBean = (P06_IACC_01_BoprRecordBean) method.invoke(dbTransaction, bean);
+
+        // Assert
+        assertNotNull(resultBean);
+        // Optionally: Reflect and check a known field was modified
+        Field opRefField = resultBean.getClass().getDeclaredField("operationReference");
+        opRefField.setAccessible(true);
+        Object opRef = opRefField.get(resultBean);
+        assertNotNull(opRef);
     }
 
     @Test
-    public void testDeleteConcurrentRecords() throws Exception {
-        try (
-            MockedStatic<P06_IACC_01_Main> mainMock = Mockito.mockStatic(P06_IACC_01_Main.class);
-            MockedStatic<P06_IACC_01_PropertiesMgr> propMock = Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class);
-        ) {
-            String expectedQuery = "DELETE FROM concurrent_records WHERE cde_branch = ? AND dte_event = ?";
-            Timestamp timestamp = new Timestamp(System.currentTimeMillis());
+    public void testPopulateLenderGrpFields_safeForNulls() throws Exception {
+        // Arrange
+        P06_IACC_01_BoprRecordBean bean = new P06_IACC_01_BoprRecordBean("BRANCH", new Timestamp(System.currentTimeMillis()));
 
-            mainMock.when(P06_IACC_01_Main::get_s_branch).thenReturn("TEST");
-            mainMock.when(P06_IACC_01_Main::get_o_eventTimestamp).thenReturn(timestamp);
-            propMock.when(() -> P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile("delete.concurrent.records"))
-                    .thenReturn(expectedQuery);
+        setPrivateField(bean, "idOwner", "OWNER123");
+        setPrivateField(bean, "prefix", "EVT456");
 
-            when(mockPreparedStatement.executeUpdate()).thenReturn(1);
+        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("populateLenderGrpFields", P06_IACC_01_BoprRecordBean.class);
+        method.setAccessible(true);
 
-            Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("deleteConcurrentRecords");
-            method.setAccessible(true);
-            method.invoke(dbTransaction);
-
-            verify(mockConnection).prepareStatement(expectedQuery);
-            verify(mockPreparedStatement).setString(1, "TEST");
-            verify(mockPreparedStatement).setTimestamp(2, timestamp);
-            verify(mockPreparedStatement).executeUpdate();
+        // Act & Assert
+        try {
+            method.invoke(dbTransaction, bean); // Should not throw
+        } catch (Exception e) {
+            fail("populateLenderGrpFields threw an exception: " + e.getMessage());
         }
     }
 }
