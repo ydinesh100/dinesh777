@@ -1,12 +1,86 @@
-private static void showUsage() {
-    System.out.println("""
-        Usage: <level> <branch> <event_date> [<begin date> <end date>] [file name]
-            where:
-                level: 2 possible values Level1/Level2
-                branch: branch name
-                event_date: processing date, DD/MM/YYYY hh:mi:ss formatted
-                begin_date: begin date, DD/MM/YYYY hh:mi:ss formatted (for level 1)
-                end_date: end date, DD/MM/YYYY hh:mi:ss formatted (for level 1)
-                file name: report file name (for level 2)
-        """);
+import static org.junit.Assert.assertEquals;
+
+import java.lang.reflect.Field;
+import java.util.Date;
+
+import org.junit.Test;
+
+public class P06_IACC_01_MainTest {
+
+    @Test
+    public void testSetG_o_eventTimestamp() throws Exception {
+        Date testDate = new Date();
+        P06_IACC_01_Main.setG_o_eventTimestamp(testDate);
+
+        Field field = P06_IACC_01_Main.class.getDeclaredField("g_o_eventTimestamp");
+        field.setAccessible(true);
+
+        assertEquals(testDate, field.get(null));
+    }
+
+    @Test
+    public void testGetG_o_eventTimestamp() throws Exception {
+        Date testDate = new Date();
+
+        Field field = P06_IACC_01_Main.class.getDeclaredField("g_o_eventTimestamp");
+        field.setAccessible(true);
+        field.set(null, testDate);
+
+        assertEquals(testDate, P06_IACC_01_Main.getG_o_eventTimestamp());
+    }
+
+    @Test
+    public void testSetG_o_beginDate() throws Exception {
+        Date testDate = new Date();
+        P06_IACC_01_Main.setG_o_beginDate(testDate);
+
+        Field field = P06_IACC_01_Main.class.getDeclaredField("g_o_beginDate");
+        field.setAccessible(true);
+
+        assertEquals(testDate, field.get(null));
+    }
+
+    @Test
+    public void testGetG_o_beginDate() throws Exception {
+        Date testDate = new Date();
+
+        Field field = P06_IACC_01_Main.class.getDeclaredField("g_o_beginDate");
+        field.setAccessible(true);
+        field.set(null, testDate);
+
+        assertEquals(testDate, P06_IACC_01_Main.getG_o_beginDate());
+    }
+
+    @Test
+    public void testSetG_o_endDate() throws Exception {
+        Date testDate = new Date();
+        P06_IACC_01_Main.setG_o_endDate(testDate);
+
+        Field field = P06_IACC_01_Main.class.getDeclaredField("g_o_endDate");
+        field.setAccessible(true);
+
+        assertEquals(testDate, field.get(null));
+    }
+
+    @Test
+    public void testGetG_o_endDate() throws Exception {
+        Date testDate = new Date();
+
+        Field field = P06_IACC_01_Main.class.getDeclaredField("g_o_endDate");
+        field.setAccessible(true);
+        field.set(null, testDate);
+
+        assertEquals(testDate, P06_IACC_01_Main.getG_o_endDate());
+    }
+
+    @Test
+    public void testSetTextFileName() throws Exception {
+        String testFileName = "testFile.txt";
+
+        Field field = P06_IACC_01_Main.class.getDeclaredField("g_s_textFileName");
+        field.setAccessible(true);
+        field.set(null, testFileName);
+
+        assertEquals("testFile.txt", field.get(null));
+    }
 }
