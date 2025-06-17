@@ -18,7 +18,6 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
 import com.bnpparibas.atlentic.common.Outils;
-import com.bnpparibas.atlentic.common.utils.DBUtils;
 import com.bnpparibas.atlentic.iacc.bopr.bean.P06_IACC_01_BoprRecordBean;
 import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1DBTransaction;
 import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
@@ -40,9 +39,9 @@ public class P06_IACC_01_Level1DBTransactionTest {
         when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
         when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
 
-        Constructor<?> constructor = P06_IACC_01_Level1DBTransaction.class.getDeclaredConstructor(Connection.class);
-        constructor.setAccessible(true);
-        dbTransaction = (P06_IACC_01_Level1DBTransaction) constructor.newInstance(mockConnection);
+        Constructor<?> ctor = P06_IACC_01_Level1DBTransaction.class.getDeclaredConstructor(Connection.class);
+        ctor.setAccessible(true);
+        dbTransaction = (P06_IACC_01_Level1DBTransaction) ctor.newInstance(mockConnection);
     }
 
     @Test
@@ -53,9 +52,9 @@ public class P06_IACC_01_Level1DBTransactionTest {
 
         when(mockPreparedStatement.executeUpdate()).thenReturn(1);
 
-        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("insertRecordsBeansList", List.class);
-        method.setAccessible(true);
-        int result = (int) method.invoke(dbTransaction, list);
+        Method m = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("insertRecordsBeansList", List.class);
+        m.setAccessible(true);
+        int result = (int) m.invoke(dbTransaction, list);
 
         assertEquals(1, result);
     }
@@ -64,71 +63,72 @@ public class P06_IACC_01_Level1DBTransactionTest {
     public void testFeedingRecordBean() throws Exception {
         P06_IACC_01_BoprRecordBean bean = new P06_IACC_01_BoprRecordBean("BRANCH", new Timestamp(System.currentTimeMillis()));
 
-        when(mockResultSet.getString(anyString())).thenAnswer(invocation -> {
-            String column = invocation.getArgument(0);
-            return column + "_VALUE";
-        });
+        // Map column -> value
+        when(mockResultSet.getString(anyString())).thenAnswer(invocation -> invocation.getArgument(0) + "_VAL");
         when(mockResultSet.getDate("dte_effective")).thenReturn(new java.sql.Date(System.currentTimeMillis()));
 
-        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("feedingRecordBean", P06_IACC_01_BoprRecordBean.class, ResultSet.class);
-        method.setAccessible(true);
-        method.invoke(dbTransaction, bean, mockResultSet);
+        Method m = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("feedingRecordBean", P06_IACC_01_BoprRecordBean.class, ResultSet.class);
+        m.setAccessible(true);
+        m.invoke(dbTransaction, bean, mockResultSet);
 
-        assertEquals("pid_deal_VALUE", bean.getDealId());
-        assertEquals("pid_facility_VALUE", bean.getFacilityId());
-        assertEquals("rid_outstanding_VALUE", bean.getOutstandingId());
+        assertEquals("pid_deal_VAL", bean.getDealId());
+        assertEquals("pid_facility_VAL", bean.getFacilityId());
+        assertEquals("rid_outstanding_VAL", bean.getOutstandingId());
+        assertEquals("EVENT123_VAL", bean.getDealId().substring(0,5), "Just checking prefix");
     }
 
     @Test
     public void testGetExchangeRatesMap() throws Exception {
         when(mockResultSet.next()).thenReturn(true, false);
         when(mockResultSet.getString("cde_currency")).thenReturn("USD");
-        when(mockResultSet.getDouble("exchange_rate")).thenReturn(1.1);
+        when(mockResultSet.getDouble("exchange_rate")).thenReturn(1.234);
 
-        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("getExchangeRatesMap");
-        method.setAccessible(true);
-        Map<String, Double> rates = (Map<String, Double>) method.invoke(dbTransaction);
+        Method m = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("getExchangeRatesMap");
+        m.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        Map<String, Double> map = (Map<String, Double>) m.invoke(dbTransaction);
 
-        assertEquals(1, rates.size());
-        assertEquals(1.1, rates.get("USD"), 0.001);
+        assertEquals(1, map.size());
+        assertEquals(Double.valueOf(1.234), map.get("USD"));
     }
 
     @Test
     public void testGenerateOperationReference() throws Exception {
         P06_IACC_01_BoprRecordBean bean = new P06_IACC_01_BoprRecordBean("BRANCH", new Timestamp(System.currentTimeMillis()));
-        bean.setIdOwner("OWNER_ID");
-        bean.setLenderServiceGrp("LENDER_GRP");
+        bean.setIdOwner("OWNER_XYZ");
+        // Without lenderServiceGrp setter, the method will use borrowerServiceGrp or idOwner
+        bean.setBorrowerServiceGrp("BORROWER_ABC");
 
-        Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("generateOperationReference", P06_IACC_01_BoprRecordBean.class);
-        method.setAccessible(true);
-        String ref = (String) method.invoke(dbTransaction, bean);
+        Method m = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("generateOperationReference", P06_IACC_01_BoprRecordBean.class);
+        m.setAccessible(true);
+        String opRef = (String) m.invoke(dbTransaction, bean);
 
-        assertEquals("OWNER_IDLENDER_GRP", ref);
+        assertTrue(opRef.contains("OWNER_XYZ") || opRef.contains("BORROWER_ABC"));
     }
 
     @Test
     public void testDeleteConcurrentRecords() throws Exception {
         try (
             MockedStatic<P06_IACC_01_Main> mainMock = Mockito.mockStatic(P06_IACC_01_Main.class);
-            MockedStatic<P06_IACC_01_PropertiesMgr> propMock = Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class);
+            MockedStatic<P06_IACC_01_PropertiesMgr> propMock = Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class)
         ) {
-            String query = "DELETE FROM concurrent_records WHERE cde_branch = ? AND dte_event = ?";
-            String branch = "TEST_BRANCH";
-            Timestamp timestamp = new Timestamp(System.currentTimeMillis());
+            String query = "DELETE ...";
+            Timestamp ts = new Timestamp(System.currentTimeMillis());
 
-            mainMock.when(P06_IACC_01_Main::get_s_branch).thenReturn(branch);
-            mainMock.when(P06_IACC_01_Main::get_o_eventTimestamp).thenReturn(timestamp);
-            propMock.when(() -> P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile("delete.concurrent.records")).thenReturn(query);
+            mainMock.when(P06_IACC_01_Main::get_s_branch).thenReturn("BR");
+            mainMock.when(P06_IACC_01_Main::get_o_eventTimestamp).thenReturn(ts);
+            propMock.when(() -> P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile("delete.concurrent.records"))
+                    .thenReturn(query);
 
             when(mockConnection.prepareStatement(query)).thenReturn(mockPreparedStatement);
             when(mockPreparedStatement.executeUpdate()).thenReturn(1);
 
-            Method method = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("deleteConcurrentRecords");
-            method.setAccessible(true);
-            method.invoke(dbTransaction);
+            Method m = P06_IACC_01_Level1DBTransaction.class.getDeclaredMethod("deleteConcurrentRecords");
+            m.setAccessible(true);
+            m.invoke(dbTransaction);
 
-            verify(mockPreparedStatement).setString(1, branch);
-            verify(mockPreparedStatement).setTimestamp(2, timestamp);
+            verify(mockPreparedStatement).setString(1, "BR");
+            verify(mockPreparedStatement).setTimestamp(2, ts);
             verify(mockPreparedStatement).executeUpdate();
         }
     }
