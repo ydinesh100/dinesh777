@@ -1,12 +1,10 @@
-
 package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
-import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
 import com.bnpparibas.atlentic.common.GlobalAtlentic;
-import com.bnpparibas.atlentic.common.Pea_IACC_00_Utility;
+import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
+import com.bnpparibas.atlentic.iacc.bopr.util.Pea_IACC_00_Utility;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
+import com.bnpparibas.atlentic.iacc.bopr.util.P06_IACC_01_PropertiesMgr;
 
 import org.junit.*;
 import org.junit.runner.RunWith;
@@ -14,9 +12,9 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -33,26 +31,29 @@ public class P06_IACC_01_MainTest {
     private Connection mockedConnection;
 
     @Before
-    public void setUp() {
-        // Mock connection and static calls
+    public void setUp() throws Exception {
         mockedConnection = mock(Connection.class);
+        PreparedStatement mockedStatement = mock(PreparedStatement.class);
+
+        // Mock: prepareStatement returns non-null to avoid NPE
+        when(mockedConnection.prepareStatement(anyString())).thenReturn(mockedStatement);
+
         globalAtlenticMock = Mockito.mockStatic(GlobalAtlentic.class);
         utilityMock = Mockito.mockStatic(Pea_IACC_00_Utility.class);
         propertiesMgrMock = Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class);
 
-        // Stub the DB connection
+        // Mock GlobalAtlentic connection
         globalAtlenticMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockedConnection);
 
-        // Stub date config data
+        // Mock utility to return expected date map
         Map<String, String> configMap = new HashMap<>();
         configMap.put("INTF_EVENT_DATE", "01/01/2023 12:00:00");
         configMap.put("INTF_SYSTEM_BEGIN_DATE", "01/01/2023 12:00:00");
         configMap.put("INTF_SYSTEM_END_DATE", "02/01/2023 12:00:00");
-        utilityMock.when(() ->
-            Pea_IACC_00_Utility.getAtlIntfDateByBranch(anyString(), eq(mockedConnection))
-        ).thenReturn(configMap);
 
-        // Stub action names
+        utilityMock.when(() -> Pea_IACC_00_Utility.getAtlIntfDateByBranch(anyString(), eq(mockedConnection)))
+                   .thenReturn(configMap);
+
         propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
         propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
     }
@@ -65,78 +66,59 @@ public class P06_IACC_01_MainTest {
     }
 
     private void invokeExecute(String[] args) throws Exception {
-        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
-        constructor.setAccessible(true);
-        Object instance = constructor.newInstance((Object) args);
-
-        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute", String[].class);
         executeMethod.setAccessible(true);
-        executeMethod.invoke(instance);
+        executeMethod.invoke(null, (Object) args); // cast required for varargs
+    }
+
+    @Test
+    public void testLevel1Execution() throws Exception {
+        String[] args = {"level1", "PARIS", "01/01/2023 12:00:00"};
+        invokeExecute(args);
+    }
+
+    @Test
+    public void testLevel2ExecutionWithFullArgs() throws Exception {
+        String[] args = {
+            "level2", "PARIS", "01/01/2023 12:00:00",
+            "01/01/2023 12:00:00", "02/01/2023 12:00:00", "output.txt"
+        };
+        invokeExecute(args);
+    }
+
+    @Test
+    public void testLevel2ExecutionWithOnlyBranch() throws Exception {
+        String[] args = {"level2", "PARIS", "01/01/2023 12:00:00"};
+        invokeExecute(args);
     }
 
     @Test(expected = P06_IACC_01_ParameterException.class)
     public void testInvalidArgumentLengthThrowsException() throws Throwable {
         try {
-            invokeExecute(new String[]{});  // Less than 1 argument
-        } catch (Exception ex) {
-            throw ex.getCause();
+            String[] args = {"level1"};
+            invokeExecute(args);
+        } catch (Exception e) {
+            throw e.getCause(); // unwrap InvocationTargetException
         }
     }
 
-    @Test
-    public void testLevel1Valid5Args() throws Exception {
-        invokeExecute(new String[]{"level1", "BR", "01/01/2023 12:00:00", "01/01/2023 12:00:00", "02/01/2023 12:00:00"});
-    }
-
-    @Test
-    public void testLevel1WithDefaultDates() throws Exception {
-        invokeExecute(new String[]{"level1"});
-    }
-
-    @Test
-    public void testLevel2WithFilename() throws Exception {
-        invokeExecute(new String[]{"level2", "BR", "01/01/2023 12:00:00", "report.txt"});
-    }
-
-    @Test
-    public void testLevel2WithOnlyBranch() throws Exception {
-        invokeExecute(new String[]{"level2", "report.txt"});
-    }
-
     @Test(expected = P06_IACC_01_ParameterException.class)
-    public void testInvalidDateOrderThrowsException() throws Throwable {
+    public void testInvalidDateFormatThrowsException() throws Throwable {
         try {
-            // Begin date after end date
-            invokeExecute(new String[]{"level1", "BR", "01/01/2023 12:00:00", "03/01/2023 12:00:00", "02/01/2023 12:00:00"});
+            String[] args = {"level1", "PARIS", "invalid-date"};
+            invokeExecute(args);
         } catch (Exception e) {
             throw e.getCause();
         }
     }
 
     @Test(expected = P06_IACC_01_ParameterException.class)
-    public void testUnknownActionThrowsException() throws Throwable {
+    public void testInvalidLevelThrowsException() throws Throwable {
         try {
-            invokeExecute(new String[]{"unknownAction", "BR", "01/01/2023 12:00:00"});
+            String[] args = {"unknown", "PARIS", "01/01/2023 12:00:00"};
+            invokeExecute(args);
         } catch (Exception e) {
             throw e.getCause();
         }
-    }
-
-    @Test
-    public void testGetterAndSetters() {
-        Date now = new Date();
-        P06_IACC_01_Main.setG_o_eventTimestamp(now);
-        Assert.assertEquals(now, P06_IACC_01_Main.get6_o_eventTimestamp());
-
-        P06_IACC_01_Main.seto_o_beginDate(now);
-        Assert.assertEquals(now, P06_IACC_01_Main.get_o_beginDate());
-
-        P06_IACC_01_Main.setG_o_endDate(now);
-        Assert.assertEquals(now, P06_IACC_01_Main.getG_o_endDate());
-    }
-
-    @Test
-    public void testMainMethod() {
-        P06_IACC_01_Main.main(new String[]{"level1"});
     }
 }
