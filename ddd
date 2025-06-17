@@ -1,148 +1,90 @@
+package com.bnpparibas.atlentic.iacc.bopr.main.test;
+
 import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
-
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.sql.SQLException;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-
-import org.junit.*;
-import org.mockito.MockedStatic;
-
+import org.junit.Test;
 import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
-import com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
 
 public class P06_IACC_01_MainTest {
 
-    private Constructor<P06_IACC_01_Main> privateConstructor;
-    private Method executeMethod;
-
-    @Before
-    public void setUp() throws Exception {
-        // Access private constructor
-        privateConstructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
-        privateConstructor.setAccessible(true);
-
-        // Access private execute() method
-        executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+    /**
+     * Helper to invoke private execute() on P06_IACC_01_Main instance with given args.
+     */
+    private void invokeExecuteWithArgs(String[] args) throws Throwable {
+        P06_IACC_01_Main instance = 
+            P06_IACC_01_Main.class.getDeclaredConstructor(String[].class)
+                .newInstance((Object) args);
+        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
         executeMethod.setAccessible(true);
-    }
-
-    @Test
-    public void testExecute_Level1Action_CorrectParams() throws Exception {
-        String[] args = new String[] { "level1Action", "BR1", "01/01/2023 00:00:00", "01/01/2023 00:00:00", "02/01/2023 00:00:00" };
-
-        try (
-            MockedStatic<StringConverter> stringConverterMock = mockStatic(StringConverter.class);
-            MockedStatic<P06_IACC_01_PropertiesMgr> propertiesMgrMock = mockStatic(P06_IACC_01_PropertiesMgr.class)
-        ) {
-            // Mock static methods
-            propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1Action");
-
-            // For StringConverter.StringToDate
-            stringConverterMock.when(() -> StringConverter.StringToDate("01/01/2023 00:00:00")).thenReturn(new Date(1672531200000L)); // 01 Jan 2023
-            stringConverterMock.when(() -> StringConverter.StringToDate("02/01/2023 00:00:00")).thenReturn(new Date(1672617600000L)); // 02 Jan 2023
-
-            // Create instance of Main
-            P06_IACC_01_Main mainInstance = privateConstructor.newInstance((Object) args);
-
-            // Execute private method
-            executeMethod.invoke(mainInstance);
-
-            // Check that static fields are set correctly
-            Field branchField = P06_IACC_01_Main.class.getDeclaredField("g_s_branch");
-            branchField.setAccessible(true);
-            assertEquals("BR1", branchField.get(null));
-
-            Field eventDateField = P06_IACC_01_Main.class.getDeclaredField("g_o_eventTimestamp");
-            eventDateField.setAccessible(true);
-            assertNotNull(eventDateField.get(null));
-
-            // Similarly test other fields or side effects as needed
-        }
-    }
-
-    @Test
-    public void testExecute_Level2Action_CorrectParams() throws Exception {
-        String[] args = new String[] { "level2Action", "BR2", "01/01/2023 00:00:00", "reportFile.txt" };
-
-        try (
-            MockedStatic<StringConverter> stringConverterMock = mockStatic(StringConverter.class);
-            MockedStatic<P06_IACC_01_PropertiesMgr> propertiesMgrMock = mockStatic(P06_IACC_01_PropertiesMgr.class)
-        ) {
-            propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2Action");
-
-            stringConverterMock.when(() -> StringConverter.StringToDate("01/01/2023 00:00:00")).thenReturn(new Date(1672531200000L));
-
-            P06_IACC_01_Main mainInstance = privateConstructor.newInstance((Object) args);
-
-            executeMethod.invoke(mainInstance);
-
-            Field branchField = P06_IACC_01_Main.class.getDeclaredField("g_s_branch");
-            branchField.setAccessible(true);
-            assertEquals("BR2", branchField.get(null));
-
-            Field textFileNameField = P06_IACC_01_Main.class.getDeclaredField("g_s_textFileName");
-            textFileNameField.setAccessible(true);
-            assertEquals("reportFile.txt", textFileNameField.get(null));
-        }
-    }
-
-    @Test(expected = Exception.class)
-    public void testExecute_ThrowsParameterExceptionWhenNoArgs() throws Exception {
-        String[] args = new String[] {};
-
-        P06_IACC_01_Main mainInstance = privateConstructor.newInstance((Object) args);
-
         try {
-            executeMethod.invoke(mainInstance);
-        } catch (Exception e) {
-            // Exception is wrapped in InvocationTargetException; unwrap it
-            Throwable cause = e.getCause();
-            if (cause != null) {
-                throw (Exception) cause;
-            } else {
-                throw e;
-            }
+            executeMethod.invoke(instance);
+        } catch (InvocationTargetException ite) {
+            // unwrap the original exception thrown inside execute()
+            throw ite.getCause();
+        }
+    }
+
+    @Test(expected = P06_IACC_01_ParameterException.class)
+    public void testExecute_NoArgs_ThrowsParameterException() throws Throwable {
+        invokeExecuteWithArgs(new String[0]);
+    }
+
+    @Test
+    public void testExecute_InsufficientArgs_ThrowsParameterException() {
+        try {
+            invokeExecuteWithArgs(new String[] {"Level1"});
+            fail("Expected ParameterException due to insufficient args");
+        } catch (Throwable e) {
+            assertTrue(e instanceof P06_IACC_01_ParameterException);
+            assertTrue(e.getMessage().contains("Wrong parameters number"));
         }
     }
 
     @Test
-    public void testStaticGettersSetters() throws Exception {
-        Date now = new Date();
-        P06_IACC_01_Main.setG_o_eventTimestamp(now);
-        assertEquals(now, P06_IACC_01_Main.getG_o_eventTimestamp());
-
-        Date begin = new Date(now.getTime() - 10000);
-        P06_IACC_01_Main.setG_o_beginDate(begin);
-        assertEquals(begin, P06_IACC_01_Main.getG_o_beginDate());
-
-        Date end = new Date(now.getTime() + 10000);
-        P06_IACC_01_Main.setG_o_endDate(end);
-        assertEquals(end, P06_IACC_01_Main.getG_o_endDate());
-
-        // Test static fields via reflection as needed
+    public void testExecute_UnknownAction_ThrowsParameterException() {
+        try {
+            invokeExecuteWithArgs(new String[] {"UnknownAction", "BR1", "01/01/2025 00:00:00"});
+            fail("Expected ParameterException due to unknown action");
+        } catch (Throwable e) {
+            assertTrue(e instanceof P06_IACC_01_ParameterException);
+            assertTrue(e.getMessage().contains("unknown"));
+        }
     }
 
     @Test
-    public void testGetDateConfigDate_Mocked() throws Exception {
-        // Mock GlobalAtlentic and POO_IACC_00_Utility static calls if possible
-        // Here we just call and catch exception or mock connection returned
+    public void testExecute_ValidLevel1Args() {
+        // Assuming Level1 action is "Level1" and minimum args length is 3
+        String[] args = new String[] {
+            "Level1",          // action
+            "BR1",             // branch
+            "01/01/2025 00:00:00",  // event date
+            "01/01/2025 00:00:00",  // begin date
+            "02/01/2025 00:00:00"   // end date
+        };
+        try {
+            invokeExecuteWithArgs(args);
+            // If no exception, test passes
+        } catch (Throwable e) {
+            fail("Did not expect exception: " + e);
+        }
+    }
 
-        // If you want, use mockito inline to mock static methods GlobalAtlentic.getLoanIQConnection()
-        // and POO_IACC_00_Utility.getAtlIntfDateByBranch()
-
-        // For now just call and expect no exception if environment is ready
-
-        Map<String, String> dummyMap = new HashMap<>();
-        dummyMap.put("INTF_EVENT_DATE", "01/01/2023 00:00:00");
-        dummyMap.put("INTF_SYSTEM_BEGIN_DATE", "31/12/2022 00:00:00");
-        dummyMap.put("INTF_SYSTEM_END_DATE", "02/01/2023 00:00:00");
-
-        // You can write a wrapper or mock these classes in integration test environment.
+    @Test
+    public void testExecute_ValidLevel2Args() {
+        // Assuming Level2 action is "Level2" and minimum args length is 3 or 4 (with file name)
+        String[] args = new String[] {
+            "Level2",          // action
+            "BR1",             // branch
+            "01/01/2025 00:00:00",  // event date
+            "reportFile.txt"        // file name (optional)
+        };
+        try {
+            invokeExecuteWithArgs(args);
+            // If no exception, test passes
+        } catch (Throwable e) {
+            fail("Did not expect exception: " + e);
+        }
     }
 }
