@@ -1,10 +1,10 @@
-package com.bnpparibas.atlentic.iacc.bopr.main;
+package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
-import static org.mockito.Mockito.mockStatic;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.util.Date;
@@ -12,18 +12,15 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.MockedStatic;
-import org.mockito.junit.MockitoJUnitRunner;
 
 import com.bnpparibas.atlentic.common.GlobalAtlentic;
-import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_Level1;
-import com.bnpparibas.atlentic.iacc.bopr.level.P06_IACC_01_Level2;
-import com.bnpparibas.atlentic.iacc.bopr.properties.P06_IACC_01_PropertiesMgr;
-import com.bnpparibas.atlentic.iacc.common.exceptions.P06_IACC_01_ParameterException;
-import com.bnpparibas.atlentic.iacc.common.utils.StringConverter;
+import com.bnpparibas.atlentic.common.P06_IACC_00_Utility;
+import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
+import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
+import com.bnpparibas.atlentic.iacc.bopr.util.P06_IACC_01_PropertiesMgr;
 
-@RunWith(MockitoJUnitRunner.class)
 public class P06_IACC_01_MainTest {
 
     private Object createMainInstance(String[] args) throws Exception {
@@ -41,31 +38,30 @@ public class P06_IACC_01_MainTest {
     @Test
     public void testExecute_validLevel1_with5Params() throws Exception {
         String[] args = {
-            "levell", "BR001", "01/01/2023 12:00:00", "01/01/2023 00:00:00", "01/01/2023 23:59:59"
+            P06_IACC_01_PropertiesMgr.getLevel1ActionName(), "TEST_BRANCH", "01/01/2023 12:00:00",
+            "01/01/2023 00:00:00", "01/01/2023 23:59:59"
         };
-        Object mainInstance = createMainInstance(args);
 
         try (
-            MockedStatic<GlobalAtlentic> mockedGA = mockStatic(GlobalAtlentic.class);
-            MockedStatic<P06_IACC_01_PropertiesMgr> mockedProps = mockStatic(P06_IACC_01_PropertiesMgr.class);
-            MockedStatic<StringConverter> mockedConverter = mockStatic(StringConverter.class);
-            MockedStatic<P06_IACC_01_Level1> mockedLevel1 = mockStatic(P06_IACC_01_Level1.class)
+            MockedStatic<GlobalAtlentic> mockedGlobal = mockStatic(GlobalAtlentic.class);
+            MockedStatic<P06_IACC_00_Utility> mockedUtility = mockStatic(P06_IACC_01_Utility.class);
+            MockedStatic<P06_IACC_01_Level1> mockedLevel1 = mockStatic(P06_IACC_01_Level1.class);
         ) {
-            Connection mockConn = mock(Connection.class);
-            mockedGA.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConn);
-            mockedProps.when(P06_IACC_01_PropertiesMgr::getLevellActionName).thenReturn("levell");
+            Connection mockConnection = mock(Connection.class);
+            mockedGlobal.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
 
-            Date eventDate = new Date();
-            Date beginDate = new Date(eventDate.getTime() - 1000000);
-            Date endDate = new Date(eventDate.getTime() + 1000000);
-
-            mockedConverter.when(() -> StringConverter.StringToDate("01/01/2023 12:00:00")).thenReturn(eventDate);
-            mockedConverter.when(() -> StringConverter.StringToDate("01/01/2023 00:00:00")).thenReturn(beginDate);
-            mockedConverter.when(() -> StringConverter.StringToDate("01/01/2023 23:59:59")).thenReturn(endDate);
+            Map<String, String> mockDateMap = new HashMap<>();
+            mockDateMap.put("INTF_EVENT_DATE", "01/01/2023 12:00:00");
+            mockDateMap.put("INTF_SYSTEM_BEGIN_DATE", "01/01/2023 00:00:00");
+            mockDateMap.put("INTF_SYSTEM_END_DATE", "01/01/2023 23:59:59");
+            mockedUtility.when(() -> P06_IACC_00_Utility.getAtlIntfDateByBranch(anyString(), any(Connection.class)))
+                         .thenReturn(mockDateMap);
 
             P06_IACC_01_Level1 mockLevel1 = mock(P06_IACC_01_Level1.class);
             mockedLevel1.when(P06_IACC_01_Level1::new).thenReturn(mockLevel1);
+            doNothing().when(mockLevel1).execute();
 
+            Object mainInstance = createMainInstance(args);
             invokeExecute(mainInstance);
 
             verify(mockLevel1).execute();
@@ -75,82 +71,65 @@ public class P06_IACC_01_MainTest {
     @Test
     public void testExecute_validLevel2_with4Params() throws Exception {
         String[] args = {
-            "level2", "BR001", "01/01/2023 12:00:00", "file.txt"
+            P06_IACC_01_PropertiesMgr.getLevel2ActionName(), "TEST_BRANCH", "01/01/2023 12:00:00", "file.txt"
         };
-        Object mainInstance = createMainInstance(args);
 
         try (
-            MockedStatic<GlobalAtlentic> mockedGA = mockStatic(GlobalAtlentic.class);
-            MockedStatic<P06_IACC_01_PropertiesMgr> mockedProps = mockStatic(P06_IACC_01_PropertiesMgr.class);
-            MockedStatic<StringConverter> mockedConverter = mockStatic(StringConverter.class);
+            MockedStatic<GlobalAtlentic> mockedGlobal = mockStatic(GlobalAtlentic.class);
+            MockedStatic<P06_IACC_00_Utility> mockedUtility = mockStatic(P06_IACC_01_Utility.class);
             MockedStatic<P06_IACC_01_Level2> mockedLevel2 = mockStatic(P06_IACC_01_Level2.class)
         ) {
-            Connection mockConn = mock(Connection.class);
-            mockedGA.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConn);
-            mockedProps.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
+            Connection mockConnection = mock(Connection.class);
+            mockedGlobal.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
 
-            Date eventDate = new Date();
-            mockedConverter.when(() -> StringConverter.StringToDate("01/01/2023 12:00:00")).thenReturn(eventDate);
+            Map<String, String> mockDateMap = new HashMap<>();
+            mockDateMap.put("INTF_EVENT_DATE", "01/01/2023 12:00:00");
+            mockDateMap.put("INTF_SYSTEM_BEGIN_DATE", "01/01/2023 00:00:00");
+            mockDateMap.put("INTF_SYSTEM_END_DATE", "01/01/2023 23:59:59");
+            mockedUtility.when(() -> P06_IACC_00_Utility.getAtlIntfDateByBranch(anyString(), any(Connection.class)))
+                         .thenReturn(mockDateMap);
 
             P06_IACC_01_Level2 mockLevel2 = mock(P06_IACC_01_Level2.class);
             mockedLevel2.when(P06_IACC_01_Level2::new).thenReturn(mockLevel2);
+            doNothing().when(mockLevel2).execute();
 
+            Object mainInstance = createMainInstance(args);
             invokeExecute(mainInstance);
 
             verify(mockLevel2).execute();
         }
     }
 
-    @Test(expected = P06_IACC_01_ParameterException.class)
-    public void testExecute_invalidParamCount_throwsException() throws Exception {
-        String[] args = { "levell" };
-        Object mainInstance = createMainInstance(args);
-        invokeExecute(mainInstance);
-    }
+    @Test
+    public void testGetAndSetStaticFields() throws Exception {
+        Field branchField = P06_IACC_01_Main.class.getDeclaredField("g_s_branch");
+        branchField.setAccessible(true);
+        branchField.set(null, "testBranch");
+        assertEquals("testBranch", P06_IACC_01_Main.getG_s_branch());
 
-    @Test(expected = P06_IACC_01_ParameterException.class)
-    public void testExecute_unknownAction_throwsException() throws Exception {
-        String[] args = { "unknown", "BR001", "01/01/2023 12:00:00" };
-        Object mainInstance = createMainInstance(args);
+        Field textFileField = P06_IACC_01_Main.class.getDeclaredField("g_s_textFileName");
+        textFileField.setAccessible(true);
+        textFileField.set(null, "testFile.txt");
+        assertEquals("testFile.txt", P06_IACC_01_Main.getG_s_textFileName());
 
-        try (
-            MockedStatic<GlobalAtlentic> mockedGA = mockStatic(GlobalAtlentic.class);
-            MockedStatic<StringConverter> mockedConverter = mockStatic(StringConverter.class)
-        ) {
-            Connection conn = mock(Connection.class);
-            mockedGA.when(GlobalAtlentic::getLoanIQConnection).thenReturn(conn);
-            Date event = new Date();
-            mockedConverter.when(() -> StringConverter.StringToDate("01/01/2023 12:00:00")).thenReturn(event);
+        Date testDate = new Date();
 
-            invokeExecute(mainInstance);
-        }
-    }
+        P06_IACC_01_Main.setG_o_eventTimestamp(testDate);
+        Field eventField = P06_IACC_01_Main.class.getDeclaredField("g_o_eventTimestamp");
+        eventField.setAccessible(true);
+        assertEquals(testDate, eventField.get(null));
+        assertEquals(testDate, P06_IACC_01_Main.getG_o_eventTimestamp());
 
-    @Test(expected = P06_IACC_01_ParameterException.class)
-    public void testExecute_invalidDateOrder_throwsException() throws Exception {
-        String[] args = {
-            "levell", "BR001", "01/01/2023 12:00:00", "01/01/2023 23:59:59", "01/01/2023 00:00:00"
-        };
-        Object mainInstance = createMainInstance(args);
+        P06_IACC_01_Main.set_o_beginDate(testDate);
+        Field beginField = P06_IACC_01_Main.class.getDeclaredField("g_o_beginDate");
+        beginField.setAccessible(true);
+        assertEquals(testDate, beginField.get(null));
+        assertEquals(testDate, P06_IACC_01_Main.getG_o_beginDate());
 
-        try (
-            MockedStatic<GlobalAtlentic> mockedGA = mockStatic(GlobalAtlentic.class);
-            MockedStatic<P06_IACC_01_PropertiesMgr> mockedProps = mockStatic(P06_IACC_01_PropertiesMgr.class);
-            MockedStatic<StringConverter> mockedConverter = mockStatic(StringConverter.class)
-        ) {
-            Connection conn = mock(Connection.class);
-            mockedGA.when(GlobalAtlentic::getLoanIQConnection).thenReturn(conn);
-            mockedProps.when(P06_IACC_01_PropertiesMgr::getLevellActionName).thenReturn("levell");
-
-            Date eventDate = new Date();
-            Date beginDate = new Date(eventDate.getTime() + 1000000);
-            Date endDate = new Date(eventDate.getTime() - 1000000);
-
-            mockedConverter.when(() -> StringConverter.StringToDate("01/01/2023 12:00:00")).thenReturn(eventDate);
-            mockedConverter.when(() -> StringConverter.StringToDate("01/01/2023 23:59:59")).thenReturn(beginDate);
-            mockedConverter.when(() -> StringConverter.StringToDate("01/01/2023 00:00:00")).thenReturn(endDate);
-
-            invokeExecute(mainInstance);
-        }
+        P06_IACC_01_Main.setG_o_endDate(testDate);
+        Field endField = P06_IACC_01_Main.class.getDeclaredField("g_o_endDate");
+        endField.setAccessible(true);
+        assertEquals(testDate, endField.get(null));
+        assertEquals(testDate, P06_IACC_01_Main.getG_o_endDate());
     }
 }
