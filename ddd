@@ -1,63 +1,79 @@
-package com.bnpparibas.atlentic.iacc.bopr.main.test;
-
-import com.bnpparibas.atlentic.common.StringConverter;
 import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.properties.P06_IACC_01_PropertiesMgr;
-import com.bnpparibas.atlentic.iacc.bopr.transaction.P06_IACC_01_Level1;
-import com.bnpparibas.atlentic.iacc.bopr.transaction.P06_IACC_01_Level2;
-
-import org.junit.Test;
+import com.bnpparibas.atlentic.iacc.bopr.util.P06_IACC_01_PropertiesMgr;
+import com.bnpparibas.framework.util.StringConverter;
+import org.junit.*;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.mockito.Mockito.*;
 
 public class P06_IACC_01_MainTest {
 
+    private String[] args;
+    private Object mainInstance;
+
+    @Before
+    public void setUp() throws Exception {
+        args = new String[] {"level1Action", "branchX", "01/06/2024", "01/06/2024", "02/06/2024"};
+        Class<?> clazz = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main");
+        mainInstance = sun.reflect.ReflectionFactory.getReflectionFactory()
+                .newConstructorForSerialization(clazz, Object.class.getDeclaredConstructor())
+                .newInstance();
+        // Set the g_o_args field
+        java.lang.reflect.Field argsField = clazz.getDeclaredField("g_o_args");
+        argsField.setAccessible(true);
+        argsField.set(mainInstance, args);
+    }
+
     @Test
-    public void testExecute_level1_withBeginAndEndDate() throws Exception {
-        String[] args = {"level1Action", "TEST_BRANCH", "01/01/2024", "02/01/2024", "03/01/2024"};
-
-        // Set static field g_o_args in P06_IACC_01_Main
-        setStaticField(P06_IACC_01_Main.class, "g_o_args", args);
-
-        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");
-        Date eventDate = sdf.parse("01/01/2024");
-        Date beginDate = sdf.parse("02/01/2024");
-        Date endDate = sdf.parse("03/01/2024");
-
+    public void testExecute_level1_withDates() throws Exception {
         try (
-            MockedStatic<StringConverter> stringConverterMock = Mockito.mockStatic(StringConverter.class);
-            MockedStatic<P06_IACC_01_PropertiesMgr> propsMock = Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class);
-            MockedStatic<P06_IACC_01_Level1> level1Mock = Mockito.mockStatic(P06_IACC_01_Level1.class);
+            MockedStatic<P06_IACC_01_PropertiesMgr> propMock = Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class);
+            MockedStatic<StringConverter> strConvMock = Mockito.mockStatic(StringConverter.class)
         ) {
-            stringConverterMock.when(() -> StringConverter.StringToDate("01/01/2024")).thenReturn(eventDate);
-            stringConverterMock.when(() -> StringConverter.StringToDate("02/01/2024")).thenReturn(beginDate);
-            stringConverterMock.when(() -> StringConverter.StringToDate("03/01/2024")).thenReturn(endDate);
+            // Mock static methods
+            propMock.when(P06_IACC_01_PropertiesMgr::getLevel1Action).thenReturn("level1Action");
 
-            propsMock.when(P06_IACC_01_PropertiesMgr::getLevellActionName).thenReturn("level1Action");
+            Date date = new Date();
+            strConvMock.when(() -> StringConverter.StringToDate(anyString())).thenReturn(date);
 
-            P06_IACC_01_Level1 mockLevel1 = mock(P06_IACC_01_Level1.class);
-            level1Mock.when(P06_IACC_01_Level1::new).thenReturn(mockLevel1);
-
-            doNothing().when(mockLevel1).execute();
-
-            // Invoke private static execute() method
-            Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+            // Reflectively invoke execute
+            Method executeMethod = mainInstance.getClass().getDeclaredMethod("execute");
             executeMethod.setAccessible(true);
-            executeMethod.invoke(null);
+            executeMethod.invoke(mainInstance);
+
+            // Assertions can be added if fields are accessible or logs can be verified
         }
     }
 
-    // Utility method to set private static fields
-    private void setStaticField(Class<?> clazz, String fieldName, Object value) throws Exception {
-        Field field = clazz.getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(null, value);  // null because static field
+    @Test
+    public void testExecute_level2_withoutFileName() throws Exception {
+        args = new String[] {"level2Action", "branchX"};
+        setArgs(args);
+
+        try (
+            MockedStatic<P06_IACC_01_PropertiesMgr> propMock = Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class);
+            MockedStatic<StringConverter> strConvMock = Mockito.mockStatic(StringConverter.class)
+        ) {
+            propMock.when(P06_IACC_01_PropertiesMgr::getLevel2Action).thenReturn("level2Action");
+
+            Date date = new Date();
+            strConvMock.when(() -> StringConverter.StringToDate(anyString())).thenReturn(date);
+
+            Method executeMethod = mainInstance.getClass().getDeclaredMethod("execute");
+            executeMethod.setAccessible(true);
+            executeMethod.invoke(mainInstance);
+        }
+    }
+
+    private void setArgs(String[] testArgs) throws Exception {
+        java.lang.reflect.Field argsField = mainInstance.getClass().getDeclaredField("g_o_args");
+        argsField.setAccessible(true);
+        argsField.set(mainInstance, testArgs);
     }
 }
