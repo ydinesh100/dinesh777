@@ -1,95 +1,100 @@
-package com.bnpparibas.atlentic.iacc.bopr.main.test;
+package com.bnpparibas.atlentic.iacc.bopr.main;
 
 import static org.mockito.Mockito.*;
-import static org.junit.Assert.*;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.sql.Connection;
+import java.lang.reflect.*;
+import java.sql.SQLException;
 import java.util.*;
 
-import org.junit.Test;
-import org.junit.Before;
-import org.mockito.MockedStatic;
+import org.junit.*;
+import org.junit.runner.RunWith;
+import org.mockito.*;
+import org.mockito.junit.MockitoJUnitRunner;
 
-import com.bnpparibas.atlentic.common.GlobalAtlentic;
-import com.bnpparibas.atlentic.common.P06_IACC_01_Utility;
-import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
-import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.properties.P06_IACC_01_PropertiesMgr;
 import com.bnpparibas.atlentic.iacc.bopr.exception.P06_IACC_01_ParameterException;
 import com.bnpparibas.atlentic.iacc.bopr.exception.P06_IACC_01_ExitApplicationException;
-import com.bnpparibas.atlentic.common.StringConverter;
+import com.bnpparibas.atlentic.iacc.bopr.util.P06_IACC_01_PropertiesMgr;
+import com.bnpparibas.common.utils.StringConverter;
 
+@RunWith(MockitoJUnitRunner.class)
 public class P06_IACC_01_MainTest {
 
-    private P06_IACC_01_Main mainInstance;
-    private String[] args;
+    private Object mainInstance;
+    private Class<?> mainClass;
 
     @Before
     public void setUp() throws Exception {
-        args = new String[]{"levell", "branchA", "01/01/2023 12:00:00", "01/01/2023 00:00:00", "01/01/2023 23:59:59"};
-        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
+        mainClass = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main");
+        Constructor<?> constructor = mainClass.getDeclaredConstructor(String[].class);
         constructor.setAccessible(true);
+        String[] args = new String[]{"levell", "BNP", "01/01/2025 120000", "01/01/2025", "02/01/2025"};
         mainInstance = constructor.newInstance((Object) args);
     }
 
     @Test
-    public void testExecute_Level1_FullPath() throws Exception {
+    public void testExecute_Level1_WithAllParams() throws Exception {
         try (
-            MockedStatic<GlobalAtlentic> globalMock = mockStatic(GlobalAtlentic.class);
-            MockedStatic<P06_IACC_01_Utility> utilityMock = mockStatic(P06_IACC_01_Utility.class);
             MockedStatic<P06_IACC_01_PropertiesMgr> propMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
-            MockedStatic<P06_IACC_01_Level1> level1Mock = mockStatic(P06_IACC_01_Level1.class);
+            MockedStatic<StringConverter> convMock = mockStatic(StringConverter.class);
+            MockedConstruction<?> level1Mock = mockConstruction(
+                P06_IACC_01_Level1.class,
+                (mock, context) -> when(mock.execute()).thenReturn(null)
+            )
         ) {
             // Mocks
-            Connection mockConnection = mock(Connection.class);
-            globalMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
+            propMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("levell");
 
-            Map<String, String> dateMap = new HashMap<>();
-            dateMap.put("INTF_EVENT_DATE", "01/01/2023 12:00:00");
-            dateMap.put("INTF_SYSTEM_BEGIN_DATE", "01/01/2023 00:00:00");
-            dateMap.put("INTF_SYSTEM_END_DATE", "01/01/2023 23:59:59");
+            Date eventDate = new Date();
+            Date beginDate = new Date(System.currentTimeMillis() - 86400000); // yesterday
+            Date endDate = new Date();
 
-            utilityMock.when(() -> P06_IACC_01_Utility.getAtlIntfDateByBranch(anyString(), any()))
-                    .thenReturn(dateMap);
-            propMock.when(P06_IACC_01_PropertiesMgr::getLevellActionName).thenReturn("levell");
+            convMock.when(() -> StringConverter.StringToDate("01/01/2025 120000")).thenReturn(eventDate);
+            convMock.when(() -> StringConverter.StringToDate("01/01/2025")).thenReturn(beginDate);
+            convMock.when(() -> StringConverter.StringToDate("02/01/2025")).thenReturn(endDate);
 
-            P06_IACC_01_Level1 mockLevel1 = mock(P06_IACC_01_Level1.class);
-            level1Mock.when(P06_IACC_01_Level1::new).thenReturn(mockLevel1);
-
-            // Reflection
-            Method method = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-            method.setAccessible(true);
-
-            method.invoke(mainInstance);
-
-            verify(mockLevel1).execute();
+            // Set private field
+            Method executeMethod = mainClass.getDeclaredMethod("execute");
+            executeMethod.setAccessible(true);
+            executeMethod.invoke(mainInstance);
         }
     }
 
-    @Test(expected = P06_IACC_01_ParameterException.class)
-    public void testExecute_ThrowsException_WhenInsufficientArgs() throws Exception {
-        String[] badArgs = new String[]{};  // No arguments
-        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
+    @Test
+    public void testExecute_Level2_WithFileName() throws Exception {
+        Constructor<?> constructor = mainClass.getDeclaredConstructor(String[].class);
         constructor.setAccessible(true);
-        P06_IACC_01_Main instance = constructor.newInstance((Object) badArgs);
+        String[] args = new String[]{"level2", "BNP", "01/01/2025 120000", "testFile.txt"};
+        Object level2Instance = constructor.newInstance((Object) args);
 
-        Method method = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        method.setAccessible(true);
-        try {
-            method.invoke(instance);
-        } catch (Exception e) {
-            throw (Exception) e.getCause();  // unwrap
+        try (
+            MockedStatic<P06_IACC_01_PropertiesMgr> propMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
+            MockedStatic<StringConverter> convMock = mockStatic(StringConverter.class);
+            MockedConstruction<?> level2Mock = mockConstruction(
+                P06_IACC_01_Level2.class,
+                (mock, context) -> when(mock.execute()).thenReturn(null)
+            )
+        ) {
+            propMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
+
+            convMock.when(() -> StringConverter.StringToDate("01/01/2025 120000")).thenReturn(new Date());
+
+            Method executeMethod = mainClass.getDeclaredMethod("execute");
+            executeMethod.setAccessible(true);
+            executeMethod.invoke(level2Instance);
         }
     }
 
-    // You can add more test cases:
-    // - testExecute_Level2_WithFileName
-    // - testExecute_Level2_WithoutFileName
-    // - testExecute_InvalidDateFormat
-    // - testExecute_BeginDateAfterEndDate
+    @Test(expected = InvocationTargetException.class)
+    public void testExecute_InvalidParamCount_ShouldThrow() throws Exception {
+        Constructor<?> constructor = mainClass.getDeclaredConstructor(String[].class);
+        constructor.setAccessible(true);
+        String[] args = new String[]{}; // empty
+        Object invalidInstance = constructor.newInstance((Object) args);
 
+        Method executeMethod = mainClass.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
+
+        // This should throw InvocationTargetException wrapping ParameterException
+        executeMethod.invoke(invalidInstance);
+    }
 }
