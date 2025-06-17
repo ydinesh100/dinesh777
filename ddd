@@ -1,105 +1,117 @@
 package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
-import static org.junit.Assert.*;
+import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
+import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
+
+import org.junit.*;
+import org.mockito.MockedConstruction;
+import org.mockito.MockedStatic;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 
-import org.junit.Test;
-
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
 public class P06_IACC_01_MainTest {
 
-    /**
-     * Helper method to create an instance of P06_IACC_01_Main with given args
-     */
+    // Helper to set up the instance with args
     private P06_IACC_01_Main createInstance(String[] args) throws Exception {
         Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
         constructor.setAccessible(true);
         return constructor.newInstance((Object) args);
     }
 
-    /**
-     * Helper method to invoke private execute() method
-     */
+    // Helper to invoke private execute()
     private void invokeExecute(P06_IACC_01_Main instance) throws Exception {
         Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
         executeMethod.setAccessible(true);
         executeMethod.invoke(instance);
     }
 
-    /**
-     * Test that execute() throws ParameterException for insufficient arguments
-     */
     @Test
-    public void testExecute_InsufficientArgs_ThrowsParameterException() throws Exception {
-        String[] insufficientArgs = new String[] { "Level1", "BR1", "01/01/2025 00:00:00" }; // Fewer than required
-
-        P06_IACC_01_Main instance = createInstance(insufficientArgs);
-
-        try {
-            invokeExecute(instance);
-            fail("Expected P06_IACC_01_ParameterException due to insufficient args");
-        } catch (Exception e) {
-            // The actual thrown exception is wrapped in InvocationTargetException, unwrap it
-            Throwable cause = e.getCause();
-            assertNotNull(cause);
-            assertTrue(cause instanceof P06_IACC_01_ParameterException);
-            assertTrue(cause.getMessage().contains("Wrong parameters number"));
-        }
-    }
-
-    /**
-     * Test that execute() runs successfully for correct Level1 arguments
-     * (Update these args based on your actual parameter requirements)
-     */
-    @Test
-    public void testExecute_Level1_ValidArgs() throws Exception {
-        String[] validLevel1Args = new String[] {
-            "Level1", "BR1", "01/01/2025 00:00:00", "01/01/2025 00:00:00", "02/01/2025 00:00:00"
-        };
-
-        P06_IACC_01_Main instance = createInstance(validLevel1Args);
-
-        // Should not throw exception
-        invokeExecute(instance);
-    }
-
-    /**
-     * Test that execute() runs successfully for correct Level2 arguments
-     * (Update these args based on your actual parameter requirements)
-     */
-    @Test
-    public void testExecute_Level2_ValidArgs() throws Exception {
-        String[] validLevel2Args = new String[] {
-            "Level2", "BR1", "01/01/2025 00:00:00", "outputReport.txt"
-        };
-
-        P06_IACC_01_Main instance = createInstance(validLevel2Args);
-
-        // Should not throw exception
-        invokeExecute(instance);
-    }
-
-    /**
-     * Test unknown action throws ParameterException
-     */
-    @Test
-    public void testExecute_UnknownAction_ThrowsParameterException() throws Exception {
-        String[] args = new String[] { "UnknownAction", "BR1", "01/01/2025 00:00:00" };
-
+    public void testExecute_NoArgs_ThrowsParameterException() throws Exception {
+        String[] args = new String[0];
         P06_IACC_01_Main instance = createInstance(args);
 
         try {
             invokeExecute(instance);
-            fail("Expected P06_IACC_01_ParameterException due to unknown action");
+            fail("Expected P06_IACC_01_ParameterException for no args");
         } catch (Exception e) {
             Throwable cause = e.getCause();
-            assertNotNull(cause);
             assertTrue(cause instanceof P06_IACC_01_ParameterException);
-            assertTrue(cause.getMessage().contains("unknown"));
+            assertTrue(cause.getMessage().toLowerCase().contains("wrong parameters number"));
+        }
+    }
+
+    @Test
+    public void testExecute_InsufficientArgs_ThrowsParameterException() throws Exception {
+        String[] args = new String[] { "levell", "BR1", "01/01/2025 00:00:00" }; // Only 3 args
+        P06_IACC_01_Main instance = createInstance(args);
+
+        try {
+            invokeExecute(instance);
+            fail("Expected P06_IACC_01_ParameterException for insufficient args");
+        } catch (Exception e) {
+            Throwable cause = e.getCause();
+            assertTrue(cause instanceof P06_IACC_01_ParameterException);
+            assertTrue(cause.getMessage().toLowerCase().contains("wrong parameters number"));
+        }
+    }
+
+    @Test
+    public void testExecute_InvalidAction_ThrowsParameterException() throws Exception {
+        String[] args = new String[] {
+            "Level1", "BR1", "01/01/2025 00:00:00", "01/01/2025 00:00:00", "02/01/2025 00:00:00",
+            "user", "pass", "env", "src", "path", "flag"
+        };
+        P06_IACC_01_Main instance = createInstance(args);
+
+        try {
+            invokeExecute(instance);
+            fail("Expected P06_IACC_01_ParameterException for invalid action");
+        } catch (Exception e) {
+            Throwable cause = e.getCause();
+            assertTrue(cause instanceof P06_IACC_01_ParameterException);
+            assertTrue(cause.getMessage().toLowerCase().contains("unknown"));
+        }
+    }
+
+    @Test
+    public void testExecute_ValidLevel1_CallsExecute() throws Exception {
+        String[] args = new String[] {
+            "levell", "BR1", "01/01/2025 00:00:00", "01/01/2025 00:00:00", "02/01/2025 00:00:00",
+            "user", "pass", "env", "src", "path", "flag"
+        };
+
+        try (MockedConstruction<P06_IACC_01_Level1> mocked = mockConstruction(P06_IACC_01_Level1.class,
+                (mock, context) -> doNothing().when(mock).execute())) {
+
+            P06_IACC_01_Main instance = createInstance(args);
+            invokeExecute(instance);
+
+            assertEquals(1, mocked.constructed().size());
+            verify(mocked.constructed().get(0), times(1)).execute();
+        }
+    }
+
+    @Test
+    public void testExecute_ValidLevel2_CallsExecute() throws Exception {
+        String[] args = new String[] {
+            "level2", "BR1", "01/01/2025 00:00:00", "out.txt",
+            "user", "pass", "env", "src", "flag1", "flag2", "extra"
+        };
+
+        try (MockedConstruction<P06_IACC_01_Level2> mocked = mockConstruction(P06_IACC_01_Level2.class,
+                (mock, context) -> doNothing().when(mock).execute())) {
+
+            P06_IACC_01_Main instance = createInstance(args);
+            invokeExecute(instance);
+
+            assertEquals(1, mocked.constructed().size());
+            verify(mocked.constructed().get(0), times(1)).execute();
         }
     }
 }
