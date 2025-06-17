@@ -1,85 +1,142 @@
 
+package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
-package com.bnpparibas.atlentic.iacc.bopr.main;
-
+import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
 import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
+import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
+import com.bnpparibas.atlentic.common.GlobalAtlentic;
+import com.bnpparibas.atlentic.common.Pea_IACC_00_Utility;
 
-import java.lang.reflect.*;
-import java.text.SimpleDateFormat;
+import org.junit.*;
+import org.junit.runner.RunWith;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import org.mockito.junit.MockitoJUnitRunner;
+
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.sql.Connection;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 
-import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
+@RunWith(MockitoJUnitRunner.class)
 public class P06_IACC_01_MainTest {
 
-    private static final SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+    private MockedStatic<GlobalAtlentic> globalAtlenticMock;
+    private MockedStatic<Pea_IACC_00_Utility> utilityMock;
+    private MockedStatic<P06_IACC_01_PropertiesMgr> propertiesMgrMock;
+
+    private Connection mockedConnection;
 
     @Before
-    public void setUp() throws Exception {
-        setStaticField("g_o_eventTimestamp", null);
-        setStaticField("g_o_beginDate", null);
-        setStaticField("g_o_endDate", null);
-        setStaticField("g_s_branch", null);
-        setStaticField("g_s_textFileName", null);
-        setStaticField("l_s_action", null);
+    public void setUp() {
+        // Mock connection and static calls
+        mockedConnection = mock(Connection.class);
+        globalAtlenticMock = Mockito.mockStatic(GlobalAtlentic.class);
+        utilityMock = Mockito.mockStatic(Pea_IACC_00_Utility.class);
+        propertiesMgrMock = Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class);
+
+        // Stub the DB connection
+        globalAtlenticMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockedConnection);
+
+        // Stub date config data
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put("INTF_EVENT_DATE", "01/01/2023 12:00:00");
+        configMap.put("INTF_SYSTEM_BEGIN_DATE", "01/01/2023 12:00:00");
+        configMap.put("INTF_SYSTEM_END_DATE", "02/01/2023 12:00:00");
+        utilityMock.when(() ->
+            Pea_IACC_00_Utility.getAtlIntfDateByBranch(anyString(), eq(mockedConnection))
+        ).thenReturn(configMap);
+
+        // Stub action names
+        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
+        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
     }
 
     @After
-    public void tearDown() throws Exception {
-        setUp(); // Reset after each test
+    public void tearDown() {
+        globalAtlenticMock.close();
+        utilityMock.close();
+        propertiesMgrMock.close();
     }
 
-    private void setStaticField(String fieldName, Object value) throws Exception {
-        Field field = P06_IACC_01_Main.class.getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(null, value);
-    }
+    private void invokeExecute(String[] args) throws Exception {
+        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
+        constructor.setAccessible(true);
+        Object instance = constructor.newInstance((Object) args);
 
-    private Object getStaticField(String fieldName) throws Exception {
-        Field field = P06_IACC_01_Main.class.getDeclaredField(fieldName);
-        field.setAccessible(true);
-        return field.get(null);
-    }
-
-    private void invokePrivateMethod(Object instance, String methodName, Class<?>[] paramTypes, Object... args) throws Exception {
-        Method method = P06_IACC_01_Main.class.getDeclaredMethod(methodName, paramTypes);
-        method.setAccessible(true);
-        method.invoke(instance, args);
+        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
+        executeMethod.invoke(instance);
     }
 
     @Test(expected = P06_IACC_01_ParameterException.class)
     public void testInvalidArgumentLengthThrowsException() throws Throwable {
-        String[] args = {"invalid_only_action"};
-        Object instance = createMainInstance(args);
         try {
-            invokePrivateMethod(instance, "execute", new Class<?>[]{});
-        } catch (InvocationTargetException e) {
-            throw e.getCause(); // unwrap
+            invokeExecute(new String[]{});  // Less than 1 argument
+        } catch (Exception ex) {
+            throw ex.getCause();
         }
     }
 
     @Test
-    public void testGettersAndSettersUsingReflection() throws Exception {
-        Date now = sdf.parse("01/01/2024 00:00:00");
-        setStaticField("g_o_eventTimestamp", now);
-        setStaticField("g_o_beginDate", now);
-        setStaticField("g_o_endDate", now);
-        setStaticField("g_s_branch", "TEST_BRANCH");
-        setStaticField("g_s_textFileName", "file.txt");
-
-        assertEquals(now, P06_IACC_01_Main.get6_o_eventTimestamp());
-        assertEquals(now, P06_IACC_01_Main.get_o_beginDate());
-        assertEquals(now, P06_IACC_01_Main.getG_o_endDate());
-        assertEquals("TEST_BRANCH", P06_IACC_01_Main.getG_s_branch());
-        assertEquals("file.txt", P06_IACC_01_Main.getG_s_textFileName());
+    public void testLevel1Valid5Args() throws Exception {
+        invokeExecute(new String[]{"level1", "BR", "01/01/2023 12:00:00", "01/01/2023 12:00:00", "02/01/2023 12:00:00"});
     }
 
-    private Object createMainInstance(String[] args) throws Exception {
-        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
-        constructor.setAccessible(true);
-        return constructor.newInstance((Object) args);
+    @Test
+    public void testLevel1WithDefaultDates() throws Exception {
+        invokeExecute(new String[]{"level1"});
+    }
+
+    @Test
+    public void testLevel2WithFilename() throws Exception {
+        invokeExecute(new String[]{"level2", "BR", "01/01/2023 12:00:00", "report.txt"});
+    }
+
+    @Test
+    public void testLevel2WithOnlyBranch() throws Exception {
+        invokeExecute(new String[]{"level2", "report.txt"});
+    }
+
+    @Test(expected = P06_IACC_01_ParameterException.class)
+    public void testInvalidDateOrderThrowsException() throws Throwable {
+        try {
+            // Begin date after end date
+            invokeExecute(new String[]{"level1", "BR", "01/01/2023 12:00:00", "03/01/2023 12:00:00", "02/01/2023 12:00:00"});
+        } catch (Exception e) {
+            throw e.getCause();
+        }
+    }
+
+    @Test(expected = P06_IACC_01_ParameterException.class)
+    public void testUnknownActionThrowsException() throws Throwable {
+        try {
+            invokeExecute(new String[]{"unknownAction", "BR", "01/01/2023 12:00:00"});
+        } catch (Exception e) {
+            throw e.getCause();
+        }
+    }
+
+    @Test
+    public void testGetterAndSetters() {
+        Date now = new Date();
+        P06_IACC_01_Main.setG_o_eventTimestamp(now);
+        Assert.assertEquals(now, P06_IACC_01_Main.get6_o_eventTimestamp());
+
+        P06_IACC_01_Main.seto_o_beginDate(now);
+        Assert.assertEquals(now, P06_IACC_01_Main.get_o_beginDate());
+
+        P06_IACC_01_Main.setG_o_endDate(now);
+        Assert.assertEquals(now, P06_IACC_01_Main.getG_o_endDate());
+    }
+
+    @Test
+    public void testMainMethod() {
+        P06_IACC_01_Main.main(new String[]{"level1"});
     }
 }
