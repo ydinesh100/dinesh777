@@ -1,18 +1,34 @@
-@Test
-public void testExecute_withValidLevel2Arguments_callsLevel2Execute() {
-    propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-    propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
+    @Test
+    public void testDeleteConcurrentRecords() throws Exception {
+        try (
+            MockedStatic<P06_IACC_01_Main> mainMock = Mockito.mockStatic(P06_IACC_01_Main.class);
+            MockedStatic<P06_IACC_01_PropertiesMgr> propMock = Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class);
+            MockedStatic<Dutils> dutilsMock = Mockito.mockStatic(Dutils.class);
+            MockedStatic<DButils> dbUtilsMock = Mockito.mockStatic(DButils.class)
+        ) {
+            // Arrange
+            String expectedQuery = "DELETE FROM concurrent_records WHERE cde_branch = ? AND dte_event = ?";
+            String branch = "TEST_BRANCH";
+            Timestamp eventTimestamp = new Timestamp(System.currentTimeMillis());
 
-    String[] args = new String[] {
-        "level2", "branchA", "01/01/2025", "01/01/2025", "02/01/2025", "file.txt",
-        "param7", "param8", "param9", "param10", "param11"
-    };
+            mainMock.when(P06_IACC_01_Main::get_s_branch).thenReturn(branch);
+            mainMock.when(P06_IACC_01_Main::get_o_eventTimestamp).thenReturn(eventTimestamp);
+            propMock.when(() -> P06_IACC_01_PropertiesMgr.getQueryFromPropertiesFile("delete.concurrent.records")).thenReturn(expectedQuery);
+            dutilsMock.when(() -> Dutils.getSqlTimestamp(eventTimestamp)).thenReturn(eventTimestamp);
 
-    try {
-        invokeExecute(args);
-    } catch (Exception e) {
-        Throwable cause = e.getCause();
-        cause.printStackTrace();  // This will print the exact error from your code
-        fail("Execution failed due to: " + cause);
+            when(mockPreparedStatement.executeUpdate()).thenReturn(1);
+
+            // Act
+            Method method = P06_IACC_01_Level108Transaction.class.getDeclaredMethod("deleteConcurrentRecords");
+            method.setAccessible(true);
+            method.invoke(dbTransaction);
+
+            // Assert
+            verify(mockConnection).prepareStatement(expectedQuery);
+            verify(mockPreparedStatement).setString(1, branch);
+            verify(mockPreparedStatement).setTimestamp(2, eventTimestamp);
+            verify(mockPreparedStatement).executeUpdate();
+            dbUtilsMock.verify(() -> DButils.closeConnexion(null, null, mockPreparedStatement));
+        }
     }
 }
