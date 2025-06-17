@@ -1,102 +1,181 @@
 package com.bnpparibas.atlentic.iacc.bopr.main;
 
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
+
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.Date;
+
+import org.junit.*;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+
 import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
 import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
 import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
 import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_81_ExitApplicationException;
 import com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter;
-
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.MockedConstruction;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
-import java.util.Date;
-
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
 
 public class P06_IACC_01_MainTest {
 
-    private MockedStatic<P06_IACC_01_PropertiesMgr> propsMock;
-    private MockedStatic<StringConverter> stringConverterMock;
+    private P06_IACC_01_Main mainInstance;
+
+    private Method executeMethod;
+
+    private MockedStatic<P06_IACC_01_PropertiesMgr> propertiesMgrStaticMock;
+    private MockedStatic<StringConverter> stringConverterStaticMock;
+
+    private MockedStatic<P06_IACC_01_Level1> level1StaticMock;
+    private MockedStatic<P06_IACC_01_Level2> level2StaticMock;
+
+    private P06_IACC_01_Level1 mockLevel1;
+    private P06_IACC_01_Level2 mockLevel2;
 
     @Before
-    public void setUp() {
-        propsMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
-        stringConverterMock = mockStatic(StringConverter.class);
+    public void setUp() throws Exception {
+        // Prepare args with dummy data; will override in tests
+        String[] args = new String[] {"level1", "BEFOR", "01/01/2025"};
+
+        mainInstance = createInstanceWithArgs(args);
+
+        // Get private execute() method
+        executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
+
+        // Mock static methods from PropertiesMgr
+        propertiesMgrStaticMock = Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class);
+
+        // Mock StringConverter.StringToDate
+        stringConverterStaticMock = Mockito.mockStatic(StringConverter.class);
+
+        // Mock Level1 and Level2 classes
+        mockLevel1 = mock(P06_IACC_01_Level1.class);
+        mockLevel2 = mock(P06_IACC_01_Level2.class);
+
+        // Level1 and Level2 constructors replaced by mocks via Mockito inline mocking
+        level1StaticMock = Mockito.mockStatic(P06_IACC_01_Level1.class);
+        level1StaticMock.when(() -> new P06_IACC_01_Level1()).thenReturn(mockLevel1);
+
+        level2StaticMock = Mockito.mockStatic(P06_IACC_01_Level2.class);
+        level2StaticMock.when(() -> new P06_IACC_01_Level2()).thenReturn(mockLevel2);
     }
 
     @After
     public void tearDown() {
-        propsMock.close();
-        stringConverterMock.close();
+        propertiesMgrStaticMock.close();
+        stringConverterStaticMock.close();
+        level1StaticMock.close();
+        level2StaticMock.close();
     }
 
-    private P06_IACC_01_Main createMain(String[] args) throws Exception {
-        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
+    // Helper: create instance with args array
+    private P06_IACC_01_Main createInstanceWithArgs(String[] args) throws Exception {
+        // private constructor
+        var constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
         constructor.setAccessible(true);
         return constructor.newInstance((Object) args);
     }
 
-    private void invokeExecute(P06_IACC_01_Main mainObj) throws Exception {
-        Method method = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        method.setAccessible(true);
-        method.invoke(mainObj);
-    }
-
-    @Test
-    public void testExecute_Level1_Valid5Params() throws Exception {
-        String[] args = {"LEVEL1", "BRANCH1", "01/01/2024", "01/01/2023", "31/12/2023"};
-
-        propsMock.when(P06_IACC_01_PropertiesMgr::getLevellActionName).thenReturn("LEVEL1");
-        stringConverterMock.when(() -> StringConverter.StringToDate(anyString())).thenReturn(new Date());
-
-        try (MockedConstruction<P06_IACC_01_Level1> level1Construction = mockConstruction(P06_IACC_01_Level1.class,
-                (mock, context) -> doNothing().when(mock).execute())) {
-
-            P06_IACC_01_Main main = createMain(args);
-            invokeExecute(main);
-
-            verify(level1Construction.constructed().get(0), times(1)).execute();
-        }
-    }
-
-    @Test
-    public void testExecute_Level2_Valid4Params() throws Exception {
-        String[] args = {"LEVEL2", "BRANCH1", "01/01/2024", "file.txt"};
-
-        propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("LEVEL2");
-        stringConverterMock.when(() -> StringConverter.StringToDate(anyString())).thenReturn(new Date());
-
-        try (MockedConstruction<P06_IACC_01_Level2> level2Construction = mockConstruction(P06_IACC_01_Level2.class,
-                (mock, context) -> doNothing().when(mock).execute())) {
-
-            P06_IACC_01_Main main = createMain(args);
-            invokeExecute(main);
-
-            verify(level2Construction.constructed().get(0), times(1)).execute();
-        }
-    }
-
-    @Test
-    public void testExecute_InvalidParams_ThrowsParameterException() throws Exception {
-        String[] args = {}; // invalid argument length
-
-        P06_IACC_01_Main main = createMain(args);
-        Method method = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        method.setAccessible(true);
-
+    // Helper: invoke private execute()
+    private void invokeExecute() throws Throwable {
         try {
-            method.invoke(main);
-            fail("Expected P06_IACC_01_ParameterException");
-        } catch (Exception ex) {
-            Throwable cause = ex.getCause();
-            assertTrue("Unexpected exception type: " + cause, cause instanceof P06_IACC_01_ParameterException);
+            executeMethod.invoke(mainInstance);
+        } catch (InvocationTargetException e) {
+            // unwrap target exception
+            throw e.getTargetException();
         }
+    }
+
+    @Test
+    public void testExecute_level1ValidParameters_shouldCallLevel1Execute() throws Throwable {
+        // Arrange
+        String[] args = new String[] {"level1", "BEFOR", "01/01/2025", "01/01/2024", "31/12/2024"};
+        mainInstance = createInstanceWithArgs(args);
+
+        propertiesMgrStaticMock.when(P06_IACC_01_PropertiesMgr::getLevellActionName).thenReturn("level1");
+        stringConverterStaticMock.when(() -> StringConverter.StringToDate("01/01/2025")).thenReturn(new Date());
+        stringConverterStaticMock.when(() -> StringConverter.StringToDate("01/01/2024")).thenReturn(new Date(1000000));
+        stringConverterStaticMock.when(() -> StringConverter.StringToDate("31/12/2024")).thenReturn(new Date(2000000));
+
+        // Act
+        invokeExecute();
+
+        // Assert
+        verify(mockLevel1, times(1)).execute();
+        verify(mockLevel2, never()).execute();
+    }
+
+    @Test
+    public void testExecute_level2ValidParameters_shouldCallLevel2Execute() throws Throwable {
+        // Arrange
+        String[] args = new String[] {"level2", "BEFOR", "01/01/2025", "testfile.txt"};
+        mainInstance = createInstanceWithArgs(args);
+
+        propertiesMgrStaticMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
+        stringConverterStaticMock.when(() -> StringConverter.StringToDate("01/01/2025")).thenReturn(new Date());
+
+        // Act
+        invokeExecute();
+
+        // Assert
+        verify(mockLevel2, times(1)).execute();
+        verify(mockLevel1, never()).execute();
+    }
+
+    @Test(expected = P06_IACC_01_ParameterException.class)
+    public void testExecute_noArguments_shouldThrowParameterException() throws Throwable {
+        // Arrange
+        String[] args = new String[0];
+        mainInstance = createInstanceWithArgs(args);
+
+        // Act
+        invokeExecute();
+    }
+
+    @Test(expected = P06_IACC_01_ParameterException.class)
+    public void testExecute_invalidAction_shouldThrowParameterException() throws Throwable {
+        // Arrange
+        String[] args = new String[] {"unknown_action", "BEFOR", "01/01/2025"};
+        mainInstance = createInstanceWithArgs(args);
+
+        propertiesMgrStaticMock.when(P06_IACC_01_PropertiesMgr::getLevellActionName).thenReturn("level1");
+        propertiesMgrStaticMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
+
+        stringConverterStaticMock.when(() -> StringConverter.StringToDate("01/01/2025")).thenReturn(new Date());
+
+        // Act
+        invokeExecute();
+    }
+
+    @Test(expected = P06_IACC_01_ParameterException.class)
+    public void testExecute_invalidDateFormat_shouldThrowParameterException() throws Throwable {
+        // Arrange
+        String[] args = new String[] {"level1", "BEFOR", "bad-date"};
+        mainInstance = createInstanceWithArgs(args);
+
+        propertiesMgrStaticMock.when(P06_IACC_01_PropertiesMgr::getLevellActionName).thenReturn("level1");
+
+        stringConverterStaticMock.when(() -> StringConverter.StringToDate("bad-date")).thenReturn(null);
+
+        // Act
+        invokeExecute();
+    }
+
+    @Test(expected = P06_IACC_01_ParameterException.class)
+    public void testExecute_beginDateAfterEndDate_shouldThrowParameterException() throws Throwable {
+        // Arrange
+        String[] args = new String[] {"level1", "BEFOR", "01/01/2025", "31/12/2025", "01/01/2025"};
+        mainInstance = createInstanceWithArgs(args);
+
+        propertiesMgrStaticMock.when(P06_IACC_01_PropertiesMgr::getLevellActionName).thenReturn("level1");
+
+        stringConverterStaticMock.when(() -> StringConverter.StringToDate("01/01/2025")).thenReturn(new Date(1000000));       // eventDate
+        stringConverterStaticMock.when(() -> StringConverter.StringToDate("31/12/2025")).thenReturn(new Date(3000000));       // beginDate
+        stringConverterStaticMock.when(() -> StringConverter.StringToDate("01/01/2025")).thenReturn(new Date(1000000));       // endDate
+
+        // Act
+        invokeExecute();
     }
 }
