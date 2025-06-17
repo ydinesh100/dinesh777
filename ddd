@@ -3,7 +3,8 @@ package com.bnpparibas.atlentic.iacc.bopr.main;
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
-import java.sql.SQLException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -18,24 +19,36 @@ import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterExc
 @RunWith(MockitoJUnitRunner.class)
 public class P06_IACC_01_MainTest {
 
+    // Utility method to instantiate P06_IACC_01_Main via reflection
+    private P06_IACC_01_Main createMainInstance(String[] args) throws Exception {
+        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
+        constructor.setAccessible(true);
+        return constructor.newInstance((Object) args);
+    }
+
+    // Utility method to invoke private execute() via reflection
+    private void invokeExecute(P06_IACC_01_Main mainInstance) throws Exception {
+        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
+        executeMethod.invoke(mainInstance);
+    }
+
     @Test
     public void testExecute_level1Action_withValidArgs() throws Exception {
         String[] args = {"level1Action", "BRANCH", "01/01/2025", "01/01/2024", "01/02/2024"};
+
         try (MockedStatic<P06_IACC_01_PropertiesMgr> propsMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
              MockedStatic<P06_IACC_01_Level1> level1Mock = mockStatic(P06_IACC_01_Level1.class)) {
 
-            // Mock static methods on PropertiesMgr
             propsMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1Action");
             propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2Action");
 
-            // Mock Level1 constructor and execute method
             P06_IACC_01_Level1 mockLevel1 = mock(P06_IACC_01_Level1.class);
             level1Mock.when(P06_IACC_01_Level1::new).thenReturn(mockLevel1);
 
-            P06_IACC_01_Main main = new P06_IACC_01_Main(args);
-            main.execute();
+            P06_IACC_01_Main main = createMainInstance(args);
+            invokeExecute(main);
 
-            // Verify that Level1 execute was called
             verify(mockLevel1).execute();
         }
     }
@@ -43,6 +56,7 @@ public class P06_IACC_01_MainTest {
     @Test
     public void testExecute_level2Action_withValidArgs() throws Exception {
         String[] args = {"level2Action", "BRANCH", "01/01/2025", "output.txt"};
+
         try (MockedStatic<P06_IACC_01_PropertiesMgr> propsMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
              MockedStatic<P06_IACC_01_Level2> level2Mock = mockStatic(P06_IACC_01_Level2.class)) {
 
@@ -52,8 +66,8 @@ public class P06_IACC_01_MainTest {
             P06_IACC_01_Level2 mockLevel2 = mock(P06_IACC_01_Level2.class);
             level2Mock.when(P06_IACC_01_Level2::new).thenReturn(mockLevel2);
 
-            P06_IACC_01_Main main = new P06_IACC_01_Main(args);
-            main.execute();
+            P06_IACC_01_Main main = createMainInstance(args);
+            invokeExecute(main);
 
             verify(mockLevel2).execute();
             assertEquals("output.txt", P06_IACC_01_Main.getd_s_textFileName());
@@ -63,19 +77,20 @@ public class P06_IACC_01_MainTest {
     @Test(expected = P06_IACC_01_ParameterException.class)
     public void testExecute_withInvalidAction_throwsParameterException() throws Exception {
         String[] args = {"invalidAction", "BRANCH", "01/01/2025"};
+
         try (MockedStatic<P06_IACC_01_PropertiesMgr> propsMock = mockStatic(P06_IACC_01_PropertiesMgr.class)) {
             propsMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1Action");
             propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2Action");
 
-            P06_IACC_01_Main main = new P06_IACC_01_Main(args);
-            main.execute();  // should throw exception
+            P06_IACC_01_Main main = createMainInstance(args);
+            invokeExecute(main);  // should throw ParameterException
         }
     }
 
     @Test(expected = P06_IACC_01_ParameterException.class)
     public void testExecute_withTooFewArguments_throwsParameterException() throws Exception {
         String[] args = {};
-        P06_IACC_01_Main main = new P06_IACC_01_Main(args);
-        main.execute();  // should throw exception due to args length check
+        P06_IACC_01_Main main = createMainInstance(args);
+        invokeExecute(main);  // should throw ParameterException due to argument length check
     }
 }
