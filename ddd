@@ -1,10 +1,12 @@
 private static void showUsage() {
-    LOG.info("Usage: <level> <branch> <event_date> [<begin_date> <end_date>] [file_name]");
-    LOG.info("\twhere:");
-    LOG.info("\t\tlevel: 2 possible values: level1/level2");
-    LOG.info("\t\tbranch: branch name");
-    LOG.info("\t\tevent_date: processing date, DD/MM/YYYY hh:mi:ss formatted");
-    LOG.info("\t\tbegin_date: begin date, DD/MM/YYYY hh:mi:ss formatted (for level 1)");
-    LOG.info("\t\tend_date: end date, DD/MM/YYYY hh:mi:ss formatted (for level 1)");
-    LOG.info("\t\tfile_name: report file name (for level 2)");
+    System.out.println("""
+        Usage: <level> <branch> <event_date> [<begin date> <end date>] [file name]
+            where:
+                level: 2 possible values Level1/Level2
+                branch: branch name
+                event_date: processing date, DD/MM/YYYY hh:mi:ss formatted
+                begin_date: begin date, DD/MM/YYYY hh:mi:ss formatted (for level 1)
+                end_date: end date, DD/MM/YYYY hh:mi:ss formatted (for level 1)
+                file name: report file name (for level 2)
+        """);
 }
