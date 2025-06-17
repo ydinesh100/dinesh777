@@ -1,24 +1,18 @@
 package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
 import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
 import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
 import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
+import org.junit.*;
+import org.mockito.MockedConstruction;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.sql.SQLException;
 import java.util.Date;
 
 import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
 
 public class P06_IACC_01_MainTest {
 
@@ -26,94 +20,69 @@ public class P06_IACC_01_MainTest {
 
     @Before
     public void setUp() throws Exception {
-        executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute", String[].class);
         executeMethod.setAccessible(true);
     }
 
-    @After
-    public void tearDown() {
-        executeMethod = null;
+    private void invokeExecute(String[] args) throws Exception {
+        try {
+            executeMethod.invoke(null, (Object) args);
+        } catch (Exception e) {
+            throw (Exception) e.getCause();
+        }
     }
 
-    private P06_IACC_01_Main createInstance(String[] args) throws Exception {
-        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
-        constructor.setAccessible(true);
-        return constructor.newInstance((Object) args);
+    @Test(expected = P06_IACC_01_ParameterException.class)
+    public void testExecute_ThrowsParameterExceptionWhenNoArgs() throws Exception {
+        invokeExecute(new String[]{});
     }
 
-    private void invokeExecute(P06_IACC_01_Main instance) throws Exception {
-        executeMethod.invoke(instance);
-    }
-
-    @Test
+    @Test(expected = P06_IACC_01_ParameterException.class)
     public void testExecute_InsufficientArgs_ThrowsParameterException() throws Exception {
-        String[] args = new String[] { "levell", "BR1" }; // less than 11 args
-        P06_IACC_01_Main instance = createInstance(args);
-
-        try {
-            invokeExecute(instance);
-            fail("Expected P06_IACC_01_ParameterException due to insufficient arguments");
-        } catch (Exception e) {
-            assertTrue(e.getCause() instanceof P06_IACC_01_ParameterException);
-        }
+        invokeExecute(new String[]{"param1", "param2"}); // less than 11
     }
 
-    @Test
+    @Test(expected = P06_IACC_01_ParameterException.class)
     public void testExecute_InvalidAction_ThrowsParameterException() throws Exception {
-        String[] args = new String[] {
-            "Level1", "BR1", "01/01/2025 00:00:00", "01/01/2025 00:00:00", "02/01/2025 00:00:00",
-            "user", "pass", "env", "src", "path", "flag"
+        String[] args = new String[]{
+            "event", "branch", "Level1", "EUR", "EUR", "100", "Y", "20240101", "20241231", "user", "role"
         };
-        P06_IACC_01_Main instance = createInstance(args);
+        invokeExecute(args);
+    }
 
-        try {
-            invokeExecute(instance);
-            fail("Expected P06_IACC_01_ParameterException for invalid action");
-        } catch (Exception e) {
-            Throwable cause = e.getCause();
-            assertNotNull("Exception cause should not be null", cause);
-            assertTrue("Expected P06_IACC_01_ParameterException but got " + cause.getClass(),
-                cause instanceof P06_IACC_01_ParameterException);
+    @Test
+    public void testExecute_ValidLevel1Action() throws Exception {
+        try (MockedConstruction<P06_IACC_01_Level1> mock = 
+             org.mockito.Mockito.mockConstruction(P06_IACC_01_Level1.class, (mocked, context) -> {
+                 org.mockito.Mockito.doNothing().when(mocked).execute();
+             })) {
+
+            String[] args = new String[]{
+                "event", "branch", "levell", "EUR", "EUR", "100", "Y", "20240101", "20241231", "user", "role"
+            };
+
+            invokeExecute(args);
+
+            assertEquals(1, mock.constructed().size());
+            org.mockito.Mockito.verify(mock.constructed().get(0)).execute();
         }
     }
 
     @Test
-    public void testExecute_Level1_Success() throws Exception {
-        String[] args = new String[] {
-            "levell", "BR1", "01/01/2025 00:00:00", "01/01/2025 00:00:00", "02/01/2025 00:00:00",
-            "user", "pass", "env", "src", "path", "flag"
-        };
-        P06_IACC_01_Main instance = createInstance(args);
+    public void testExecute_ValidLevel2Action() throws Exception {
+        try (MockedConstruction<P06_IACC_01_Level2> mock = 
+             org.mockito.Mockito.mockConstruction(P06_IACC_01_Level2.class, (mocked, context) -> {
+                 org.mockito.Mockito.doNothing().when(mocked).execute();
+             })) {
 
-        try (MockedStatic<P06_IACC_01_Level1> mockStatic = Mockito.mockStatic(P06_IACC_01_Level1.class)) {
-            P06_IACC_01_Level1 mockLevel1 = mock(P06_IACC_01_Level1.class);
-            mockStatic.when(() -> P06_IACC_01_Level1.getInstance(anyString(), any(Date.class), any(Date.class))).thenReturn(mockLevel1);
-            doNothing().when(mockLevel1).execute();
+            String[] args = new String[]{
+                "event", "branch", "level2", "EUR", "EUR", "100", "Y", "20240101", "20241231", "user", "role"
+            };
 
-            invokeExecute(instance);
+            invokeExecute(args);
 
-            mockStatic.verify(() -> P06_IACC_01_Level1.getInstance(anyString(), any(Date.class), any(Date.class)), times(1));
-            verify(mockLevel1, times(1)).execute();
-        }
-    }
-
-    @Test
-    public void testExecute_Level2_Success() throws Exception {
-        String[] args = new String[] {
-            "level2", "BR1", "01/01/2025 00:00:00", "01/01/2025 00:00:00", "02/01/2025 00:00:00",
-            "user", "pass", "env", "src", "path", "flag"
-        };
-        P06_IACC_01_Main instance = createInstance(args);
-
-        try (MockedStatic<P06_IACC_01_Level2> mockStatic = Mockito.mockStatic(P06_IACC_01_Level2.class)) {
-            P06_IACC_01_Level2 mockLevel2 = mock(P06_IACC_01_Level2.class);
-            mockStatic.when(() -> P06_IACC_01_Level2.getInstance(anyString(), any(Date.class), any(Date.class))).thenReturn(mockLevel2);
-            doNothing().when(mockLevel2).execute();
-
-            invokeExecute(instance);
-
-            mockStatic.verify(() -> P06_IACC_01_Level2.getInstance(anyString(), any(Date.class), any(Date.class)), times(1));
-            verify(mockLevel2, times(1)).execute();
+            assertEquals(1, mock.constructed().size());
+            org.mockito.Mockito.verify(mock.constructed().get(0)).execute();
         }
     }
 }
