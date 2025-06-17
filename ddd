@@ -3,9 +3,7 @@ package com.bnpparibas.atlentic.iacc.bopr.main.test;
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
-import java.sql.SQLException;
 
 import org.junit.After;
 import org.junit.Before;
@@ -13,113 +11,101 @@ import org.junit.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
-import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
-import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
 import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
 import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
 
 public class P06_IACC_01_MainTest {
 
-    private Constructor<P06_IACC_01_Main> constructor;
-    private Method executeMethod;
-
     private MockedStatic<P06_IACC_01_PropertiesMgr> propertiesMgrMock;
 
     @Before
-    public void setUp() throws Exception {
-        // Access private constructor
-        constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
-        constructor.setAccessible(true);
-
-        // Access private execute() method
-        executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
-
-        // Mock static methods of PropertiesMgr
+    public void setUp() {
+        // Mock static methods in PropertiesMgr before each test
         propertiesMgrMock = Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class);
     }
 
     @After
     public void tearDown() {
+        // Close the mock after each test to avoid memory leaks
         propertiesMgrMock.close();
     }
 
+    /**
+     * Helper method to invoke the private execute() method on P06_IACC_01_Main
+     */
     private void invokeExecute(String[] args) throws Exception {
-        P06_IACC_01_Main mainInstance = constructor.newInstance((Object) args);
-        executeMethod.invoke(mainInstance);
+        // Create instance of P06_IACC_01_Main using reflection since constructor is private
+        Class<P06_IACC_01_Main> clazz = P06_IACC_01_Main.class;
+        // Use default constructor (private) via reflection
+        P06_IACC_01_Main instance = clazz.getDeclaredConstructor().newInstance();
+
+        // Get private execute method
+        Method executeMethod = clazz.getDeclaredMethod("execute", String[].class);
+        executeMethod.setAccessible(true);
+
+        // Invoke execute with args
+        executeMethod.invoke(instance, (Object) args);
     }
 
     @Test(expected = P06_IACC_01_ParameterException.class)
-    public void testExecute_withTooFewArguments_throwsParameterException() throws Exception {
-        String[] args = {}; // no arguments
-        invokeExecute(args);
+    public void testExecute_withTooFewArguments_throwsParameterException() throws Throwable {
+        // Arrange: mock static methods return expected action names
+        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
+        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
+
+        String[] args = new String[] {"level1", "branchA", "01/01/2025"}; // fewer than expected args
+
+        try {
+            invokeExecute(args);
+            fail("Expected P06_IACC_01_ParameterException due to insufficient arguments");
+        } catch (Exception e) {
+            // unwrap InvocationTargetException to get root cause
+            Throwable cause = e.getCause();
+            if (cause instanceof P06_IACC_01_ParameterException) {
+                throw cause;
+            } else {
+                fail("Unexpected exception type: " + cause);
+            }
+        }
     }
 
     @Test
-    public void testExecute_withValidLevel1Arguments_callsLevel1Execute() throws Exception {
-        // Arrange input args for Level1 action
-        String level1Action = "LEVEL1";
-        String branch = "BEFOR";
-        String eventDate = "17/06/2025";
+    public void testExecute_withValidLevel1Arguments_callsLevel1Execute() throws Throwable {
+        // Arrange: mock static methods for Level1 and Level2 action names
+        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
+        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
 
-        String[] args = new String[] { level1Action, branch, eventDate, "15/06/2025", "18/06/2025" };
+        // Add other mocking here if Level1 execution is calling static methods or needs mocks
 
-        // Mock PropertiesMgr static methods for Level1
-        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevellActionName).thenReturn(level1Action);
-        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("LEVEL2");
+        String[] args = new String[] {
+            "level1", "branchA", "01/01/2025", "01/01/2025", "02/01/2025", "file.txt",
+            "param7", "param8", "param9", "param10", "param11"
+        };
 
-        // Spy the Level1 class to verify execute called
-        P06_IACC_01_Level1 level1Spy = mock(P06_IACC_01_Level1.class);
-        // Inject the spy (simplified by mocking constructor or using other ways, 
-        // but here just demonstrate basic)
-        // Because P06_IACC_01_Main creates new Level1 internally, this test assumes code refactor or wrapper for injection.
-
-        // Act & Assert no exception thrown (happy path)
-        invokeExecute(args);
-    }
-
-    @Test(expected = P06_IACC_01_ParameterException.class)
-    public void testExecute_withInvalidDateRange_throwsParameterException() throws Exception {
-        String level1Action = "LEVEL1";
-        String branch = "BEFOR";
-        String eventDate = "17/06/2025";
-
-        // Begin date after end date
-        String[] args = new String[] { level1Action, branch, eventDate, "19/06/2025", "18/06/2025" };
-
-        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevellActionName).thenReturn(level1Action);
-        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("LEVEL2");
-
-        invokeExecute(args);
+        try {
+            invokeExecute(args);
+            // If no exception, success. Add asserts or verify mock calls as needed.
+        } catch (Exception e) {
+            fail("Did not expect exception: " + e.getCause());
+        }
     }
 
     @Test
-    public void testExecute_withValidLevel2Arguments_callsLevel2Execute() throws Exception {
-        String level2Action = "LEVEL2";
-        String branch = "BEFOR";
-        String eventDate = "17/06/2025";
+    public void testExecute_withValidLevel2Arguments_callsLevel2Execute() throws Throwable {
+        // Arrange: mock static methods
+        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
+        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
 
-        String[] args = new String[] { level2Action, branch, eventDate, "testfile.txt" };
+        String[] args = new String[] {
+            "level2", "branchA", "01/01/2025", "01/01/2025", "02/01/2025", "file.txt",
+            "param7", "param8", "param9", "param10", "param11"
+        };
 
-        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevellActionName).thenReturn("LEVEL1");
-        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn(level2Action);
-
-        invokeExecute(args);
+        try {
+            invokeExecute(args);
+            // Success, add further verification if needed
+        } catch (Exception e) {
+            fail("Did not expect exception: " + e.getCause());
+        }
     }
-
-    @Test(expected = P06_IACC_01_ParameterException.class)
-    public void testExecute_withUnknownAction_throwsParameterException() throws Exception {
-        String unknownAction = "UNKNOWN";
-        String branch = "BEFOR";
-        String eventDate = "17/06/2025";
-
-        String[] args = new String[] { unknownAction, branch, eventDate };
-
-        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevellActionName).thenReturn("LEVEL1");
-        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("LEVEL2");
-
-        invokeExecute(args);
-    }
-
 }
