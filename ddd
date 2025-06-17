@@ -1,124 +1,13 @@
-package com.bnpparibas.atlentic.iacc.bopr.main.test;
-
-import com.bnpparibas.atlentic.common.GlobalAtlentic;
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.util.Pea_IACC_00_Utility;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
-import com.bnpparibas.atlentic.iacc.bopr.util.P06_IACC_01_PropertiesMgr;
-
-import org.junit.*;
-import org.junit.runner.RunWith;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnitRunner;
-
-import java.lang.reflect.Method;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-
-import static org.mockito.Mockito.*;
-
-@RunWith(MockitoJUnitRunner.class)
-public class P06_IACC_01_MainTest {
-
-    private MockedStatic<GlobalAtlentic> globalAtlenticMock;
-    private MockedStatic<Pea_IACC_00_Utility> utilityMock;
-    private MockedStatic<P06_IACC_01_PropertiesMgr> propertiesMgrMock;
-
-    private Connection mockedConnection;
-
-    @Before
-    public void setUp() throws Exception {
-        mockedConnection = mock(Connection.class);
-        PreparedStatement mockedStatement = mock(PreparedStatement.class);
-
-        // Mock: prepareStatement returns non-null to avoid NPE
-        when(mockedConnection.prepareStatement(anyString())).thenReturn(mockedStatement);
-
-        globalAtlenticMock = Mockito.mockStatic(GlobalAtlentic.class);
-        utilityMock = Mockito.mockStatic(Pea_IACC_00_Utility.class);
-        propertiesMgrMock = Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class);
-
-        // Mock GlobalAtlentic connection
-        globalAtlenticMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockedConnection);
-
-        // Mock utility to return expected date map
-        Map<String, String> configMap = new HashMap<>();
-        configMap.put("INTF_EVENT_DATE", "01/01/2023 12:00:00");
-        configMap.put("INTF_SYSTEM_BEGIN_DATE", "01/01/2023 12:00:00");
-        configMap.put("INTF_SYSTEM_END_DATE", "02/01/2023 12:00:00");
-
-        utilityMock.when(() -> Pea_IACC_00_Utility.getAtlIntfDateByBranch(anyString(), eq(mockedConnection)))
-                   .thenReturn(configMap);
-
-        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-        propertiesMgrMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
-    }
-
-    @After
-    public void tearDown() {
-        globalAtlenticMock.close();
-        utilityMock.close();
-        propertiesMgrMock.close();
-    }
-
-    private void invokeExecute(String[] args) throws Exception {
-        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute", String[].class);
-        executeMethod.setAccessible(true);
-        executeMethod.invoke(null, (Object) args); // cast required for varargs
-    }
-
-    @Test
-    public void testLevel1Execution() throws Exception {
-        String[] args = {"level1", "PARIS", "01/01/2023 12:00:00"};
-        invokeExecute(args);
-    }
-
-    @Test
-    public void testLevel2ExecutionWithFullArgs() throws Exception {
-        String[] args = {
-            "level2", "PARIS", "01/01/2023 12:00:00",
-            "01/01/2023 12:00:00", "02/01/2023 12:00:00", "output.txt"
-        };
-        invokeExecute(args);
-    }
-
-    @Test
-    public void testLevel2ExecutionWithOnlyBranch() throws Exception {
-        String[] args = {"level2", "PARIS", "01/01/2023 12:00:00"};
-        invokeExecute(args);
-    }
-
-    @Test(expected = P06_IACC_01_ParameterException.class)
-    public void testInvalidArgumentLengthThrowsException() throws Throwable {
-        try {
-            String[] args = {"level1"};
-            invokeExecute(args);
-        } catch (Exception e) {
-            throw e.getCause(); // unwrap InvocationTargetException
-        }
-    }
-
-    @Test(expected = P06_IACC_01_ParameterException.class)
-    public void testInvalidDateFormatThrowsException() throws Throwable {
-        try {
-            String[] args = {"level1", "PARIS", "invalid-date"};
-            invokeExecute(args);
-        } catch (Exception e) {
-            throw e.getCause();
-        }
-    }
-
-    @Test(expected = P06_IACC_01_ParameterException.class)
-    public void testInvalidLevelThrowsException() throws Throwable {
-        try {
-            String[] args = {"unknown", "PARIS", "01/01/2023 12:00:00"};
-            invokeExecute(args);
-        } catch (Exception e) {
-            throw e.getCause();
-        }
-    }
+private static void showUsage() {
+    String usageText = """
+        Usage: <level> <branch> <event_date> [<begin_date> <end_date>] [file_name]
+        \twhere:
+        \t\tlevel: 2 possible values: level1/level2
+        \t\tbranch: branch name
+        \t\tevent_date: processing date, DD/MM/YYYY hh:mi:ss formatted
+        \t\tbegin_date: begin date, DD/MM/YYYY hh:mi:ss formatted (for level 1)
+        \t\tend_date: end date, DD/MM/YYYY hh:mi:ss formatted (for level 1)
+        \t\tfile_name: report file name (for level 2)
+        """;
+    LOG.info(usageText);
 }
