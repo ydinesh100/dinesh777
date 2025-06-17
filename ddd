@@ -1,25 +1,102 @@
-@Test(expected = P06_IACC_01_ParameterException.class)
-public void testExecute_InvalidParamLength() throws Exception {
-    String[] args = {};
+package com.bnpparibas.atlentic.iacc.bopr.main;
 
-    Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
-    constructor.setAccessible(true);
-    P06_IACC_01_Main mainObj = constructor.newInstance((Object) args);
+import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
+import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
+import com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter;
 
-    Method method = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-    method.setAccessible(true);
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.MockedConstruction;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
-    try {
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.util.Date;
+
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
+
+public class P06_IACC_01_MainTest {
+
+    private MockedStatic<P06_IACC_01_PropertiesMgr> propsMock;
+    private MockedStatic<StringConverter> stringConverterMock;
+
+    @Before
+    public void setUp() {
+        propsMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
+        stringConverterMock = mockStatic(StringConverter.class);
+    }
+
+    @After
+    public void tearDown() {
+        propsMock.close();
+        stringConverterMock.close();
+    }
+
+    private P06_IACC_01_Main createMain(String[] args) throws Exception {
+        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
+        constructor.setAccessible(true);
+        return constructor.newInstance((Object) args);
+    }
+
+    private void invokeExecute(P06_IACC_01_Main mainObj) throws Exception {
+        Method method = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        method.setAccessible(true);
         method.invoke(mainObj);
-        fail("Expected ParameterException was not thrown");
-    } catch (Exception ex) {
-        // Unwrap the cause from reflection
-        Throwable cause = ex.getCause();
-        if (cause instanceof P06_IACC_01_ParameterException) {
-            throw (P06_IACC_01_ParameterException) cause;
-        } else {
-            // If some other exception is thrown, fail the test with details
-            fail("Unexpected exception thrown: " + ex);
+    }
+
+    @Test
+    public void testExecute_Level1_Valid5Params() throws Exception {
+        String[] args = {"LEVEL1", "BRANCH1", "01/01/2024", "01/01/2023", "31/12/2023"};
+
+        propsMock.when(P06_IACC_01_PropertiesMgr::getLevellActionName).thenReturn("LEVEL1");
+        stringConverterMock.when(() -> StringConverter.StringToDate(anyString())).thenReturn(new Date());
+
+        try (MockedConstruction<P06_IACC_01_Level1> level1Construction = mockConstruction(P06_IACC_01_Level1.class,
+                (mock, context) -> doNothing().when(mock).execute())) {
+
+            P06_IACC_01_Main main = createMain(args);
+            invokeExecute(main);
+
+            verify(level1Construction.constructed().get(0), times(1)).execute();
+        }
+    }
+
+    @Test
+    public void testExecute_Level2_Valid4Params() throws Exception {
+        String[] args = {"LEVEL2", "BRANCH1", "01/01/2024", "file.txt"};
+
+        propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("LEVEL2");
+        stringConverterMock.when(() -> StringConverter.StringToDate(anyString())).thenReturn(new Date());
+
+        try (MockedConstruction<P06_IACC_01_Level2> level2Construction = mockConstruction(P06_IACC_01_Level2.class,
+                (mock, context) -> doNothing().when(mock).execute())) {
+
+            P06_IACC_01_Main main = createMain(args);
+            invokeExecute(main);
+
+            verify(level2Construction.constructed().get(0), times(1)).execute();
+        }
+    }
+
+    @Test
+    public void testExecute_InvalidParams_ThrowsParameterException() throws Exception {
+        String[] args = {}; // invalid argument length
+
+        P06_IACC_01_Main main = createMain(args);
+        Method method = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        method.setAccessible(true);
+
+        try {
+            method.invoke(main);
+            fail("Expected P06_IACC_01_ParameterException");
+        } catch (Exception ex) {
+            Throwable cause = ex.getCause();
+            assertTrue("Unexpected exception type: " + cause, cause instanceof P06_IACC_01_ParameterException);
         }
     }
 }
