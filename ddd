@@ -6,11 +6,11 @@ import java.util.Date;
 import java.util.Map;
 
 import com.bnpparibas.atlentic.common.GlobalAtlentic;
-import com.bnpparibas.atlentic.common.P06_IACC_00_Utility;
+import com.bnpparibas.atlentic.common.Pe0_IACC_00_Utility;
 import com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter;
 import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
 import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
-import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
+import com.bnpparibas.atlentic.iacc.bopr.resource.P86_IACC_01_PropertiesMgr;
 import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
 import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
 
@@ -25,6 +25,7 @@ public final class P06_IACC_01_Main {
     private static Date beginDate;
     private static Date endDate;
     private static String textFileName;
+
     public static String action;
     public static final String BRANCH_TYPE = "BEFOR";
 
@@ -32,14 +33,18 @@ public final class P06_IACC_01_Main {
         this.args = args;
     }
 
+    public static void main(final String... args) {
+        new P06_IACC_01_Main(args).execute();
+    }
+
     private void execute() {
         LOG.debug("BOPR interface process starting...");
-        LOG.debug("Input parameters:");
+        LOG.debug("Input parameters: ");
         printArguments();
 
         try {
             if (args.length < 1) {
-                throw new P06_IACC_01_ParameterException("Wrong parameters number, should be at least 1.");
+                throw new P06_IACC_01_ParameterException("Wrong parameters number, should be at least equals to 1");
             }
 
             executeMain();
@@ -48,103 +53,65 @@ public final class P06_IACC_01_Main {
                 throw new P06_IACC_01_ParameterException("The process date format is unknown!");
             }
 
-            if (P06_IACC_01_PropertiesMgr.getLevel1ActionName().equals(action)) {
-                if (args.length != 1 && args.length != 5) {
-                    throw new P06_IACC_01_ParameterException("Wrong parameters number for level 1 action, must be 1 or 5.");
-                }
-                executeMain2();
-            } else if (P06_IACC_01_PropertiesMgr.getLevel2ActionName().equals(action)) {
-                if (args.length != 2 && args.length != 4) {
-                    throw new P06_IACC_01_ParameterException("Wrong parameters number for level 2 action, must be 2 or 4.");
-                }
-                if (args.length > 2) {
-                    beginDate = StringConverter.StringToDate(args[2]);
-                    endDate = StringConverter.StringToDate(args[3]);
-                }
-                new P06_IACC_01_Level2().execute();
-            } else {
-                showUsage();
-            }
+        } catch (final P06_IACC_01_ExitApplicationException e) {
+            LOG.error("Application exception: ", e);
+            e.printStackTrace();
+            System.exit(8);
+        } catch (SQLException e) {
+            LOG.error("SQL exception while getting Input Date: ", e);
+            e.printStackTrace();
+            System.exit(5);
+        }
 
-        } catch (P06_IACC_01_ExitApplicationException | SQLException e) {
-            LOG.error("Execution failed", e);
+        System.exit(0);
+    }
+
+    private void printArguments() {
+        for (int i = 0; i < this.args.length; i++) {
+            LOG.info("Parameter ({}) {}", i, this.args[i]);
         }
     }
 
-    private void executeMain2() throws P06_IACC_01_ExitApplicationException, SQLException {
+    private void executeMain() throws P06_IACC_01_ExitApplicationException, SQLException {
         if (args.length > 3) {
-            beginDate = StringConverter.StringToDate(args[3]);
+            // Level 1
+            setBeginDate(StringConverter.StringToDate(args[3]));
             if (beginDate == null) {
                 throw new P06_IACC_01_ParameterException("The begin date format is unknown!");
             }
 
-            endDate = StringConverter.StringToDate(args[4]);
+            setEndDate(StringConverter.StringToDate(args[4]));
             if (endDate == null) {
                 throw new P06_IACC_01_ParameterException("The end date format is unknown!");
             }
 
-            validateDateOrder();
-        } else {
-            Map<String, String> config = getDateConfigDate();
-            beginDate = StringConverter.StringToDate(config.get("INTF_SYSTEM_BEGIN_DATE"));
-            LOG.info("Parameter System Begin Date: {}", config.get("INTF_SYSTEM_BEGIN_DATE"));
-
-            endDate = StringConverter.StringToDate(config.get("INTF_SYSTEM_END_DATE"));
-            LOG.info("Parameter System End Date: {}", config.get("INTF_SYSTEM_END_DATE"));
-
-            if (beginDate == null || endDate == null) {
-                throw new P06_IACC_01_ParameterException("Invalid begin or end date in config.");
+            if (!beginDate.before(endDate)) {
+                throw new P06_IACC_01_ParameterException("Begin date must be before End date");
             }
 
-            validateDateOrder();
-        }
+            new P06_IACC_01_Level1().execute();
 
-        new P06_IACC_01_Level1().execute();
-    }
-
-    private void validateDateOrder() throws P06_IACC_01_ParameterException {
-        if (!beginDate.before(endDate)) {
-            throw new P06_IACC_01_ParameterException("The start date should be before the end date!");
-        }
-    }
-
-    private void executeMain() throws SQLException {
-        if (args.length > 2) {
-            action = args[0];
-            branch = args[1];
-            eventTimestamp = StringConverter.StringToDate(args[2]);
         } else {
-            Map<String, String> config = getDateConfigDate();
-            action = args[0];
+            // Level 2
+            Map<String, String> dateConfig = getDateConfigDate();
+
+            setBeginDate(StringConverter.StringToDate(dateConfig.get("INTF_SYSTEM_BEGIN_DATE")));
+            setEndDate(StringConverter.StringToDate(dateConfig.get("INTF_SYSTEM_END_DATE")));
+            setEventTimestamp(StringConverter.StringToDate(dateConfig.get("INTF_EVENT_DATE")));
+
             branch = BRANCH_TYPE;
-            LOG.info("Parameter Branch: {}", BRANCH_TYPE);
-            eventTimestamp = StringConverter.StringToDate(config.get("INTF_EVENT_DATE"));
-            LOG.info("Parameter Event Date: {}", config.get("INTF_EVENT_DATE"));
-        }
-    }
 
-    private static void showUsage() {
-        LOG.info("""
-            Usage: <level> <branch> <event_date> [<begin_date> <end_date>] [file_name]
-                where:
-                    level: level1 / level2
-                    branch: branch name
-                    event_date: processing date (DD/MM/YYYY hh:mm:ss)
-                    begin_date: for level1 (DD/MM/YYYY hh:mm:ss)
-                    end_date: for level1 (DD/MM/YYYY hh:mm:ss)
-                    file_name: for level2
-        """);
-    }
+            LOG.info("Parameter Branch: {}", branch);
+            LOG.info("Parameter System Begin Date: {}", dateConfig.get("INTF_SYSTEM_BEGIN_DATE"));
+            LOG.info("Parameter Event Date: {}", dateConfig.get("INTF_EVENT_DATE"));
 
-    private void printArguments() {
-        for (int i = 0; i < args.length; i++) {
-            LOG.info("Parameter({}): {}", i, args[i]);
+            new P06_IACC_01_Level2().execute();
         }
     }
 
     private static Map<String, String> getDateConfigDate() throws SQLException {
-        try (Connection conn = GlobalAtlentic.getLoanIQConnection()) {
-            return P06_IACC_00_Utility.getAtlIntfDateByBranch(BRANCH_TYPE, conn);
+        try (Connection dbConn = GlobalAtlentic.getLoanIQConnection()) {
+            return Pe0_IACC_00_Utility.getAtlIntfDateByBranch(BRANCH_TYPE, dbConn);
         }
     }
 
@@ -152,8 +119,8 @@ public final class P06_IACC_01_Main {
         return eventTimestamp;
     }
 
-    public static void setEventTimestamp(Date date) {
-        eventTimestamp = date;
+    public static void setEventTimestamp(Date timestamp) {
+        eventTimestamp = timestamp;
     }
 
     public static Date getBeginDate() {
@@ -172,15 +139,24 @@ public final class P06_IACC_01_Main {
         endDate = date;
     }
 
-    public static String getBranch() {
-        return branch;
-    }
-
     public static String getTextFileName() {
         return textFileName;
     }
 
-    public static void main(String... args) {
-        new P06_IACC_01_Main(args).execute();
+    public static String getBranch() {
+        return branch;
+    }
+
+    private static void showUsage() {
+        LOG.info("""
+                Usage: <level> <branch> <event_date> [<begin_date> <end_date>] [file_name]
+                where:
+                    level: levell or level2
+                    branch: branch name
+                    event_date: processing date, DD/MM/YYYY hh:mm:ss
+                    begin_date: begin date, DD/MM/YYYY hh:mm:ss (for level 1)
+                    end_date: end date, DD/MM/YYYY hh:mm:ss (for level 1)
+                    file_name: report file name (for level 2)
+                """);
     }
 }
