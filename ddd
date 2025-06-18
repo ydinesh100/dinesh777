@@ -1,87 +1,16 @@
-package com.bnpparibas.atlentic.iacc.bopr.main;
+@Test
+void testMissingArgumentsThrowsParameterException() throws Exception {
+    String[] args = {};
+    Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
+    constructor.setAccessible(true);
+    Object mainInstance = constructor.newInstance((Object) args);
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+    InvocationTargetException thrown = assertThrows(InvocationTargetException.class, () -> {
+        executeMethod.invoke(mainInstance);
+    });
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.sql.SQLException;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-
-import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
-import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
-import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P86_IACC_01_ParameterException;
-import org.junit.jupiter.api.*;
-import org.mockito.MockedStatic;
-
-class P06_IACC_01_MainTest {
-
-    private static Method executeMethod;
-
-    @BeforeAll
-    static void setup() throws Exception {
-        executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
-    }
-
-    @Test
-    void testMissingArgumentsThrowsParameterException() throws Exception {
-        String[] args = {};
-        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
-        constructor.setAccessible(true);
-        P06_IACC_01_Main mainInstance = constructor.newInstance((Object) args);
-
-        Exception ex = assertThrows(Exception.class, () -> executeMethod.invoke(mainInstance));
-        assertTrue(ex.getCause() instanceof P86_IACC_01_ParameterException);
-        assertTrue(ex.getCause().getMessage().contains("Wrong parameters number"));
-    }
-
-    @Test
-    void testUnknownActionThrowsParameterException() throws Exception {
-        String[] args = {"UNKNOWN_ACTION", "BR001"};
-        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
-        constructor.setAccessible(true);
-        P06_IACC_01_Main mainInstance = constructor.newInstance((Object) args);
-
-        try (MockedStatic<P06_IACC_01_PropertiesMgr> mockedProperties = mockStatic(P06_IACC_01_PropertiesMgr.class)) {
-            mockedProperties.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("Level1");
-            mockedProperties.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("Level2");
-
-            Exception ex = assertThrows(Exception.class, () -> executeMethod.invoke(mainInstance));
-            assertTrue(ex.getCause() instanceof P86_IACC_01_ParameterException);
-            assertTrue(ex.getCause().getMessage().contains("The action"));
-        }
-    }
-
-    @Test
-    void testLevel2WithTextFileName() throws Exception {
-        String[] args = {"Level2", "BR001", "01/01/2024 00:00:00", "output.txt"};
-        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
-        constructor.setAccessible(true);
-        P06_IACC_01_Main mainInstance = constructor.newInstance((Object) args);
-
-        try (MockedStatic<P06_IACC_01_PropertiesMgr> mockedProperties = mockStatic(P06_IACC_01_PropertiesMgr.class);
-             MockedStatic<P06_IACC_01_Level2> mockedLevel2 = mockStatic(P06_IACC_01_Level2.class)) {
-
-            mockedProperties.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("Level2");
-
-            P06_IACC_01_Level2 mocked = mock(P06_IACC_01_Level2.class);
-            mockedLevel2.when(P06_IACC_01_Level2::new).thenReturn(mocked);
-            doNothing().when(mocked).execute();
-
-            assertDoesNotThrow(() -> executeMethod.invoke(mainInstance));
-            verify(mocked, times(1)).execute();
-        }
-    }
-
-    // Add more cases as needed, like:
-    // - testLevel1WithConfigDates
-    // - testInvalidDateFormats
-    // - testLevel1BeginAfterEndDate
-
+    Throwable rootCause = thrown.getCause();
+    assertInstanceOf(P86_IACC_01_ParameterException.class, rootCause);
+    assertTrue(rootCause.getMessage().contains("Wrong parameters number"));
 }
+
