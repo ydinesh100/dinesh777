@@ -1,74 +1,154 @@
-package com.bnpparibas.atlentic.iacc.bopr.main.test;
-
-import static org.junit.Assert.fail;
-import static org.mockito.Mockito.*;
-
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-
-import org.junit.Before;
-import org.junit.Test;
-
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P86_IACC_01_ParameterException;
-
 public class P06_IACC_01_MainTest {
 
-    private Method executeMethod;
-    private Field argsField;
+    @Rule
+    public ExpectedException expectedException = ExpectedException.none();
+
+    private MockedStatic<GlobalAtlentic> globalAtlenticMock;
+    private MockedStatic<P00_IACC_00_Utility> utilityMock;
+    private MockedStatic<P06_IACC_01_PropertiesMgr> propsMock;
+
+    private Connection mockConnection;
 
     @Before
-    public void setUp() throws Exception {
-        // Access private execute() method without parameters
-        executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
-
-        // Access private static g_o_args String[] field
-        argsField = P06_IACC_01_Main.class.getDeclaredField("g_o_args");
-        argsField.setAccessible(true);
+    public void setup() {
+        mockConnection = mock(Connection.class);
+        globalAtlenticMock = mockStatic(GlobalAtlentic.class);
+        utilityMock = mockStatic(P00_IACC_00_Utility.class);
+        propsMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
     }
 
-    // Helper method to safely set static args field (never null)
-    private void setArgs(String... args) throws Exception {
-        if (args == null) {
-            args = new String[0];
-        }
-        argsField.set(null, args);
+    @After
+    public void teardown() {
+        globalAtlenticMock.close();
+        utilityMock.close();
+        propsMock.close();
     }
 
-    // Test: execute() throws ParameterException on empty args (args length < 1)
-    @Test(expected = P86_IACC_01_ParameterException.class)
-    public void testExecute_EmptyArgs_ThrowsParameterException() throws Exception {
-        setArgs();  // empty args array
-        executeMethod.invoke(null);
+    private P06_IACC_01_Main createMainInstance(String... args) throws Exception {
+        Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
+        constructor.setAccessible(true);
+        return constructor.newInstance((Object) args);
     }
 
-    // Test: execute() throws ParameterException on invalid action argument
-    @Test(expected = P86_IACC_01_ParameterException.class)
-    public void testExecute_InvalidAction_ThrowsParameterException() throws Exception {
-        setArgs("INVALID_ACTION");
-        executeMethod.invoke(null);
+    private void setPrivateField(String name, Object value) throws Exception {
+        Field field = P06_IACC_01_Main.class.getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(null, value);
     }
 
-    // You can add more tests below for other scenarios, like:
-    // - Valid level1 action args -> verify Level1.execute() called
-    // - Valid level2 action args -> verify Level2.execute() called
-    // - Dates validation and exceptions
-    // For those, you may need to mock Level1 and Level2 classes or related static methods.
-
-    // Example placeholder test (to be implemented based on your project)
     @Test
-    public void testExecute_ValidLevel1Action_ExecutesLevel1() throws Exception {
-        // Arrange: set up args with valid level1 action and parameters
-        setArgs("LEVEL1_ACTION", "BRANCH1", "2025-06-17", "2025-06-01", "2025-06-10");
+    public void testExecute_Level1_AllParamsValid() throws Exception {
+        String[] args = {
+            "LEVEL1_ACTION",
+            "BRANCH1",
+            "01/01/2024 00:00:00",
+            "01/01/2024 00:00:00",
+            "02/01/2024 00:00:00"
+        };
 
-        // TODO: Mock P06_IACC_01_PropertiesMgr.getLevel1ActionName() to return "LEVEL1_ACTION"
-        // TODO: Mock P06_IACC_01_Level1.execute() if necessary
+        propsMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("LEVEL1_ACTION");
 
-        // Act
-        executeMethod.invoke(null);
+        // Valid date map
+        Map<String, String> dateMap = new HashMap<>();
+        dateMap.put("INTF_EVENT_DATE", "01/01/2024 00:00:00");
+        dateMap.put("INTF_SYSTEM_BEGIN_DATE", "01/01/2024 00:00:00");
+        dateMap.put("INTF_SYSTEM_END_DATE", "02/01/2024 00:00:00");
 
-        // Assert
-        // TODO: verify mocks or expected side effects
+        globalAtlenticMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConnection);
+        utilityMock.when(() -> P00_IACC_00_Utility.getAtlIntfDateByBranch(anyString(), any())).thenReturn(dateMap);
+
+        try (MockedStatic<P06_IACC_01_Level1> level1Mock = mockStatic(P06_IACC_01_Level1.class)) {
+            P06_IACC_01_Level1 mockLevel1 = mock(P06_IACC_01_Level1.class);
+            level1Mock.when(P06_IACC_01_Level1::new).thenReturn(mockLevel1);
+
+            P06_IACC_01_Main main = createMainInstance(args);
+
+            Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+            executeMethod.setAccessible(true);
+            executeMethod.invoke(main);
+
+            verify(mockLevel1).execute();
+        }
+    }
+
+    @Test
+    public void testExecute_Level2_WithTextFileName() throws Exception {
+        String[] args = {
+            "LEVEL2_ACTION",
+            "BRANCH2",
+            "01/01/2024 00:00:00",
+            "report.txt"
+        };
+
+        propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("LEVEL2_ACTION");
+
+        try (MockedStatic<P06_IACC_01_Level2> level2Mock = mockStatic(P06_IACC_01_Level2.class)) {
+            P06_IACC_01_Level2 mockLevel2 = mock(P06_IACC_01_Level2.class);
+            level2Mock.when(P06_IACC_01_Level2::new).thenReturn(mockLevel2);
+
+            P06_IACC_01_Main main = createMainInstance(args);
+
+            Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+            executeMethod.setAccessible(true);
+            executeMethod.invoke(main);
+
+            verify(mockLevel2).execute();
+        }
+    }
+
+    @Test
+    public void testExecute_InvalidLevel_ThrowsException() throws Exception {
+        String[] args = {"INVALID_ACTION"};
+
+        propsMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("LEVEL1_ACTION");
+        propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("LEVEL2_ACTION");
+
+        expectedException.expectCause(instanceOf(P06_IACC_01_ParameterException.class));
+
+        P06_IACC_01_Main main = createMainInstance(args);
+        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
+        executeMethod.invoke(main);
+    }
+
+    @Test
+    public void testShowUsageMethod() throws Exception {
+        Method method = P06_IACC_01_Main.class.getDeclaredMethod("showUsage");
+        method.setAccessible(true);
+        method.invoke(null); // static
+    }
+
+    @Test
+    public void testGettersAndSetters() throws Exception {
+        Date now = new Date();
+
+        Method setEvent = P06_IACC_01_Main.class.getDeclaredMethod("setG_o_eventTimestamp", Date.class);
+        setEvent.invoke(null, now);
+
+        Method getEvent = P06_IACC_01_Main.class.getDeclaredMethod("get_o_eventTimestamp");
+        Date resultEvent = (Date) getEvent.invoke(null);
+        assertEquals(now, resultEvent);
+
+        Method setBegin = P06_IACC_01_Main.class.getDeclaredMethod("setG_o_beginDate", Date.class);
+        setBegin.invoke(null, now);
+
+        Method getBegin = P06_IACC_01_Main.class.getDeclaredMethod("getG_o_beginDate");
+        Date resultBegin = (Date) getBegin.invoke(null);
+        assertEquals(now, resultBegin);
+
+        Method setEnd = P06_IACC_01_Main.class.getDeclaredMethod("set_o_endDate", Date.class);
+        setEnd.invoke(null, now);
+
+        Method getEnd = P06_IACC_01_Main.class.getDeclaredMethod("get_o_endDate");
+        Date resultEnd = (Date) getEnd.invoke(null);
+        assertEquals(now, resultEnd);
+
+        Method getBranch = P06_IACC_01_Main.class.getDeclaredMethod("get_s_branch");
+        getBranch.setAccessible(true);
+        getBranch.invoke(null);
+
+        Method getTextFile = P06_IACC_01_Main.class.getDeclaredMethod("getG_s_textFileName");
+        getTextFile.setAccessible(true);
+        getTextFile.invoke(null);
     }
 }
