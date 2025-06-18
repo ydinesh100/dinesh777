@@ -1,16 +1,36 @@
-@Test
-void testMissingArgumentsThrowsParameterException() throws Exception {
-    String[] args = {};
-    Constructor<P06_IACC_01_Main> constructor = P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
-    constructor.setAccessible(true);
-    Object mainInstance = constructor.newInstance((Object) args);
+import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
+import org.junit.jupiter.api.Test;
 
-    InvocationTargetException thrown = assertThrows(InvocationTargetException.class, () -> {
-        executeMethod.invoke(mainInstance);
-    });
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 
-    Throwable rootCause = thrown.getCause();
-    assertInstanceOf(P86_IACC_01_ParameterException.class, rootCause);
-    assertTrue(rootCause.getMessage().contains("Wrong parameters number"));
+import static org.junit.jupiter.api.Assertions.*;
+
+class P06_IACC_01_MainTest {
+
+    @Test
+    void testMissingArgumentsThrowsParameterException() throws Exception {
+        // Arrange
+        String[] args = {};
+        Constructor<P06_IACC_01_Main> constructor =
+                P06_IACC_01_Main.class.getDeclaredConstructor(String[].class);
+        constructor.setAccessible(true);
+        Object mainInstance = constructor.newInstance((Object) args);
+
+        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
+
+        // Act & Assert
+        InvocationTargetException thrown = assertThrows(InvocationTargetException.class, () -> {
+            executeMethod.invoke(mainInstance);
+        });
+
+        // Unwrap actual cause
+        Throwable actualException = thrown.getCause();
+        assertNotNull(actualException);
+        assertInstanceOf(P06_IACC_01_ParameterException.class, actualException);
+        assertTrue(actualException.getMessage().contains("Wrong parameters"));
+    }
 }
-
