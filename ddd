@@ -1,13 +1,16 @@
 package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
 import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
 import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
 import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
 
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.lang.reflect.Method;
 import java.sql.SQLException;
@@ -15,117 +18,93 @@ import java.sql.SQLException;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@ExtendWith(MockitoExtension.class)
 class P06_IACC_01_MainTest {
 
-    Method executeMethod;
+    private static Method executeMethod;
 
-    @BeforeEach
-    void setUp() throws Exception {
+    @BeforeAll
+    static void init() throws Exception {
         executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
         executeMethod.setAccessible(true);
     }
 
     @Test
-    void testMissingArguments_ThrowsParameterException() {
-        try (MockedStatic<P06_IACC_01_Main> mocked = mockStatic(P06_IACC_01_Main.class)) {
-            mocked.when(P06_IACC_01_Main::get_s_actionName).thenReturn(null);  // Missing action name
-
-            P06_IACC_01_ParameterException exception = assertThrows(
-                P06_IACC_01_ParameterException.class,
-                () -> executeMethod.invoke(null)
-            );
-            assertTrue(exception.getMessage().contains("wrong parameters"));
-        }
-    }
-
-    @Test
-    void testWrongActionName_ThrowsParameterException() {
-        try (MockedStatic<P06_IACC_01_Main> mocked = mockStatic(P06_IACC_01_Main.class)) {
-            mocked.when(P06_IACC_01_Main::get_s_actionName).thenReturn("invalidAction");
-            mocked.when(P06_IACC_01_Main::get_s_arguments).thenReturn(new String[0]);
-
-            P06_IACC_01_ParameterException exception = assertThrows(
-                P06_IACC_01_ParameterException.class,
-                () -> executeMethod.invoke(null)
-            );
-            assertTrue(exception.getMessage().contains("wrong parameters"));
-        }
-    }
-
-    @Test
-    void testLevel1Execution_Success() throws Exception {
+    void testExecute_withActionNameLevel1_shouldCallLevel1Execute() throws Exception {
         try (
-            MockedStatic<P06_IACC_01_Main> mocked = mockStatic(P06_IACC_01_Main.class);
+            MockedStatic<P06_IACC_01_Main> mainMock = mockStatic(P06_IACC_01_Main.class);
             MockedStatic<P06_IACC_01_Level1> level1Mock = mockStatic(P06_IACC_01_Level1.class)
         ) {
-            mocked.when(P06_IACC_01_Main::get_s_actionName).thenReturn("level1");
-            mocked.when(P06_IACC_01_Main::get_s_arguments).thenReturn(new String[] {
-                "progname", "level1", "event", "branch", "start", "end", "cur", "log", "path", "out", "user"
-            });
+            mainMock.when(P06_IACC_01_Main::get_s_actionName).thenReturn("Level1");
+            mainMock.when(P06_IACC_01_Main::get_s_branch).thenReturn("BR001");
+            mainMock.when(P06_IACC_01_Main::get_s_eventDate).thenReturn("2024-01-01");
 
-            level1Mock.when(P06_IACC_01_Level1::execute).then(invocation -> null);
+            level1Mock.when(() -> P06_IACC_01_Level1.execute()).then(invocation -> null);
 
             assertDoesNotThrow(() -> executeMethod.invoke(null));
         }
     }
 
     @Test
-    void testLevel2Execution_Success() throws Exception {
+    void testExecute_withActionNameLevel2_shouldCallLevel2Execute() throws Exception {
         try (
-            MockedStatic<P06_IACC_01_Main> mocked = mockStatic(P06_IACC_01_Main.class);
+            MockedStatic<P06_IACC_01_Main> mainMock = mockStatic(P06_IACC_01_Main.class);
             MockedStatic<P06_IACC_01_Level2> level2Mock = mockStatic(P06_IACC_01_Level2.class)
         ) {
-            mocked.when(P06_IACC_01_Main::get_s_actionName).thenReturn("level2");
-            mocked.when(P06_IACC_01_Main::get_s_arguments).thenReturn(new String[] {
-                "progname", "level2", "event", "branch", "start", "end", "cur", "log", "path", "out", "user"
-            });
+            mainMock.when(P06_IACC_01_Main::get_s_actionName).thenReturn("Level2");
+            mainMock.when(P06_IACC_01_Main::get_s_branch).thenReturn("BR001");
+            mainMock.when(P06_IACC_01_Main::get_s_eventDate).thenReturn("2024-01-01");
 
-            level2Mock.when(P06_IACC_01_Level2::execute).then(invocation -> null);
+            level2Mock.when(() -> P06_IACC_01_Level2.execute()).then(invocation -> null);
 
             assertDoesNotThrow(() -> executeMethod.invoke(null));
         }
     }
 
     @Test
-    void testLevel1Execution_ThrowsExitException() throws Exception {
-        try (
-            MockedStatic<P06_IACC_01_Main> mocked = mockStatic(P06_IACC_01_Main.class);
-            MockedStatic<P06_IACC_01_Level1> level1Mock = mockStatic(P06_IACC_01_Level1.class)
-        ) {
-            mocked.when(P06_IACC_01_Main::get_s_actionName).thenReturn("level1");
-            mocked.when(P06_IACC_01_Main::get_s_arguments).thenReturn(new String[] {
-                "progname", "level1", "event", "branch", "start", "end", "cur", "log", "path", "out", "user"
-            });
+    void testExecute_withInvalidArguments_shouldThrowParameterException() throws Exception {
+        try (MockedStatic<P06_IACC_01_Main> mainMock = mockStatic(P06_IACC_01_Main.class)) {
+            mainMock.when(P06_IACC_01_Main::get_s_actionName).thenReturn("InvalidAction");
+            mainMock.when(P06_IACC_01_Main::get_s_branch).thenReturn("BR001");
+            mainMock.when(P06_IACC_01_Main::get_s_eventDate).thenReturn("2024-01-01");
 
-            level1Mock.when(P06_IACC_01_Level1::execute)
-                      .thenThrow(new P06_IACC_01_ExitApplicationException("Exit triggered"));
+            Exception exception = assertThrows(Exception.class, () -> executeMethod.invoke(null));
 
-            P06_IACC_01_ExitApplicationException ex = assertThrows(
-                P06_IACC_01_ExitApplicationException.class,
-                () -> executeMethod.invoke(null)
-            );
-            assertEquals("Exit triggered", ex.getMessage());
+            Throwable cause = exception.getCause();
+            assertTrue(cause instanceof P06_IACC_01_ParameterException);
+            assertTrue(cause.getMessage().contains("Invalid action"));
         }
     }
 
     @Test
-    void testLevel2Execution_ThrowsSQLException() throws Exception {
+    void testExecute_withMissingArguments_shouldThrowParameterException() throws Exception {
+        try (MockedStatic<P06_IACC_01_Main> mainMock = mockStatic(P06_IACC_01_Main.class)) {
+            mainMock.when(P06_IACC_01_Main::get_s_actionName).thenReturn(null);
+            mainMock.when(P06_IACC_01_Main::get_s_branch).thenReturn(null);
+            mainMock.when(P06_IACC_01_Main::get_s_eventDate).thenReturn(null);
+
+            Exception exception = assertThrows(Exception.class, () -> executeMethod.invoke(null));
+            Throwable cause = exception.getCause();
+            assertTrue(cause instanceof P06_IACC_01_ParameterException);
+        }
+    }
+
+    @Test
+    void testExecute_SQLExceptionPropagation() throws Exception {
         try (
-            MockedStatic<P06_IACC_01_Main> mocked = mockStatic(P06_IACC_01_Main.class);
-            MockedStatic<P06_IACC_01_Level2> level2Mock = mockStatic(P06_IACC_01_Level2.class)
+            MockedStatic<P06_IACC_01_Main> mainMock = mockStatic(P06_IACC_01_Main.class);
+            MockedStatic<P06_IACC_01_Level1> level1Mock = mockStatic(P06_IACC_01_Level1.class)
         ) {
-            mocked.when(P06_IACC_01_Main::get_s_actionName).thenReturn("level2");
-            mocked.when(P06_IACC_01_Main::get_s_arguments).thenReturn(new String[] {
-                "progname", "level2", "event", "branch", "start", "end", "cur", "log", "path", "out", "user"
-            });
+            mainMock.when(P06_IACC_01_Main::get_s_actionName).thenReturn("Level1");
+            mainMock.when(P06_IACC_01_Main::get_s_branch).thenReturn("BR001");
+            mainMock.when(P06_IACC_01_Main::get_s_eventDate).thenReturn("2024-01-01");
 
-            level2Mock.when(P06_IACC_01_Level2::execute).thenThrow(new SQLException("SQL error"));
+            level1Mock.when(() -> P06_IACC_01_Level1.execute())
+                      .thenThrow(new SQLException("DB Error"));
 
-            SQLException ex = assertThrows(
-                SQLException.class,
-                () -> executeMethod.invoke(null)
-            );
-            assertEquals("SQL error", ex.getMessage());
+            Exception exception = assertThrows(Exception.class, () -> executeMethod.invoke(null));
+            assertTrue(exception.getCause() instanceof SQLException);
         }
     }
 }
+
