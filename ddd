@@ -1,110 +1,186 @@
-package com.bnpparibas.atlentic.iacc.bopr.main.test;
+package com.bnpparibas.atlentic.iacc.bopr.main;
 
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.Date;
+import java.util.Map;
+
+import com.bnpparibas.atlentic.common.GlobalAtlentic;
+import com.bnpparibas.atlentic.common.P06_IACC_00_Utility;
+import com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter;
 import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
 import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
+import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
 import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
 
-import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-import org.mockito.junit.jupiter.MockitoExtension;
+import lombok.CustomLog;
 
-import java.lang.reflect.Method;
-import java.sql.SQLException;
+@CustomLog(topic = "P06_IACC_BPOR_BE")
+public final class P06_IACC_01_Main {
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+    private final String[] args;
+    private static String branch;
+    private static Date eventTimestamp;
+    private static Date beginDate;
+    private static Date endDate;
+    private static String textFileName;
+    public static String action;
+    public static final String BRANCH_TYPE = "BEFOR";
 
-@ExtendWith(MockitoExtension.class)
-class P06_IACC_01_MainTest {
-
-    private static Method executeMethod;
-
-    @BeforeAll
-    static void init() throws Exception {
-        executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
+    private P06_IACC_01_Main(final String[] args) {
+        this.args = args;
     }
 
-    @Test
-    void testExecute_withActionNameLevel1_shouldCallLevel1Execute() throws Exception {
-        try (
-            MockedStatic<P06_IACC_01_Main> mainMock = mockStatic(P06_IACC_01_Main.class);
-            MockedStatic<P06_IACC_01_Level1> level1Mock = mockStatic(P06_IACC_01_Level1.class)
-        ) {
-            mainMock.when(P06_IACC_01_Main::get_s_actionName).thenReturn("Level1");
-            mainMock.when(P06_IACC_01_Main::get_s_branch).thenReturn("BR001");
-            mainMock.when(P06_IACC_01_Main::get_s_eventDate).thenReturn("2024-01-01");
+    private void execute() {
+        LOG.debug("BOPR interface process starting...");
+        LOG.debug("Input parameters:");
+        printArguments();
 
-            level1Mock.when(() -> P06_IACC_01_Level1.execute()).then(invocation -> null);
+        try {
+            if (args.length < 1) {
+                throw new P06_IACC_01_ParameterException("Wrong parameters number, should be at least 1.");
+            }
 
-            assertDoesNotThrow(() -> executeMethod.invoke(null));
+            executeMain();
+
+            if (eventTimestamp == null) {
+                throw new P06_IACC_01_ParameterException("The process date format is unknown!");
+            }
+
+            if (P06_IACC_01_PropertiesMgr.getLevel1ActionName().equals(action)) {
+                if (args.length != 1 && args.length != 5) {
+                    throw new P06_IACC_01_ParameterException("Wrong parameters number for level 1 action, must be 1 or 5.");
+                }
+                executeMain2();
+            } else if (P06_IACC_01_PropertiesMgr.getLevel2ActionName().equals(action)) {
+                if (args.length != 2 && args.length != 4) {
+                    throw new P06_IACC_01_ParameterException("Wrong parameters number for level 2 action, must be 2 or 4.");
+                }
+                if (args.length > 2) {
+                    beginDate = StringConverter.StringToDate(args[2]);
+                    endDate = StringConverter.StringToDate(args[3]);
+                }
+                new P06_IACC_01_Level2().execute();
+            } else {
+                showUsage();
+            }
+
+        } catch (P06_IACC_01_ExitApplicationException | SQLException e) {
+            LOG.error("Execution failed", e);
         }
     }
 
-    @Test
-    void testExecute_withActionNameLevel2_shouldCallLevel2Execute() throws Exception {
-        try (
-            MockedStatic<P06_IACC_01_Main> mainMock = mockStatic(P06_IACC_01_Main.class);
-            MockedStatic<P06_IACC_01_Level2> level2Mock = mockStatic(P06_IACC_01_Level2.class)
-        ) {
-            mainMock.when(P06_IACC_01_Main::get_s_actionName).thenReturn("Level2");
-            mainMock.when(P06_IACC_01_Main::get_s_branch).thenReturn("BR001");
-            mainMock.when(P06_IACC_01_Main::get_s_eventDate).thenReturn("2024-01-01");
+    private void executeMain2() throws P06_IACC_01_ExitApplicationException, SQLException {
+        if (args.length > 3) {
+            beginDate = StringConverter.StringToDate(args[3]);
+            if (beginDate == null) {
+                throw new P06_IACC_01_ParameterException("The begin date format is unknown!");
+            }
 
-            level2Mock.when(() -> P06_IACC_01_Level2.execute()).then(invocation -> null);
+            endDate = StringConverter.StringToDate(args[4]);
+            if (endDate == null) {
+                throw new P06_IACC_01_ParameterException("The end date format is unknown!");
+            }
 
-            assertDoesNotThrow(() -> executeMethod.invoke(null));
+            validateDateOrder();
+        } else {
+            Map<String, String> config = getDateConfigDate();
+            beginDate = StringConverter.StringToDate(config.get("INTF_SYSTEM_BEGIN_DATE"));
+            LOG.info("Parameter System Begin Date: {}", config.get("INTF_SYSTEM_BEGIN_DATE"));
+
+            endDate = StringConverter.StringToDate(config.get("INTF_SYSTEM_END_DATE"));
+            LOG.info("Parameter System End Date: {}", config.get("INTF_SYSTEM_END_DATE"));
+
+            if (beginDate == null || endDate == null) {
+                throw new P06_IACC_01_ParameterException("Invalid begin or end date in config.");
+            }
+
+            validateDateOrder();
+        }
+
+        new P06_IACC_01_Level1().execute();
+    }
+
+    private void validateDateOrder() throws P06_IACC_01_ParameterException {
+        if (!beginDate.before(endDate)) {
+            throw new P06_IACC_01_ParameterException("The start date should be before the end date!");
         }
     }
 
-    @Test
-    void testExecute_withInvalidArguments_shouldThrowParameterException() throws Exception {
-        try (MockedStatic<P06_IACC_01_Main> mainMock = mockStatic(P06_IACC_01_Main.class)) {
-            mainMock.when(P06_IACC_01_Main::get_s_actionName).thenReturn("InvalidAction");
-            mainMock.when(P06_IACC_01_Main::get_s_branch).thenReturn("BR001");
-            mainMock.when(P06_IACC_01_Main::get_s_eventDate).thenReturn("2024-01-01");
-
-            Exception exception = assertThrows(Exception.class, () -> executeMethod.invoke(null));
-
-            Throwable cause = exception.getCause();
-            assertTrue(cause instanceof P06_IACC_01_ParameterException);
-            assertTrue(cause.getMessage().contains("Invalid action"));
+    private void executeMain() throws SQLException {
+        if (args.length > 2) {
+            action = args[0];
+            branch = args[1];
+            eventTimestamp = StringConverter.StringToDate(args[2]);
+        } else {
+            Map<String, String> config = getDateConfigDate();
+            action = args[0];
+            branch = BRANCH_TYPE;
+            LOG.info("Parameter Branch: {}", BRANCH_TYPE);
+            eventTimestamp = StringConverter.StringToDate(config.get("INTF_EVENT_DATE"));
+            LOG.info("Parameter Event Date: {}", config.get("INTF_EVENT_DATE"));
         }
     }
 
-    @Test
-    void testExecute_withMissingArguments_shouldThrowParameterException() throws Exception {
-        try (MockedStatic<P06_IACC_01_Main> mainMock = mockStatic(P06_IACC_01_Main.class)) {
-            mainMock.when(P06_IACC_01_Main::get_s_actionName).thenReturn(null);
-            mainMock.when(P06_IACC_01_Main::get_s_branch).thenReturn(null);
-            mainMock.when(P06_IACC_01_Main::get_s_eventDate).thenReturn(null);
+    private static void showUsage() {
+        LOG.info("""
+            Usage: <level> <branch> <event_date> [<begin_date> <end_date>] [file_name]
+                where:
+                    level: level1 / level2
+                    branch: branch name
+                    event_date: processing date (DD/MM/YYYY hh:mm:ss)
+                    begin_date: for level1 (DD/MM/YYYY hh:mm:ss)
+                    end_date: for level1 (DD/MM/YYYY hh:mm:ss)
+                    file_name: for level2
+        """);
+    }
 
-            Exception exception = assertThrows(Exception.class, () -> executeMethod.invoke(null));
-            Throwable cause = exception.getCause();
-            assertTrue(cause instanceof P06_IACC_01_ParameterException);
+    private void printArguments() {
+        for (int i = 0; i < args.length; i++) {
+            LOG.info("Parameter({}): {}", i, args[i]);
         }
     }
 
-    @Test
-    void testExecute_SQLExceptionPropagation() throws Exception {
-        try (
-            MockedStatic<P06_IACC_01_Main> mainMock = mockStatic(P06_IACC_01_Main.class);
-            MockedStatic<P06_IACC_01_Level1> level1Mock = mockStatic(P06_IACC_01_Level1.class)
-        ) {
-            mainMock.when(P06_IACC_01_Main::get_s_actionName).thenReturn("Level1");
-            mainMock.when(P06_IACC_01_Main::get_s_branch).thenReturn("BR001");
-            mainMock.when(P06_IACC_01_Main::get_s_eventDate).thenReturn("2024-01-01");
-
-            level1Mock.when(() -> P06_IACC_01_Level1.execute())
-                      .thenThrow(new SQLException("DB Error"));
-
-            Exception exception = assertThrows(Exception.class, () -> executeMethod.invoke(null));
-            assertTrue(exception.getCause() instanceof SQLException);
+    private static Map<String, String> getDateConfigDate() throws SQLException {
+        try (Connection conn = GlobalAtlentic.getLoanIQConnection()) {
+            return P06_IACC_00_Utility.getAtlIntfDateByBranch(BRANCH_TYPE, conn);
         }
+    }
+
+    public static Date getEventTimestamp() {
+        return eventTimestamp;
+    }
+
+    public static void setEventTimestamp(Date date) {
+        eventTimestamp = date;
+    }
+
+    public static Date getBeginDate() {
+        return beginDate;
+    }
+
+    public static void setBeginDate(Date date) {
+        beginDate = date;
+    }
+
+    public static Date getEndDate() {
+        return endDate;
+    }
+
+    public static void setEndDate(Date date) {
+        endDate = date;
+    }
+
+    public static String getBranch() {
+        return branch;
+    }
+
+    public static String getTextFileName() {
+        return textFileName;
+    }
+
+    public static void main(String... args) {
+        new P06_IACC_01_Main(args).execute();
     }
 }
-
