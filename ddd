@@ -1,19 +1,13 @@
-@Test
-void testLevel1ExecutionViaConstructorMock() throws Exception {
-    String[] args = {"L1", "B", "01/01/2025 10:00:00", "02/01/2025 10:00:00", "03/01/2025 10:00:00"};
-
-    try (MockedStatic<P06_IACC_01_PropertiesMgr> props = mockStatic(P06_IACC_01_PropertiesMgr.class)) {
-        props.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("L1");
-        props.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("L2");
-
-        try (MockedConstruction<P06_IACC_01_Level1> mocked = mockConstruction(P06_IACC_01_Level1.class,
-                (mock, context) -> doNothing().when(mock).execute())) {
-
-            Method main = P06_IACC_01_Main.class.getDeclaredMethod("main", String[].class);
-            main.invoke(null, (Object) args);
-
-            assertEquals(1, mocked.constructed().size());
-            verify(mocked.constructed().get(0), times(1)).execute();
+try (MockedStatic<GlobalAtlentic> globalMock = mockStatic(GlobalAtlentic.class)) {
+    globalMock.when(GlobalAtlentic::getLoanIQConnection)
+              .thenThrow(new SQLException("mock SQL exception"));
+    
+    assertThrows(
+        P06_IACC_01_ExitApplicationException.class,
+        () -> {
+            Method method = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+            method.setAccessible(true);
+            method.invoke(null);
         }
-    }
+    );
 }
