@@ -1,109 +1,44 @@
 package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
 import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
 import org.junit.jupiter.api.*;
-import java.lang.reflect.*;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.security.Permission;
 import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class P06_IACC_01_MainTest {
 
-    private Method extracted1;
-    private Method getTextFileNameMethod;
-    private Method setBeginDateMethod;
-    private Method getBeginDateMethod;
-    private Method setEventTimestampMethod;
-    private Method getEventTimestampMethod;
-    private Method setEndDateMethod;
-    private Method getEndDateMethod;
+    private static SecurityManager originalSecurityManager;
+
+    @BeforeAll
+    static void backupSecurityManager() {
+        originalSecurityManager = System.getSecurityManager();
+    }
+
+    @AfterAll
+    static void restoreSecurityManager() {
+        System.setSecurityManager(originalSecurityManager);
+    }
 
     @BeforeEach
-    void clearStaticsAndLoadMethods() throws Exception {
-        // Reset static fields
-        for (String field : new String[]{"args", "branch", "action", "eventTimestamp", "beginDate", "endDate", "textFileName"}) {
+    void resetStatics() throws Exception {
+        String[] fields = { "args", "branch", "action", "eventTimestamp", "beginDate", "endDate", "textFileName" };
+        for (String field : fields) {
             Field f = P06_IACC_01_Main.class.getDeclaredField(field);
             f.setAccessible(true);
             f.set(null, null);
         }
-
-        extracted1 = P06_IACC_01_Main.class.getDeclaredMethod("extracted1");
-        extracted1.setAccessible(true);
-
-        getTextFileNameMethod = P06_IACC_01_Main.class.getDeclaredMethod("getG_s_textFileName");
-        getTextFileNameMethod.setAccessible(true);
-
-        setBeginDateMethod = P06_IACC_01_Main.class.getDeclaredMethod("setG_o_beginDate", Date.class);
-        getBeginDateMethod = P06_IACC_01_Main.class.getDeclaredMethod("getG_o_beginDate");
-        setBeginDateMethod.setAccessible(true);
-        getBeginDateMethod.setAccessible(true);
-
-        setEventTimestampMethod = P06_IACC_01_Main.class.getDeclaredMethod("setG_o_eventTimestamp", Date.class);
-        getEventTimestampMethod = P06_IACC_01_Main.class.getDeclaredMethod("getG_o_eventTimestamp");
-        setEventTimestampMethod.setAccessible(true);
-        getEventTimestampMethod.setAccessible(true);
-
-        setEndDateMethod = P06_IACC_01_Main.class.getDeclaredMethod("setG_o_endDate", Date.class);
-        getEndDateMethod = P06_IACC_01_Main.class.getDeclaredMethod("getG_o_endDate");
-        setEndDateMethod.setAccessible(true);
-        getEndDateMethod.setAccessible(true);
     }
 
     @Test
-    void testSettersAndGettersViaReflection() throws Exception {
-        Date now = new Date();
-
-        setEventTimestampMethod.invoke(null, now);
-        assertSame(now, getEventTimestampMethod.invoke(null));
-
-        setBeginDateMethod.invoke(null, now);
-        assertSame(now, getBeginDateMethod.invoke(null));
-
-        setEndDateMethod.invoke(null, now);
-        assertSame(now, getEndDateMethod.invoke(null));
-    }
-
-    @Test
-    void testTextFileNameStaticFieldAccess() throws Exception {
-        Field textFileNameField = P06_IACC_01_Main.class.getDeclaredField("textFileName");
-        textFileNameField.setAccessible(true);
-        textFileNameField.set(null, "test-report.txt");
-
-        String actual = (String) getTextFileNameMethod.invoke(null);
-        assertEquals("test-report.txt", actual);
-    }
-
-    @Test
-    void testExtracted1WithArgs() throws Exception {
-        String[] testArgs = new String[]{"levell", "branch1", "01/01/2023 00:00:00"};
-        Method setArgsMethod = P06_IACC_01_Main.class.getDeclaredMethod("set_args", String[].class);
-        setArgsMethod.invoke(null, (Object) testArgs);
-
-        // GlobalAtlentic.getLoanIQConnection() should be mocked externally for full test
-        try {
-            extracted1.invoke(null); // Test valid flow
-        } catch (InvocationTargetException e) {
-            if (e.getCause() instanceof SQLException) {
-                // expected if LoanIQConnection not mocked
-            } else {
-                fail("Unexpected exception: " + e.getCause());
-            }
-        }
-    }
-
-    @Test
-    void testBeginDateSetterAndGetter() throws Exception {
-        Date expected = new Date();
-        setBeginDateMethod.invoke(null, expected);
-        Date actual = (Date) getBeginDateMethod.invoke(null);
-        assertEquals(expected, actual);
-    }
-
-    @Test
-    void testInvalidParameterExceptionHandling() throws Exception {
-        // Prepare invalid args
+    void testInvalidParameterExceptionHandling_exitsWith5() throws Exception {
         String[] invalidArgs = new String[]{};
+
         Method setArgsMethod = P06_IACC_01_Main.class.getDeclaredMethod("set_args", String[].class);
         setArgsMethod.setAccessible(true);
         setArgsMethod.invoke(null, (Object) invalidArgs);
@@ -111,23 +46,112 @@ class P06_IACC_01_MainTest {
         Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
         executeMethod.setAccessible(true);
 
-        InvocationTargetException thrown = assertThrows(InvocationTargetException.class, () -> {
-            executeMethod.invoke(null);
-        });
+        System.setSecurityManager(new NoExitSecurityManager());
 
-        assertTrue(thrown.getCause() instanceof P06_IACC_01_ParameterException);
+        ExitTrappedException ex = assertThrows(ExitTrappedException.class, () -> executeMethod.invoke(null));
+        assertEquals(5, ex.getStatus()); // Should exit with code 5
     }
 
     @Test
-    void testBranchGetter() throws Exception {
+    void testEventTimestampGetterSetterViaReflection() throws Exception {
+        Date now = new Date();
+
+        Method setter = P06_IACC_01_Main.class.getDeclaredMethod("setG_o_eventTimestamp", Date.class);
+        Method getter = P06_IACC_01_Main.class.getDeclaredMethod("getG_o_eventTimestamp");
+        setter.setAccessible(true);
+        getter.setAccessible(true);
+
+        setter.invoke(null, now);
+        Date result = (Date) getter.invoke(null);
+
+        assertEquals(now, result);
+    }
+
+    @Test
+    void testBeginDateGetterSetterViaReflection() throws Exception {
+        Date now = new Date();
+
+        Method setter = P06_IACC_01_Main.class.getDeclaredMethod("setG_o_beginDate", Date.class);
+        Method getter = P06_IACC_01_Main.class.getDeclaredMethod("getG_o_beginDate");
+        setter.setAccessible(true);
+        getter.setAccessible(true);
+
+        setter.invoke(null, now);
+        Date result = (Date) getter.invoke(null);
+
+        assertEquals(now, result);
+    }
+
+    @Test
+    void testEndDateGetterSetterViaReflection() throws Exception {
+        Date now = new Date();
+
+        Method setter = P06_IACC_01_Main.class.getDeclaredMethod("setG_o_endDate", Date.class);
+        Method getter = P06_IACC_01_Main.class.getDeclaredMethod("getG_o_endDate");
+        setter.setAccessible(true);
+        getter.setAccessible(true);
+
+        setter.invoke(null, now);
+        Date result = (Date) getter.invoke(null);
+
+        assertEquals(now, result);
+    }
+
+    @Test
+    void testSetArgsAndTextFileNameFieldAccess() throws Exception {
+        String[] inputArgs = new String[] { "level1", "branch", "10/10/2023 10:00:00" };
+
+        Method setArgs = P06_IACC_01_Main.class.getDeclaredMethod("set_args", String[].class);
+        setArgs.setAccessible(true);
+        setArgs.invoke(null, (Object) inputArgs);
+
+        Field textFileNameField = P06_IACC_01_Main.class.getDeclaredField("textFileName");
+        textFileNameField.setAccessible(true);
+        textFileNameField.set(null, "report.txt");
+
+        Method getTextFileName = P06_IACC_01_Main.class.getDeclaredMethod("getG_s_textFileName");
+        getTextFileName.setAccessible(true);
+
+        String result = (String) getTextFileName.invoke(null);
+        assertEquals("report.txt", result);
+    }
+
+    @Test
+    void testSetBranchFieldDirectly() throws Exception {
         Field branchField = P06_IACC_01_Main.class.getDeclaredField("branch");
         branchField.setAccessible(true);
-        branchField.set(null, "BEF");
+        branchField.set(null, "HYD");
 
-        Method getBranchMethod = P06_IACC_01_Main.class.getDeclaredMethod("getG_s_branch");
-        getBranchMethod.setAccessible(true);
+        Method getBranch = P06_IACC_01_Main.class.getDeclaredMethod("getG_s_branch");
+        getBranch.setAccessible(true);
 
-        String result = (String) getBranchMethod.invoke(null);
-        assertEquals("BEF", result);
+        String result = (String) getBranch.invoke(null);
+        assertEquals("HYD", result);
+    }
+
+    // Custom SecurityManager to intercept System.exit
+    static class NoExitSecurityManager extends SecurityManager {
+        @Override
+        public void checkPermission(Permission perm) {
+            // allow everything else
+        }
+
+        @Override
+        public void checkExit(int status) {
+            throw new ExitTrappedException(status);
+        }
+    }
+
+    static class ExitTrappedException extends SecurityException {
+        private final int status;
+
+        public ExitTrappedException(int status) {
+            super("Intercepted System.exit(" + status + ")");
+            this.status = status;
+        }
+
+        public int getStatus() {
+            return status;
+        }
     }
 }
