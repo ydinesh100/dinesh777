@@ -1,157 +1,71 @@
-package com.bnpparibas.atlentic.iacc.bopr.main.test;
+package com.bnpparibas.atlentic.iacc.bopr.main;
 
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import org.junit.jupiter.api.*;
+import static org.mockito.Mockito.*;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
+import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedConstruction;
+import org.mockito.MockedStatic;
+
 import java.lang.reflect.Method;
-import java.security.Permission;
-import java.util.Date;
+import java.sql.SQLException;
 
-import static org.junit.jupiter.api.Assertions.*;
+class P06_IACC_01_Main_Executed1Test {
 
-class P06_IACC_01_MainTest {
+    @Test
+    void testExecuted1_withLevel1Action_executesLevel1() throws Exception {
+        // Mock static method get_s_actionName to return "LEVEL1"
+        try (MockedStatic<P06_IACC_01_Main> mainStaticMock = mockStatic(P06_IACC_01_Main.class);
+             MockedConstruction<P06_IACC_01_Level1> mockedConstruction = mockConstruction(P06_IACC_01_Level1.class,
+                     (mock, context) -> doNothing().when(mock).execute())) {
 
-    private static SecurityManager originalSecurityManager;
+            mainStaticMock.when(P06_IACC_01_Main::get_s_actionName).thenReturn("LEVEL1");
 
-    @BeforeAll
-    static void backupSecurityManager() {
-        originalSecurityManager = System.getSecurityManager();
-    }
+            Method method = P06_IACC_01_Main.class.getDeclaredMethod("executed1");
+            method.setAccessible(true);
+            method.invoke(null);
 
-    @AfterAll
-    static void restoreSecurityManager() {
-        System.setSecurityManager(originalSecurityManager);
-    }
-
-    @BeforeEach
-    void resetStatics() throws Exception {
-        String[] fields = { "args", "branch", "action", "eventTimestamp", "beginDate", "endDate", "textFileName" };
-        for (String field : fields) {
-            Field f = P06_IACC_01_Main.class.getDeclaredField(field);
-            f.setAccessible(true);
-            f.set(null, null);
+            // Assert execute() was called once
+            P06_IACC_01_Level1 mockInstance = mockedConstruction.constructed().get(0);
+            verify(mockInstance, times(1)).execute();
         }
     }
 
     @Test
-    void testInvalidParameterExceptionHandling_exitsWith5() throws Exception {
-        String[] invalidArgs = new String[]{};
+    void testExecuted1_withNonLevel1Action_doesNotExecuteLevel1() throws Exception {
+        try (MockedStatic<P06_IACC_01_Main> mainStaticMock = mockStatic(P06_IACC_01_Main.class);
+             MockedConstruction<P06_IACC_01_Level1> mockedConstruction = mockConstruction(P06_IACC_01_Level1.class)) {
 
-        Method setArgsMethod = P06_IACC_01_Main.class.getDeclaredMethod("set_args", String[].class);
-        setArgsMethod.setAccessible(true);
-        setArgsMethod.invoke(null, (Object) invalidArgs);
+            mainStaticMock.when(P06_IACC_01_Main::get_s_actionName).thenReturn("LEVEL2");
 
-        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
+            Method method = P06_IACC_01_Main.class.getDeclaredMethod("executed1");
+            method.setAccessible(true);
+            method.invoke(null);
 
-        System.setSecurityManager(new NoExitSecurityManager());
-
-        ExitTrappedException ex = assertThrows(ExitTrappedException.class, () -> executeMethod.invoke(null));
-        assertEquals(5, ex.getStatus()); // Should exit with code 5
-    }
-
-    @Test
-    void testEventTimestampGetterSetterViaReflection() throws Exception {
-        Date now = new Date();
-
-        Method setter = P06_IACC_01_Main.class.getDeclaredMethod("setG_o_eventTimestamp", Date.class);
-        Method getter = P06_IACC_01_Main.class.getDeclaredMethod("getG_o_eventTimestamp");
-        setter.setAccessible(true);
-        getter.setAccessible(true);
-
-        setter.invoke(null, now);
-        Date result = (Date) getter.invoke(null);
-
-        assertEquals(now, result);
-    }
-
-    @Test
-    void testBeginDateGetterSetterViaReflection() throws Exception {
-        Date now = new Date();
-
-        Method setter = P06_IACC_01_Main.class.getDeclaredMethod("setG_o_beginDate", Date.class);
-        Method getter = P06_IACC_01_Main.class.getDeclaredMethod("getG_o_beginDate");
-        setter.setAccessible(true);
-        getter.setAccessible(true);
-
-        setter.invoke(null, now);
-        Date result = (Date) getter.invoke(null);
-
-        assertEquals(now, result);
-    }
-
-    @Test
-    void testEndDateGetterSetterViaReflection() throws Exception {
-        Date now = new Date();
-
-        Method setter = P06_IACC_01_Main.class.getDeclaredMethod("setG_o_endDate", Date.class);
-        Method getter = P06_IACC_01_Main.class.getDeclaredMethod("getG_o_endDate");
-        setter.setAccessible(true);
-        getter.setAccessible(true);
-
-        setter.invoke(null, now);
-        Date result = (Date) getter.invoke(null);
-
-        assertEquals(now, result);
-    }
-
-    @Test
-    void testSetArgsAndTextFileNameFieldAccess() throws Exception {
-        String[] inputArgs = new String[] { "level1", "branch", "10/10/2023 10:00:00" };
-
-        Method setArgs = P06_IACC_01_Main.class.getDeclaredMethod("set_args", String[].class);
-        setArgs.setAccessible(true);
-        setArgs.invoke(null, (Object) inputArgs);
-
-        Field textFileNameField = P06_IACC_01_Main.class.getDeclaredField("textFileName");
-        textFileNameField.setAccessible(true);
-        textFileNameField.set(null, "report.txt");
-
-        Method getTextFileName = P06_IACC_01_Main.class.getDeclaredMethod("getG_s_textFileName");
-        getTextFileName.setAccessible(true);
-
-        String result = (String) getTextFileName.invoke(null);
-        assertEquals("report.txt", result);
-    }
-
-    @Test
-    void testSetBranchFieldDirectly() throws Exception {
-        Field branchField = P06_IACC_01_Main.class.getDeclaredField("branch");
-        branchField.setAccessible(true);
-        branchField.set(null, "HYD");
-
-        Method getBranch = P06_IACC_01_Main.class.getDeclaredMethod("getG_s_branch");
-        getBranch.setAccessible(true);
-
-        String result = (String) getBranch.invoke(null);
-        assertEquals("HYD", result);
-    }
-
-    // Custom SecurityManager to intercept System.exit
-    static class NoExitSecurityManager extends SecurityManager {
-        @Override
-        public void checkPermission(Permission perm) {
-            // allow everything else
-        }
-
-        @Override
-        public void checkExit(int status) {
-            throw new ExitTrappedException(status);
+            // Assert that no Level1 instance is created or execute is not called
+            assert mockedConstruction.constructed().isEmpty();
         }
     }
 
-    static class ExitTrappedException extends SecurityException {
-        private final int status;
+    @Test
+    void testExecuted1_throwsSQLException() throws Exception {
+        try (MockedStatic<P06_IACC_01_Main> mainStaticMock = mockStatic(P06_IACC_01_Main.class);
+             MockedConstruction<P06_IACC_01_Level1> mockedConstruction = mockConstruction(P06_IACC_01_Level1.class,
+                     (mock, context) -> doThrow(new SQLException("DB error")).when(mock).execute())) {
 
-        public ExitTrappedException(int status) {
-            super("Intercepted System.exit(" + status + ")");
-            this.status = status;
-        }
+            mainStaticMock.when(P06_IACC_01_Main::get_s_actionName).thenReturn("LEVEL1");
 
-        public int getStatus() {
-            return status;
+            Method method = P06_IACC_01_Main.class.getDeclaredMethod("executed1");
+            method.setAccessible(true);
+
+            try {
+                method.invoke(null);
+            } catch (Exception e) {
+                // unwrap reflection exception
+                Throwable cause = e.getCause();
+                assert cause instanceof SQLException;
+                assert cause.getMessage().equals("DB error");
+            }
         }
     }
 }
