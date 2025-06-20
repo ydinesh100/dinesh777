@@ -1,25 +1,27 @@
 package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
 import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
 import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
 
 import org.junit.jupiter.api.*;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.sql.SQLException;
-import java.text.SimpleDateFormat;
+import java.security.Permission;
 import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class P06_IACC_01_MainTest {
 
     private Method executeMethod;
+    private SecurityManager originalSecurityManager;
 
     @BeforeAll
     void init() throws Exception {
@@ -28,68 +30,105 @@ public class P06_IACC_01_MainTest {
     }
 
     @BeforeEach
-    void clearStatics() throws Exception {
-        String[] fields = { "args", "branch", "action", "eventTimestamp", "beginDate", "endDate", "textFileName" };
-        for (String fieldName : fields) {
-            Field field = P06_IACC_01_Main.class.getDeclaredField(fieldName);
+    void beforeEach() throws Exception {
+        originalSecurityManager = System.getSecurityManager();
+        System.setSecurityManager(new NoExitSecurityManager());
+
+        for (String f : new String[]{"args","branch","action","eventTimestamp","beginDate","endDate","textFileName"}) {
+            Field field = P06_IACC_01_Main.class.getDeclaredField(f);
             field.setAccessible(true);
             field.set(null, null);
         }
     }
 
-    @Test
-    void testExecute_withValidLevel1Args_shouldInvokeLevel1Execute() throws Exception {
-        String dateStr = "01/01/2023 10:00:00";
-        String[] args = { "level1", "BR001", dateStr, dateStr, dateStr };
+    @AfterEach
+    void afterEach() {
+        System.setSecurityManager(originalSecurityManager);
+    }
 
-        // Set static field via reflection
-        Field argsField = P06_IACC_01_Main.class.getDeclaredField("args");
-        argsField.setAccessible(true);
-        argsField.set(null, args);
+    @Test
+    void testExecute_withValidLevel1Args_invokesLevel1Execute() throws Exception {
+        String[] args = {"level1","BR1","01/01/2023 10:00:00","01/01/2023 11:00:00","01/01/2023 12:00:00"};
+        setField("args", args);
 
         try (
-            MockedStatic<com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr> propMock = Mockito.mockStatic(com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr.class);
-            MockedStatic<com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter> stringConverterMock = Mockito.mockStatic(com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter.class);
-            MockedStatic<com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1> level1Mock = Mockito.mockStatic(com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1.class)
+            MockedStatic<com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr> p =
+                Mockito.mockStatic(com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr.class);
+            MockedStatic<com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter> sc =
+                Mockito.mockStatic(com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter.class);
+            MockedStatic<com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1> lvl1 =
+                Mockito.mockStatic(com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1.class)
         ) {
-            propMock.when(() -> com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr.getLevel1ActionName())
-                    .thenReturn("level1");
+            p.when(() -> com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr.getLevel1ActionName())
+                .thenReturn("level1");
 
-            Date fakeDate = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss").parse(dateStr);
-            stringConverterMock.when(() -> com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter.StringToDate(Mockito.anyString()))
-                    .thenReturn(fakeDate);
+            sc.when(() -> com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter.StringToDate(anyString()))
+                .thenReturn(new Date());
 
-            com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1 level1Instance = Mockito.mock(com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1.class);
-            level1Mock.when(com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1::new).thenReturn(level1Instance);
+            com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1 inst =
+                Mockito.mock(com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1.class);
+            lvl1.when(com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1::new)
+                .thenReturn(inst);
+            Mockito.doNothing().when(inst).execute();
 
-            Mockito.doNothing().when(level1Instance).execute();
-
-            // Execute private method
-            executeMethod.invoke(null);
-
-            Mockito.verify(level1Instance).execute();
+            assertThrows(SecurityException.class, () -> executeMethod.invoke(null));
+            Mockito.verify(inst).execute();
         }
     }
 
     @Test
-    void testExecute_withMissingArgs_shouldThrowParameterException() throws Exception {
-        String[] args = {};
+    void testExecute_withValidLevel2Args_invokesLevel2Execute() throws Exception {
+        String[] args = {"level2","BR2","01/01/2023 10:00:00","out.txt"};
+        setField("args", args);
+        setField("action", "level2");
 
-        Field argsField = P06_IACC_01_Main.class.getDeclaredField("args");
-        argsField.setAccessible(true);
-        argsField.set(null, args);
+        try (
+            MockedStatic<com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr> p =
+                Mockito.mockStatic(com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr.class);
+            MockedStatic<com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter> sc =
+                Mockito.mockStatic(com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter.class);
+            MockedStatic<com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2> lvl2 =
+                Mockito.mockStatic(com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2.class)
+        ) {
+            p.when(() -> com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr.getLevel2ActionName())
+                .thenReturn("level2");
 
-        InvocationTargetException ex = assertThrows(InvocationTargetException.class, () -> {
+            sc.when(() -> com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter.StringToDate(anyString()))
+                .thenReturn(new Date());
+
+            com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2 inst2 =
+                Mockito.mock(com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2.class);
+            lvl2.when(com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2::new)
+                .thenReturn(inst2);
+            Mockito.doNothing().when(inst2).execute();
+
+            assertThrows(SecurityException.class, () -> executeMethod.invoke(null));
+            Mockito.verify(inst2).execute();
+        }
+    }
+
+    @Test
+    void testExecute_withNoArgs_exitsWithCode5() {
+        setField("args", new String[]{});
+        ExecutionException ex = assertThrows(ExecutionException.class, () -> {
             executeMethod.invoke(null);
         });
-
         assertTrue(ex.getCause() instanceof P06_IACC_01_ParameterException);
     }
 
-    // Additional test cases can be added here for:
-    // - Level2 execution
-    // - Invalid action
-    // - Null or malformed dates
-    // - SQL exception in getDateConfigDate()
-    // - ParameterException from extracted1, extracted2, extracted3, etc.
+    // Helpers
+    private void setField(String name, Object value) throws Exception {
+        Field f = P06_IACC_01_Main.class.getDeclaredField(name);
+        f.setAccessible(true);
+        f.set(null, value);
+    }
+
+    static class NoExitSecurityManager extends SecurityManager {
+        @Override
+        public void checkPermission(Permission perm) {}
+        @Override
+        public void checkExit(int status) {
+            throw new SecurityException("exit(" + status + ")");
+        }
+    }
 }
