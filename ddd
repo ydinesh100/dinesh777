@@ -1,71 +1,95 @@
-package com.bnpparibas.atlentic.iacc.bopr.main;
+package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
-import static org.mockito.Mockito.*;
+import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
 
-import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
-import org.junit.jupiter.api.Test;
-import org.mockito.MockedConstruction;
+import org.junit.jupiter.api.*;
 import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.sql.SQLException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
-class P06_IACC_01_Main_Executed1Test {
+import static org.junit.jupiter.api.Assertions.*;
 
-    @Test
-    void testExecuted1_withLevel1Action_executesLevel1() throws Exception {
-        // Mock static method get_s_actionName to return "LEVEL1"
-        try (MockedStatic<P06_IACC_01_Main> mainStaticMock = mockStatic(P06_IACC_01_Main.class);
-             MockedConstruction<P06_IACC_01_Level1> mockedConstruction = mockConstruction(P06_IACC_01_Level1.class,
-                     (mock, context) -> doNothing().when(mock).execute())) {
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+public class P06_IACC_01_MainTest {
 
-            mainStaticMock.when(P06_IACC_01_Main::get_s_actionName).thenReturn("LEVEL1");
+    private Method executeMethod;
 
-            Method method = P06_IACC_01_Main.class.getDeclaredMethod("executed1");
-            method.setAccessible(true);
-            method.invoke(null);
+    @BeforeAll
+    void init() throws Exception {
+        executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
+    }
 
-            // Assert execute() was called once
-            P06_IACC_01_Level1 mockInstance = mockedConstruction.constructed().get(0);
-            verify(mockInstance, times(1)).execute();
+    @BeforeEach
+    void clearStatics() throws Exception {
+        String[] fields = { "args", "branch", "action", "eventTimestamp", "beginDate", "endDate", "textFileName" };
+        for (String fieldName : fields) {
+            Field field = P06_IACC_01_Main.class.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            field.set(null, null);
         }
     }
 
     @Test
-    void testExecuted1_withNonLevel1Action_doesNotExecuteLevel1() throws Exception {
-        try (MockedStatic<P06_IACC_01_Main> mainStaticMock = mockStatic(P06_IACC_01_Main.class);
-             MockedConstruction<P06_IACC_01_Level1> mockedConstruction = mockConstruction(P06_IACC_01_Level1.class)) {
+    void testExecute_withValidLevel1Args_shouldInvokeLevel1Execute() throws Exception {
+        String dateStr = "01/01/2023 10:00:00";
+        String[] args = { "level1", "BR001", dateStr, dateStr, dateStr };
 
-            mainStaticMock.when(P06_IACC_01_Main::get_s_actionName).thenReturn("LEVEL2");
+        // Set static field via reflection
+        Field argsField = P06_IACC_01_Main.class.getDeclaredField("args");
+        argsField.setAccessible(true);
+        argsField.set(null, args);
 
-            Method method = P06_IACC_01_Main.class.getDeclaredMethod("executed1");
-            method.setAccessible(true);
-            method.invoke(null);
+        try (
+            MockedStatic<com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr> propMock = Mockito.mockStatic(com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr.class);
+            MockedStatic<com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter> stringConverterMock = Mockito.mockStatic(com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter.class);
+            MockedStatic<com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1> level1Mock = Mockito.mockStatic(com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1.class)
+        ) {
+            propMock.when(() -> com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr.getLevel1ActionName())
+                    .thenReturn("level1");
 
-            // Assert that no Level1 instance is created or execute is not called
-            assert mockedConstruction.constructed().isEmpty();
+            Date fakeDate = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss").parse(dateStr);
+            stringConverterMock.when(() -> com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter.StringToDate(Mockito.anyString()))
+                    .thenReturn(fakeDate);
+
+            com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1 level1Instance = Mockito.mock(com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1.class);
+            level1Mock.when(com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1::new).thenReturn(level1Instance);
+
+            Mockito.doNothing().when(level1Instance).execute();
+
+            // Execute private method
+            executeMethod.invoke(null);
+
+            Mockito.verify(level1Instance).execute();
         }
     }
 
     @Test
-    void testExecuted1_throwsSQLException() throws Exception {
-        try (MockedStatic<P06_IACC_01_Main> mainStaticMock = mockStatic(P06_IACC_01_Main.class);
-             MockedConstruction<P06_IACC_01_Level1> mockedConstruction = mockConstruction(P06_IACC_01_Level1.class,
-                     (mock, context) -> doThrow(new SQLException("DB error")).when(mock).execute())) {
+    void testExecute_withMissingArgs_shouldThrowParameterException() throws Exception {
+        String[] args = {};
 
-            mainStaticMock.when(P06_IACC_01_Main::get_s_actionName).thenReturn("LEVEL1");
+        Field argsField = P06_IACC_01_Main.class.getDeclaredField("args");
+        argsField.setAccessible(true);
+        argsField.set(null, args);
 
-            Method method = P06_IACC_01_Main.class.getDeclaredMethod("executed1");
-            method.setAccessible(true);
+        InvocationTargetException ex = assertThrows(InvocationTargetException.class, () -> {
+            executeMethod.invoke(null);
+        });
 
-            try {
-                method.invoke(null);
-            } catch (Exception e) {
-                // unwrap reflection exception
-                Throwable cause = e.getCause();
-                assert cause instanceof SQLException;
-                assert cause.getMessage().equals("DB error");
-            }
-        }
+        assertTrue(ex.getCause() instanceof P06_IACC_01_ParameterException);
     }
+
+    // Additional test cases can be added here for:
+    // - Level2 execution
+    // - Invalid action
+    // - Null or malformed dates
+    // - SQL exception in getDateConfigDate()
+    // - ParameterException from extracted1, extracted2, extracted3, etc.
 }
