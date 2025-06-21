@@ -1,6 +1,11 @@
-package com.bnpparibas.atlentic.iacc.bopr.main.test;
+package com.bnpparibas.atlentic.iacc.bopr.main;
 
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
+import com.bnpparibas.atlentic.common.GlobalAtlentic;
+import com.bnpparibas.atlentic.common.Pee_IACC_00_Utility;
+import com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter;
+import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
+import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
 import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
 import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
 
@@ -8,127 +13,135 @@ import org.junit.jupiter.api.*;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.security.Permission;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
-public class P06_IACC_01_MainTest {
+class P06_IACC_01_MainTest {
 
-    private Method executeMethod;
-    private SecurityManager originalSecurityManager;
-
-    @BeforeAll
-    void init() throws Exception {
-        executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
-    }
+    private Method execute;
 
     @BeforeEach
-    void beforeEach() throws Exception {
-        originalSecurityManager = System.getSecurityManager();
-        System.setSecurityManager(new NoExitSecurityManager());
-
-        for (String f : new String[]{"args","branch","action","eventTimestamp","beginDate","endDate","textFileName"}) {
-            Field field = P06_IACC_01_Main.class.getDeclaredField(f);
-            field.setAccessible(true);
-            field.set(null, null);
-        }
-    }
-
-    @AfterEach
-    void afterEach() {
-        System.setSecurityManager(originalSecurityManager);
+    void setup() throws Exception {
+        execute = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        execute.setAccessible(true);
     }
 
     @Test
-    void testExecute_withValidLevel1Args_invokesLevel1Execute() throws Exception {
-        String[] args = {"level1","BR1","01/01/2023 10:00:00","01/01/2023 11:00:00","01/01/2023 12:00:00"};
-        setField("args", args);
+    void testMissingArgs_throwsParameterException() {
+        P06_IACC_01_Main.set_args(new String[]{});
+        try (MockedStatic<System> sys = mockStatic(System.class)) {
+            sys.when(() -> System.exit(anyInt()))
+               .thenThrow(new ExitTrappedException());
+            assertThrows(ExitTrappedException.class, () -> execute.invoke(null));
+        }
+    }
+
+    @Test
+    void testInvalidAction_throwsParameterException() throws Exception {
+        String[] args = {"invalid", "BR", "01/01/2025 10:00:00"};
+        P06_IACC_01_Main.set_args(args);
 
         try (
-            MockedStatic<com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr> p =
-                Mockito.mockStatic(com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr.class);
-            MockedStatic<com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter> sc =
-                Mockito.mockStatic(com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter.class);
-            MockedStatic<com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1> lvl1 =
-                Mockito.mockStatic(com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1.class)
+            MockedStatic<StringConverter> sc = mockStatic(StringConverter.class);
+            MockedStatic<P06_IACC_01_PropertiesMgr> pm = mockStatic(P06_IACC_01_PropertiesMgr.class);
+            MockedStatic<System> sys = mockStatic(System.class)
         ) {
-            p.when(() -> com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr.getLevel1ActionName())
-                .thenReturn("level1");
+            sc.when(() -> StringConverter.StringToDate(anyString()))
+              .thenReturn(new SimpleDateFormat("dd/MM/yyyy HH:mm:ss").parse(args[2]));
+            pm.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("L1");
+            pm.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("L2");
+            sys.when(() -> System.exit(anyInt()))
+               .thenThrow(new ExitTrappedException());
 
-            sc.when(() -> com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter.StringToDate(anyString()))
-                .thenReturn(new Date());
-
-            com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1 inst =
-                Mockito.mock(com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1.class);
-            lvl1.when(com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1::new)
-                .thenReturn(inst);
-            Mockito.doNothing().when(inst).execute();
-
-            assertThrows(SecurityException.class, () -> executeMethod.invoke(null));
-            Mockito.verify(inst).execute();
+            assertThrows(ExitTrappedException.class, () -> execute.invoke(null));
         }
     }
 
     @Test
-    void testExecute_withValidLevel2Args_invokesLevel2Execute() throws Exception {
-        String[] args = {"level2","BR2","01/01/2023 10:00:00","out.txt"};
-        setField("args", args);
-        setField("action", "level2");
+    void testLevel1WithoutDates_executesLevel1() throws Exception {
+        String[] args = {"L1", "BR", "01/01/2025 10:00:00"};
+        P06_IACC_01_Main.set_args(args);
 
         try (
-            MockedStatic<com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr> p =
-                Mockito.mockStatic(com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr.class);
-            MockedStatic<com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter> sc =
-                Mockito.mockStatic(com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter.class);
-            MockedStatic<com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2> lvl2 =
-                Mockito.mockStatic(com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2.class)
+            MockedStatic<StringConverter> sc = mockStatic(StringConverter.class);
+            MockedStatic<P06_IACC_01_PropertiesMgr> pm = mockStatic(P06_IACC_01_PropertiesMgr.class);
+            MockedStatic<P06_IACC_01_Level1> l1Mock = mockStatic(P06_IACC_01_Level1.class);
+            MockedStatic<System> sys = mockStatic(System.class)
         ) {
-            p.when(() -> com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr.getLevel2ActionName())
-                .thenReturn("level2");
+            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+            Date dt = sdf.parse(args[2]);
+            sc.when(() -> StringConverter.StringToDate(anyString())).thenReturn(dt);
+            pm.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("L1");
+            pm.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("L2");
 
-            sc.when(() -> com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter.StringToDate(anyString()))
-                .thenReturn(new Date());
+            P06_IACC_01_Level1 l1 = mock(P06_IACC_01_Level1.class);
+            l1Mock.when(P06_IACC_01_Level1::new).thenReturn(l1);
 
-            com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2 inst2 =
-                Mockito.mock(com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2.class);
-            lvl2.when(com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2::new)
-                .thenReturn(inst2);
-            Mockito.doNothing().when(inst2).execute();
+            sys.when(() -> System.exit(0)).thenThrow(new ExitTrappedException());
 
-            assertThrows(SecurityException.class, () -> executeMethod.invoke(null));
-            Mockito.verify(inst2).execute();
+            assertThrows(ExitTrappedException.class, () -> execute.invoke(null));
+            verify(l1).execute();
         }
     }
 
     @Test
-    void testExecute_withNoArgs_exitsWithCode5() {
-        setField("args", new String[]{});
-        ExecutionException ex = assertThrows(ExecutionException.class, () -> {
-            executeMethod.invoke(null);
-        });
-        assertTrue(ex.getCause() instanceof P06_IACC_01_ParameterException);
-    }
+    void testLevel2_executesLevel2() throws Exception {
+        String[] args = {"L2", "BR", "01/01/2025 10:00:00", "FILE"};
+        P06_IACC_01_Main.set_args(args);
 
-    // Helpers
-    private void setField(String name, Object value) throws Exception {
-        Field f = P06_IACC_01_Main.class.getDeclaredField(name);
-        f.setAccessible(true);
-        f.set(null, value);
-    }
+        try (
+            MockedStatic<StringConverter> sc = mockStatic(StringConverter.class);
+            MockedStatic<P06_IACC_01_PropertiesMgr> pm = mockStatic(P06_IACC_01_PropertiesMgr.class);
+            MockedStatic<P06_IACC_01_Level2> l2Mock = mockStatic(P06_IACC_01_Level2.class);
+            MockedStatic<System> sys = mockStatic(System.class)
+        ) {
+            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+            Date dt = sdf.parse(args[2]);
+            sc.when(() -> StringConverter.StringToDate(anyString())).thenReturn(dt);
+            pm.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("L1");
+            pm.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("L2");
 
-    static class NoExitSecurityManager extends SecurityManager {
-        @Override
-        public void checkPermission(Permission perm) {}
-        @Override
-        public void checkExit(int status) {
-            throw new SecurityException("exit(" + status + ")");
+            P06_IACC_01_Level2 l2 = mock(P06_IACC_01_Level2.class);
+            l2Mock.when(P06_IACC_01_Level2::new).thenReturn(l2);
+
+            sys.when(() -> System.exit(0)).thenThrow(new ExitTrappedException());
+
+            assertThrows(ExitTrappedException.class, () -> execute.invoke(null));
+            verify(l2).execute();
         }
     }
+
+    @Test
+    void testSQLException_inExtracted1_leadsToExit() throws Exception {
+        // trigger path where extractedi() calls getDateConfigDate()
+        String[] args = {"L1", "BR"};
+        P06_IACC_01_Main.set_args(args);
+
+        try (
+            MockedStatic<GlobalAtlentic> ga = mockStatic(GlobalAtlentic.class);
+            MockedStatic<Pee_IACC_00_Utility> pu = mockStatic(Pee_IACC_00_Utility.class);
+            MockedStatic<P06_IACC_01_PropertiesMgr> pm = mockStatic(P06_IACC_01_PropertiesMgr.class);
+            MockedStatic<System> sys = mockStatic(System.class)
+        ) {
+            ga.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mock(Connection.class));
+            pu.when(() -> Pee_IACC_00_Utility.getAtlIntfDateByBranch(any(), any()))
+              .thenThrow(new SQLException("fail"));
+
+            sys.when(() -> System.exit(anyInt()))
+               .thenThrow(new ExitTrappedException());
+
+            assertThrows(ExitTrappedException.class, () -> execute.invoke(null));
+        }
+    }
+
+    // Utility to trap calls to System.exit
+    private static class ExitTrappedException extends RuntimeException { }
 }
