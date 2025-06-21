@@ -1,139 +1,17 @@
-package com.bnpparibas.atlentic.iacc.bopr.main.test;
+// P06_IACC_01_Level1_Stub.java
+package com.bnpparibas.atlentic.iacc.bopr.level1;
 
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.main.test.util.NoExitSecurityManager;
-import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
-import com.bnpparibas.atlentic.common.GlobalAtlentic;
-import com.bnpparibas.atlentic.common.P00_IACC_00_Utility;
-
-import org.junit.jupiter.api.*;
-import org.mockito.MockedConstruction;
-import org.mockito.MockedStatic;
-
-import java.lang.reflect.Method;
-import java.sql.Connection;
-import java.util.Date;
-import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class P06_IACC_01_MainTest {
-
-    private Method executeMethod;
-
-    @BeforeAll
-    void setupSecurityManager() {
-        NoExitSecurityManager.setupExitInterceptor();
-    }
-
-    @AfterAll
-    void cleanupSecurityManager() {
-        NoExitSecurityManager.resetSecurityManager();
-    }
-
-    @BeforeEach
-    void setupReflection() throws Exception {
-        executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
-    }
-
-    @Test
-    void testInvalidLevel_shouldExitWithCode8() throws Exception {
-        String[] args = {"invalidAction", "branch"};
-        P06_IACC_01_Main.set_args(args);
-
-        try (MockedStatic<P06_IACC_01_PropertiesMgr> propsMock = mockStatic(P06_IACC_01_PropertiesMgr.class)) {
-            propsMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-            propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
-
-            Exception e = assertThrows(NoExitSecurityManager.ExitException.class, () -> {
-                executeMethod.invoke(null);
-            });
-
-            assertEquals(8, ((NoExitSecurityManager.ExitException) e).status);
-        }
-    }
-
-    @Test
-    void testValidLevel1_withDates_shouldExecuteLevel1() throws Exception {
-        String[] args = {"level1", "branch", "01/01/2025 00:00:00", "01/01/2025 00:00:00", "01/01/2025 01:00:00"};
-        P06_IACC_01_Main.set_args(args);
-
-        try (
-            MockedStatic<P06_IACC_01_PropertiesMgr> propsMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
-            MockedConstruction<com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1> mocked = mockConstruction(com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1.class,
-                (mock, context) -> doNothing().when(mock).execute())
-        ) {
-            propsMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-            propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
-
-            assertThrows(NoExitSecurityManager.ExitException.class, () -> executeMethod.invoke(null));
-            assertEquals(0, NoExitSecurityManager.getStatus()); // Should have called System.exit(0)
-            assertEquals(1, mocked.constructed().size());
-        }
-    }
-
-    @Test
-    void testLevel2_withFileName_shouldExecuteLevel2() throws Exception {
-        String[] args = {"level2", "branch", "01/01/2025 00:00:00", "report.txt"};
-        P06_IACC_01_Main.set_args(args);
-
-        try (
-            MockedStatic<P06_IACC_01_PropertiesMgr> propsMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
-            MockedConstruction<com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2> mocked = mockConstruction(com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2.class,
-                (mock, context) -> doNothing().when(mock).execute())
-        ) {
-            propsMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-            propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
-
-            assertThrows(NoExitSecurityManager.ExitException.class, () -> executeMethod.invoke(null));
-            assertEquals(0, NoExitSecurityManager.getStatus());
-            assertEquals(1, mocked.constructed().size());
-        }
+public class P06_IACC_01_Level1 {
+    public void execute() {
+        System.out.println("Stub Level1 executed");
     }
 }
 
+// P06_IACC_01_Level2_Stub.java
+package com.bnpparibas.atlentic.iacc.bopr.level2;
 
-
-
-package com.bnpparibas.atlentic.iacc.bopr.main.test.util;
-
-public class NoExitSecurityManager extends SecurityManager {
-
-    private static int status = -1;
-
-    public static void setupExitInterceptor() {
-        System.setSecurityManager(new NoExitSecurityManager());
-    }
-
-    public static void resetSecurityManager() {
-        System.setSecurityManager(null);
-    }
-
-    public static int getStatus() {
-        return status;
-    }
-
-    @Override
-    public void checkPermission(java.security.Permission perm) {
-        // allow everything
-    }
-
-    @Override
-    public void checkExit(int status) {
-        NoExitSecurityManager.status = status;
-        throw new ExitException(status);
-    }
-
-    public static class ExitException extends SecurityException {
-        public final int status;
-
-        public ExitException(int status) {
-            super("Intercepted System.exit(" + status + ")");
-            this.status = status;
-        }
+public class P06_IACC_01_Level2 {
+    public void execute() {
+        System.out.println("Stub Level2 executed");
     }
 }
-
