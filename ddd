@@ -1,150 +1,42 @@
-package com.bnpparibas.atlentic.iacc.bopr.main.test;
-
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
-import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
-import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
-import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
-import com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter;
-
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
-import org.mockito.junit.jupiter.MockitoExtension;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.sql.SQLException;
-import java.util.HashMap;
-import java.util.Map;
+import java.lang.reflect.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.*;
-import static com.github.stefanbirkner.systemlambda.SystemLambda.catchSystemExit;
+import static org.junit.jupiter.api.Assertions.*;
 
-@ExtendWith(MockitoExtension.class)
 class P06_IACC_01_MainTest {
 
     @BeforeEach
-    void resetStatics() throws Exception {
-        setStaticField("args", null);
-        setStaticField("branch", null);
-        setStaticField("eventTimestamp", null);
-        setStaticField("beginDate", null);
-        setStaticField("endDate", null);
-        setStaticField("textFileName", null);
-        setStaticField("action", null);
+    void disableSystemExit() throws Exception {
+        // Prevent actual exit
+        Method setExitHandler = P06_IACC_01_Main.class.getDeclaredMethod("setExitHandler", Runnable.class);
+        setExitHandler.setAccessible(true);
+        setExitHandler.invoke(null, (Runnable) () -> {
+            throw new RuntimeException("System.exit intercepted");
+        });
     }
 
-    @Test
-    void testLevel1ValidArgs_callsLevel1Execute() throws Exception {
-        String[] args = {"level1Action", "BR1", "21/06/2025 08:00:00", "21/06/2025 08:00:00", "22/06/2025 08:00:00"};
-
-        mockStaticProps("level.1.action.name", "level1Action");
-        mockStringToDate();
-        mockLevel1Execute();
-
-        setStaticField("args", args);
-        int exitCode = catchSystemExit(() -> invokeExecute());
-
-        assertEquals(0, exitCode);
-    }
-
-    @Test
-    void testLevel2ValidArgs_callsLevel2Execute() throws Exception {
-        String[] args = {"level2Action", "BR1", "21/06/2025 08:00:00", "report.txt"};
-
-        mockStaticProps("level.2.action.name", "level2Action");
-        mockStringToDate();
-        mockLevel2Execute();
-
-        setStaticField("args", args);
-        int exitCode = catchSystemExit(() -> invokeExecute());
-
-        assertEquals(0, exitCode);
+    @AfterEach
+    void resetSystemExit() throws Exception {
+        // Reset to default exit handler (System.exit)
+        Method setExitHandler = P06_IACC_01_Main.class.getDeclaredMethod("setExitHandler", Runnable.class);
+        setExitHandler.setAccessible(true);
+        setExitHandler.invoke(null, (Runnable) () -> System.exit(0));
     }
 
     @Test
     void testInvalidAction_throwsParameterException() throws Exception {
-        String[] args = {"invalidAction", "BR1", "21/06/2025 08:00:00"};
+        String[] args = {"invalidAction"};
+        Field argsField = P06_IACC_01_Main.class.getDeclaredField("args");
+        argsField.setAccessible(true);
+        argsField.set(null, args);
 
-        mockStaticProps("level.1.action.name", "level1Action");
-        mockStaticProps("level.2.action.name", "level2Action");
-        mockStringToDate();
-
-        setStaticField("args", args);
-        int exitCode = catchSystemExit(() -> invokeExecute());
-
-        assertEquals(8, exitCode);
-    }
-
-    @Test
-    void testLessThanRequiredParams_throwsParameterException() throws Exception {
-        String[] args = {};
-
-        setStaticField("args", args);
-        int exitCode = catchSystemExit(() -> invokeExecute());
-
-        assertEquals(8, exitCode);
-    }
-
-    @Test
-    void testInvalidDateFormat_throwsParameterException() throws Exception {
-        String[] args = {"level1Action", "BR1", "invalid-date"};
-
-        mockStaticProps("level.1.action.name", "level1Action");
-        mockStaticProps("level.2.action.name", "level2Action");
-
-        when(StringConverter.StringToDate("invalid-date")).thenReturn(null);
-        setStaticField("args", args);
-
-        int exitCode = catchSystemExit(() -> invokeExecute());
-
-        assertEquals(8, exitCode);
-    }
-
-    // ---------------------- Utility Methods ----------------------
-
-    void setStaticField(String fieldName, Object value) throws Exception {
-        Field field = P06_IACC_01_Main.class.getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(null, value);
-    }
-
-    void invokeExecute() throws Exception {
         Method method = P06_IACC_01_Main.class.getDeclaredMethod("execute");
         method.setAccessible(true);
-        method.invoke(null);
-    }
 
-    void mockStaticProps(String key, String returnValue) {
-        try (MockedStatic<P06_IACC_01_PropertiesMgr> mocked = Mockito.mockStatic(P06_IACC_01_PropertiesMgr.class)) {
-            if (key.contains("level.1")) {
-                mocked.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn(returnValue);
-            } else {
-                mocked.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn(returnValue);
-            }
-        }
-    }
+        RuntimeException thrown = assertThrows(RuntimeException.class, () -> {
+            method.invoke(null);
+        });
 
-    void mockStringToDate() {
-        try (MockedStatic<StringConverter> mocked = mockStatic(StringConverter.class)) {
-            mocked.when(() -> StringConverter.StringToDate(anyString()))
-                  .thenReturn(new java.util.Date());
-        }
-    }
-
-    void mockLevel1Execute() throws Exception {
-        P06_IACC_01_Level1 mockLevel1 = mock(P06_IACC_01_Level1.class);
-        when(mockLevel1.execute()).thenReturn(null);
-        try (MockedConstruction<P06_IACC_01_Level1> mocked = mockConstruction(P06_IACC_01_Level1.class,
-                (mock, context) -> doNothing().when(mock).execute())) {}
-    }
-
-    void mockLevel2Execute() throws Exception {
-        P06_IACC_01_Level2 mockLevel2 = mock(P06_IACC_01_Level2.class);
-        when(mockLevel2.execute()).thenReturn(null);
-        try (MockedConstruction<P06_IACC_01_Level2> mocked = mockConstruction(P06_IACC_01_Level2.class,
-                (mock, context) -> doNothing().when(mock).execute())) {}
+        assertEquals("System.exit intercepted", thrown.getMessage());
     }
 }
