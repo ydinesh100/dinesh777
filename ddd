@@ -145,3 +145,28 @@ class P06_IACC_01_MainTest {
     // Utility to trap calls to System.exit
     private static class ExitTrappedException extends RuntimeException { }
 }
+
+@Test
+void testInvalidAction_throwsParameterException() throws Exception {
+    String[] args = {"invalid", "BR", "01/01/2025 10:00:00"};
+    P06_IACC_01_Main.set_args(args);
+
+    try (
+        MockedStatic<StringConverter> sc = mockStatic(StringConverter.class);
+        MockedStatic<P06_IACC_01_PropertiesMgr> pm = mockStatic(P06_IACC_01_PropertiesMgr.class);
+        MockedStatic<System> sys = mockStatic(System.class)
+    ) {
+        Date eventDate = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss").parse(args[2]);
+
+        // Required mocks
+        sc.when(() -> StringConverter.StringToDate(args[2])).thenReturn(eventDate);
+        pm.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("L1");
+        pm.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("L2");
+
+        // Required to avoid JVM termination
+        sys.when(() -> System.exit(anyInt()))
+           .thenThrow(new ExitTrappedException());
+
+        assertThrows(ExitTrappedException.class, () -> execute.invoke(null));
+    }
+}
