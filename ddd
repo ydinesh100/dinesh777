@@ -1,48 +1,4 @@
-import org.junit.jupiter.api.*;
-import static org.junit.jupiter.api.Assertions.*;
-import java.lang.reflect.Method;
-import java.security.Permission;
-
-import static org.mockito.Mockito.*;
-
-// Custom security manager to intercept System.exit()
-class NoExitSecurityManager extends SecurityManager {
-    private final SecurityManager original;
-
-    public NoExitSecurityManager(SecurityManager original) {
-        this.original = original;
-    }
-
-    @Override
-    public void checkPermission(Permission perm) {
-        if (original != null) {
-            original.checkPermission(perm);
-        }
-    }
-
-    @Override
-    public void checkPermission(Permission perm, Object context) {
-        if (original != null) {
-            original.checkPermission(perm, context);
-        }
-    }
-
-    @Override
-    public void checkExit(int status) {
-        super.checkExit(status);
-        throw new ExitException(status);
-    }
-
-    public static class ExitException extends SecurityException {
-        public final int status;
-
-        public ExitException(int status) {
-            super("System.exit() called with status: " + status);
-            this.status = status;
-        }
-    }
-}
-
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class P06_IACC_01_MainTest {
 
     private SecurityManager originalSecurityManager;
@@ -58,41 +14,134 @@ public class P06_IACC_01_MainTest {
         System.setSecurityManager(originalSecurityManager);
     }
 
-    // Utility method to invoke private static execute() using reflection
     private void invokeExecute() throws Exception {
         Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
         executeMethod.setAccessible(true);
         executeMethod.invoke(null);
     }
 
-    // Helper to run code and catch System.exit calls
     private int catchSystemExit(Runnable runnable) {
         try {
             runnable.run();
         } catch (NoExitSecurityManager.ExitException e) {
             return e.status;
         }
-        return 0; // no exit called
+        return 0;
     }
 
     @Test
-    void testInvalidAction_throwsParameterException_andExitsWithCode8() throws Exception {
-        // Mock PropertiesMgr to return known action names
-        try (var mockedProps = mockStatic(P06_IACC_01_PropertiesMgr.class)) {
-            mockedProps.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-            mockedProps.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
+    void testNoArguments_shouldExit8() throws Exception {
+        P06_IACC_01_Main.set_args(new String[]{});
+        int code = catchSystemExit(this::invokeExecute);
+        assertEquals(8, code);
+    }
 
-            // Set arguments with invalid action to cause ParameterException
-            String[] args = {"invalidAction", "BEFOR", "01/01/2025 12:00:00"};
-            P06_IACC_01_Main.set_args(args);
+    @Test
+    void testValidLevel1WithDates_shouldCallLevel1Execute() throws Exception {
+        try (var props = mockStatic(P06_IACC_01_PropertiesMgr.class);
+             var level1 = mockConstruction(P06_IACC_01_Level1.class, (mock, context) -> {
+                 doNothing().when(mock).execute();
+             })) {
 
-            int exitCode = catchSystemExit(() -> {
-                invokeExecute();
+            props.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
+
+            P06_IACC_01_Main.set_args(new String[]{
+                "level1", "BEFOR", "01/01/2025 00:00:00", "01/01/2025 00:00:00", "02/01/2025 00:00:00"
             });
 
-            assertEquals(8, exitCode, "Expected System.exit(8) due to invalid action");
+            int exitCode = catchSystemExit(this::invokeExecute);
+            assertEquals(0, exitCode);
         }
     }
 
-    // Additional tests to cover other branches can be added similarly
+    @Test
+    void testValidLevel1NoDates_shouldFetchFromDB() throws Exception {
+        try (var props = mockStatic(P06_IACC_01_PropertiesMgr.class);
+             var global = mockStatic(GlobalAtlentic.class);
+             var utility = mockStatic(Pee_IACC_00_Utility.class);
+             var level1 = mockConstruction(P06_IACC_01_Level1.class, (mock, context) -> {
+                 doNothing().when(mock).execute();
+             })) {
+
+            props.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
+            props.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
+
+            var mockMap = Map.of(
+                "INTF_EVENT_DATE", "01/01/2025 00:00:00",
+                "INTF_SYSTEM_BEGIN_DATE", "01/01/2025 00:00:00",
+                "INTF_SYSTEM_END_DATE", "02/01/2025 00:00:00"
+            );
+
+            global.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mock(Connection.class));
+            utility.when(() -> Pee_IACC_00_Utility.getAtlIntfDateByBranch(any(), any()))
+                .thenReturn(mockMap);
+
+            P06_IACC_01_Main.set_args(new String[]{"level1"});
+
+            int exitCode = catchSystemExit(this::invokeExecute);
+            assertEquals(0, exitCode);
+        }
+    }
+
+    @Test
+    void testLevel1_startAfterEnd_shouldExit8() throws Exception {
+        try (var props = mockStatic(P06_IACC_01_PropertiesMgr.class)) {
+            props.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
+
+            String[] args = {
+                "level1", "BEFOR", "01/01/2025 00:00:00", "03/01/2025 00:00:00", "02/01/2025 00:00:00"
+            };
+            P06_IACC_01_Main.set_args(args);
+
+            int exitCode = catchSystemExit(this::invokeExecute);
+            assertEquals(8, exitCode);
+        }
+    }
+
+    @Test
+    void testLevel2WithFileName_shouldCallLevel2Execute() throws Exception {
+        try (var props = mockStatic(P06_IACC_01_PropertiesMgr.class);
+             var level2 = mockConstruction(P06_IACC_01_Level2.class, (mock, context) -> {
+                 doNothing().when(mock).execute();
+             })) {
+
+            props.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
+            props.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
+
+            String[] args = {"level2", "BEFOR", "01/01/2025 00:00:00", "report.txt"};
+            P06_IACC_01_Main.set_args(args);
+
+            int exitCode = catchSystemExit(this::invokeExecute);
+            assertEquals(0, exitCode);
+        }
+    }
+
+    @Test
+    void testLevel2WithoutFileName_shouldCallLevel2Execute() throws Exception {
+        try (var props = mockStatic(P06_IACC_01_PropertiesMgr.class);
+             var level2 = mockConstruction(P06_IACC_01_Level2.class, (mock, context) -> {
+                 doNothing().when(mock).execute();
+             })) {
+
+            props.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
+            props.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
+
+            String[] args = {"level2", "BEFOR"};
+            P06_IACC_01_Main.set_args(args);
+
+            int exitCode = catchSystemExit(this::invokeExecute);
+            assertEquals(0, exitCode);
+        }
+    }
+
+    @Test
+    void testMissingEventDate_shouldExit8() throws Exception {
+        try (var props = mockStatic(P06_IACC_01_PropertiesMgr.class)) {
+            props.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
+
+            P06_IACC_01_Main.set_args(new String[]{"level1"});
+            int exitCode = catchSystemExit(this::invokeExecute);
+            assertEquals(8, exitCode);
+        }
+    }
 }
