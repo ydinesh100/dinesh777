@@ -1,35 +1,10 @@
-package com.bnpparibas.atlentic.iacc.bopr.stub;
-
-import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
-import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
-
-/**
- * Stub for P06_IACC_01_Level1 to avoid real execution.
- */
-public class StubLevel1 extends P06_IACC_01_Level1 {
-    @Override
-    public void execute() {
-        // Do nothing (stubbed)
-    }
-}
-
-/**
- * Stub for P06_IACC_01_Level2 to avoid real execution.
- */
-public class StubLevel2 extends P06_IACC_01_Level2 {
-    @Override
-    public void execute() {
-        // Do nothing (stubbed)
-    }
-}
-
 package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
 import com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter;
 import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
 import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
-import com.bnpparibas.atlentic.iacc.bopr.stub.StubLevel1;
-import com.bnpparibas.atlentic.iacc.bopr.stub.StubLevel2;
+import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
 import org.junit.jupiter.api.*;
 import org.mockito.MockedConstruction;
 
@@ -43,7 +18,7 @@ import static org.mockito.Mockito.*;
 
 class P06_IACC_01_MainTest {
 
-    // === Exit Trap ===
+    // === Exit trap ===
     static class ExitTrappedException extends SecurityException {
         final int status;
         ExitTrappedException(int status) {
@@ -56,6 +31,7 @@ class P06_IACC_01_MainTest {
         NoExitSecurityManager(SecurityManager original) {
             this.original = original;
         }
+
         @Override public void checkPermission(Permission perm) {}
         @Override public void checkExit(int status) {
             throw new ExitTrappedException(status);
@@ -64,67 +40,16 @@ class P06_IACC_01_MainTest {
 
     SecurityManager originalSecurityManager;
 
-    @BeforeEach void setup() {
+    @BeforeEach
+    void setup() {
         originalSecurityManager = System.getSecurityManager();
         System.setSecurityManager(new NoExitSecurityManager(originalSecurityManager));
     }
 
-    @AfterEach void cleanup() {
+    @AfterEach
+    void restoreSecurity() {
         System.setSecurityManager(originalSecurityManager);
     }
-
-    // === Tests ===
-
-    @Test void testExecute_level1() throws Exception {
-        setArgs(new String[]{"lvl1", "BE", "01/01/2025 01:00:00", "01/01/2025 01:00:01", "01/01/2025 01:00:02"});
-
-        try (
-            var propsMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
-            var convMock = mockStatic(StringConverter.class);
-            MockedConstruction<StubLevel1> stub = mockConstruction(StubLevel1.class,
-                (mock, ctx) -> doNothing().when(mock).execute())
-        ) {
-            propsMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("lvl1");
-            propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("lvl2");
-            convMock.when(() -> StringConverter.StringToDate(anyString())).thenReturn(new Date());
-
-            assertThrows(ExitTrappedException.class, this::invokeExecute);
-        }
-    }
-
-    @Test void testExecute_level2() throws Exception {
-        setArgs(new String[]{"lvl2", "BE", "01/01/2025 01:00:00", "file.txt"});
-
-        try (
-            var propsMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
-            var convMock = mockStatic(StringConverter.class);
-            MockedConstruction<StubLevel2> stub = mockConstruction(StubLevel2.class,
-                (mock, ctx) -> doNothing().when(mock).execute())
-        ) {
-            propsMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("lvl1");
-            propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("lvl2");
-            convMock.when(() -> StringConverter.StringToDate(anyString())).thenReturn(new Date());
-
-            assertThrows(ExitTrappedException.class, this::invokeExecute);
-        }
-    }
-
-    @Test void testExecute_invalidAction() throws Exception {
-        setArgs(new String[]{"invalid", "BE", "01/01/2025 01:00:00"});
-
-        try (
-            var propsMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
-            var convMock = mockStatic(StringConverter.class)
-        ) {
-            propsMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("lvl1");
-            propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("lvl2");
-            convMock.when(() -> StringConverter.StringToDate(anyString())).thenReturn(new Date());
-
-            assertThrows(ExitTrappedException.class, this::invokeExecute);
-        }
-    }
-
-    // === Utility Methods ===
 
     private void setArgs(String[] args) throws Exception {
         Field argsField = P06_IACC_01_Main.class.getDeclaredField("args");
@@ -133,14 +58,69 @@ class P06_IACC_01_MainTest {
     }
 
     private void invokeExecute() throws Exception {
-        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
-        executeMethod.invoke(null);
+        Method m = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        m.setAccessible(true);
+        m.invoke(null);
+    }
+
+    @Test
+    void testExecute_Level1_shouldExit() throws Exception {
+        String[] args = {"level1", "BE", "01/01/2025 10:00:00", "01/01/2025 11:00:00", "01/01/2025 12:00:00"};
+        setArgs(args);
+
+        try (
+            var staticMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
+            var converterMock = mockStatic(StringConverter.class);
+            MockedConstruction<P06_IACC_01_Level1> level1Mock = mockConstruction(P06_IACC_01_Level1.class,
+                (mock, context) -> doNothing().when(mock).execute())
+        ) {
+            staticMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
+            staticMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
+
+            converterMock.when(() -> StringConverter.StringToDate(anyString()))
+                         .thenReturn(new Date());
+
+            assertThrows(ExitTrappedException.class, this::invokeExecute);
+        }
+    }
+
+    @Test
+    void testExecute_Level2_shouldExit() throws Exception {
+        String[] args = {"level2", "BE", "01/01/2025 10:00:00", "report.txt"};
+        setArgs(args);
+
+        try (
+            var staticMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
+            var converterMock = mockStatic(StringConverter.class);
+            MockedConstruction<P06_IACC_01_Level2> level2Mock = mockConstruction(P06_IACC_01_Level2.class,
+                (mock, context) -> doNothing().when(mock).execute())
+        ) {
+            staticMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
+            staticMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
+
+            converterMock.when(() -> StringConverter.StringToDate(anyString()))
+                         .thenReturn(new Date());
+
+            assertThrows(ExitTrappedException.class, this::invokeExecute);
+        }
+    }
+
+    @Test
+    void testExecute_invalidAction_shouldExit() throws Exception {
+        String[] args = {"invalid", "BE", "01/01/2025 10:00:00"};
+        setArgs(args);
+
+        try (
+            var staticMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
+            var converterMock = mockStatic(StringConverter.class)
+        ) {
+            staticMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
+            staticMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
+
+            converterMock.when(() -> StringConverter.StringToDate(anyString()))
+                         .thenReturn(new Date());
+
+            assertThrows(ExitTrappedException.class, this::invokeExecute);
+        }
     }
 }
-
-
-
-
-
-
