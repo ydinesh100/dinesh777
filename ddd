@@ -1,42 +1,146 @@
+package com.bnpparibas.atlentic.iacc.bopr.stub;
+
+import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
+import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
+
+/**
+ * Stub for P06_IACC_01_Level1 to avoid real execution.
+ */
+public class StubLevel1 extends P06_IACC_01_Level1 {
+    @Override
+    public void execute() {
+        // Do nothing (stubbed)
+    }
+}
+
+/**
+ * Stub for P06_IACC_01_Level2 to avoid real execution.
+ */
+public class StubLevel2 extends P06_IACC_01_Level2 {
+    @Override
+    public void execute() {
+        // Do nothing (stubbed)
+    }
+}
+
+package com.bnpparibas.atlentic.iacc.bopr.main.test;
+
+import com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter;
+import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
+import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
+import com.bnpparibas.atlentic.iacc.bopr.stub.StubLevel1;
+import com.bnpparibas.atlentic.iacc.bopr.stub.StubLevel2;
 import org.junit.jupiter.api.*;
-import java.lang.reflect.*;
+import org.mockito.MockedConstruction;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.security.Permission;
+import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 class P06_IACC_01_MainTest {
 
-    @BeforeEach
-    void disableSystemExit() throws Exception {
-        // Prevent actual exit
-        Method setExitHandler = P06_IACC_01_Main.class.getDeclaredMethod("setExitHandler", Runnable.class);
-        setExitHandler.setAccessible(true);
-        setExitHandler.invoke(null, (Runnable) () -> {
-            throw new RuntimeException("System.exit intercepted");
-        });
+    // === Exit Trap ===
+    static class ExitTrappedException extends SecurityException {
+        final int status;
+        ExitTrappedException(int status) {
+            this.status = status;
+        }
     }
 
-    @AfterEach
-    void resetSystemExit() throws Exception {
-        // Reset to default exit handler (System.exit)
-        Method setExitHandler = P06_IACC_01_Main.class.getDeclaredMethod("setExitHandler", Runnable.class);
-        setExitHandler.setAccessible(true);
-        setExitHandler.invoke(null, (Runnable) () -> System.exit(0));
+    static class NoExitSecurityManager extends SecurityManager {
+        private final SecurityManager original;
+        NoExitSecurityManager(SecurityManager original) {
+            this.original = original;
+        }
+        @Override public void checkPermission(Permission perm) {}
+        @Override public void checkExit(int status) {
+            throw new ExitTrappedException(status);
+        }
     }
 
-    @Test
-    void testInvalidAction_throwsParameterException() throws Exception {
-        String[] args = {"invalidAction"};
+    SecurityManager originalSecurityManager;
+
+    @BeforeEach void setup() {
+        originalSecurityManager = System.getSecurityManager();
+        System.setSecurityManager(new NoExitSecurityManager(originalSecurityManager));
+    }
+
+    @AfterEach void cleanup() {
+        System.setSecurityManager(originalSecurityManager);
+    }
+
+    // === Tests ===
+
+    @Test void testExecute_level1() throws Exception {
+        setArgs(new String[]{"lvl1", "BE", "01/01/2025 01:00:00", "01/01/2025 01:00:01", "01/01/2025 01:00:02"});
+
+        try (
+            var propsMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
+            var convMock = mockStatic(StringConverter.class);
+            MockedConstruction<StubLevel1> stub = mockConstruction(StubLevel1.class,
+                (mock, ctx) -> doNothing().when(mock).execute())
+        ) {
+            propsMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("lvl1");
+            propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("lvl2");
+            convMock.when(() -> StringConverter.StringToDate(anyString())).thenReturn(new Date());
+
+            assertThrows(ExitTrappedException.class, this::invokeExecute);
+        }
+    }
+
+    @Test void testExecute_level2() throws Exception {
+        setArgs(new String[]{"lvl2", "BE", "01/01/2025 01:00:00", "file.txt"});
+
+        try (
+            var propsMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
+            var convMock = mockStatic(StringConverter.class);
+            MockedConstruction<StubLevel2> stub = mockConstruction(StubLevel2.class,
+                (mock, ctx) -> doNothing().when(mock).execute())
+        ) {
+            propsMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("lvl1");
+            propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("lvl2");
+            convMock.when(() -> StringConverter.StringToDate(anyString())).thenReturn(new Date());
+
+            assertThrows(ExitTrappedException.class, this::invokeExecute);
+        }
+    }
+
+    @Test void testExecute_invalidAction() throws Exception {
+        setArgs(new String[]{"invalid", "BE", "01/01/2025 01:00:00"});
+
+        try (
+            var propsMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
+            var convMock = mockStatic(StringConverter.class)
+        ) {
+            propsMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("lvl1");
+            propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("lvl2");
+            convMock.when(() -> StringConverter.StringToDate(anyString())).thenReturn(new Date());
+
+            assertThrows(ExitTrappedException.class, this::invokeExecute);
+        }
+    }
+
+    // === Utility Methods ===
+
+    private void setArgs(String[] args) throws Exception {
         Field argsField = P06_IACC_01_Main.class.getDeclaredField("args");
         argsField.setAccessible(true);
         argsField.set(null, args);
+    }
 
-        Method method = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        method.setAccessible(true);
-
-        RuntimeException thrown = assertThrows(RuntimeException.class, () -> {
-            method.invoke(null);
-        });
-
-        assertEquals("System.exit intercepted", thrown.getMessage());
+    private void invokeExecute() throws Exception {
+        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
+        executeMethod.invoke(null);
     }
 }
+
+
+
+
+
+
