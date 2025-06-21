@@ -1,147 +1,109 @@
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
-public class P06_IACC_01_MainTest {
+@Test
+void test_extracted3_success_scenario_shouldCallLevel1Execute() throws Exception {
+    try (MockedStatic<GlobalAtlentic> globalMock = mockStatic(GlobalAtlentic.class);
+         MockedStatic<Pee_IACC_00_Utility> utilMock = mockStatic(Pee_IACC_00_Utility.class);
+         MockedConstruction<P06_IACC_01_Level1> level1Mock = mockConstruction(P06_IACC_01_Level1.class,
+            (mock, context) -> doNothing().when(mock).execute())) {
 
-    private SecurityManager originalSecurityManager;
+        Map<String, String> mockDateMap = Map.of(
+            "INTF_SYSTEM_BEGIN_DATE", "01/01/2025 00:00:00",
+            "INTF_SYSTEM_END_DATE", "02/01/2025 00:00:00"
+        );
 
-    @BeforeEach
-    void setUp() {
-        originalSecurityManager = System.getSecurityManager();
-        System.setSecurityManager(new NoExitSecurityManager(originalSecurityManager));
-    }
+        globalMock.when(GlobalAtlentic::getLoanIQConnection)
+                  .thenReturn(mock(Connection.class));
+        utilMock.when(() -> Pee_IACC_00_Utility.getAtlIntfDateByBranch(any(), any()))
+                .thenReturn(mockDateMap);
 
-    @AfterEach
-    void tearDown() {
-        System.setSecurityManager(originalSecurityManager);
-    }
+        Method method = P06_IACC_01_Main.class.getDeclaredMethod("extracted3");
+        method.setAccessible(true);
+        method.invoke(null);
 
-    private void invokeExecute() throws Exception {
-        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
-        executeMethod.invoke(null);
-    }
-
-    private int catchSystemExit(Runnable runnable) {
-        try {
-            runnable.run();
-        } catch (NoExitSecurityManager.ExitException e) {
-            return e.status;
-        }
-        return 0;
-    }
-
-    @Test
-    void testNoArguments_shouldExit8() throws Exception {
-        P06_IACC_01_Main.set_args(new String[]{});
-        int code = catchSystemExit(this::invokeExecute);
-        assertEquals(8, code);
-    }
-
-    @Test
-    void testValidLevel1WithDates_shouldCallLevel1Execute() throws Exception {
-        try (var props = mockStatic(P06_IACC_01_PropertiesMgr.class);
-             var level1 = mockConstruction(P06_IACC_01_Level1.class, (mock, context) -> {
-                 doNothing().when(mock).execute();
-             })) {
-
-            props.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-
-            P06_IACC_01_Main.set_args(new String[]{
-                "level1", "BEFOR", "01/01/2025 00:00:00", "01/01/2025 00:00:00", "02/01/2025 00:00:00"
-            });
-
-            int exitCode = catchSystemExit(this::invokeExecute);
-            assertEquals(0, exitCode);
-        }
-    }
-
-    @Test
-    void testValidLevel1NoDates_shouldFetchFromDB() throws Exception {
-        try (var props = mockStatic(P06_IACC_01_PropertiesMgr.class);
-             var global = mockStatic(GlobalAtlentic.class);
-             var utility = mockStatic(Pee_IACC_00_Utility.class);
-             var level1 = mockConstruction(P06_IACC_01_Level1.class, (mock, context) -> {
-                 doNothing().when(mock).execute();
-             })) {
-
-            props.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-            props.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
-
-            var mockMap = Map.of(
-                "INTF_EVENT_DATE", "01/01/2025 00:00:00",
-                "INTF_SYSTEM_BEGIN_DATE", "01/01/2025 00:00:00",
-                "INTF_SYSTEM_END_DATE", "02/01/2025 00:00:00"
-            );
-
-            global.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mock(Connection.class));
-            utility.when(() -> Pee_IACC_00_Utility.getAtlIntfDateByBranch(any(), any()))
-                .thenReturn(mockMap);
-
-            P06_IACC_01_Main.set_args(new String[]{"level1"});
-
-            int exitCode = catchSystemExit(this::invokeExecute);
-            assertEquals(0, exitCode);
-        }
-    }
-
-    @Test
-    void testLevel1_startAfterEnd_shouldExit8() throws Exception {
-        try (var props = mockStatic(P06_IACC_01_PropertiesMgr.class)) {
-            props.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-
-            String[] args = {
-                "level1", "BEFOR", "01/01/2025 00:00:00", "03/01/2025 00:00:00", "02/01/2025 00:00:00"
-            };
-            P06_IACC_01_Main.set_args(args);
-
-            int exitCode = catchSystemExit(this::invokeExecute);
-            assertEquals(8, exitCode);
-        }
-    }
-
-    @Test
-    void testLevel2WithFileName_shouldCallLevel2Execute() throws Exception {
-        try (var props = mockStatic(P06_IACC_01_PropertiesMgr.class);
-             var level2 = mockConstruction(P06_IACC_01_Level2.class, (mock, context) -> {
-                 doNothing().when(mock).execute();
-             })) {
-
-            props.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-            props.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
-
-            String[] args = {"level2", "BEFOR", "01/01/2025 00:00:00", "report.txt"};
-            P06_IACC_01_Main.set_args(args);
-
-            int exitCode = catchSystemExit(this::invokeExecute);
-            assertEquals(0, exitCode);
-        }
-    }
-
-    @Test
-    void testLevel2WithoutFileName_shouldCallLevel2Execute() throws Exception {
-        try (var props = mockStatic(P06_IACC_01_PropertiesMgr.class);
-             var level2 = mockConstruction(P06_IACC_01_Level2.class, (mock, context) -> {
-                 doNothing().when(mock).execute();
-             })) {
-
-            props.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-            props.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
-
-            String[] args = {"level2", "BEFOR"};
-            P06_IACC_01_Main.set_args(args);
-
-            int exitCode = catchSystemExit(this::invokeExecute);
-            assertEquals(0, exitCode);
-        }
-    }
-
-    @Test
-    void testMissingEventDate_shouldExit8() throws Exception {
-        try (var props = mockStatic(P06_IACC_01_PropertiesMgr.class)) {
-            props.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-
-            P06_IACC_01_Main.set_args(new String[]{"level1"});
-            int exitCode = catchSystemExit(this::invokeExecute);
-            assertEquals(8, exitCode);
-        }
+        assertEquals(1, level1Mock.constructed().size(), "Level1 should have been constructed and executed");
     }
 }
+
+@Test
+void test_extracted3_startDateAfterEndDate_shouldThrowParameterException() throws Exception {
+    try (MockedStatic<GlobalAtlentic> globalMock = mockStatic(GlobalAtlentic.class);
+         MockedStatic<Pee_IACC_00_Utility> utilMock = mockStatic(Pee_IACC_00_Utility.class)) {
+
+        Map<String, String> badMap = Map.of(
+            "INTF_SYSTEM_BEGIN_DATE", "03/01/2025 00:00:00",
+            "INTF_SYSTEM_END_DATE", "02/01/2025 00:00:00"
+        );
+
+        globalMock.when(GlobalAtlentic::getLoanIQConnection)
+                  .thenReturn(mock(Connection.class));
+        utilMock.when(() -> Pee_IACC_00_Utility.getAtlIntfDateByBranch(any(), any()))
+                .thenReturn(badMap);
+
+        Method method = P06_IACC_01_Main.class.getDeclaredMethod("extracted3");
+        method.setAccessible(true);
+
+        Executable exec = () -> method.invoke(null);
+        InvocationTargetException ex = assertThrows(InvocationTargetException.class, exec);
+        assertTrue(ex.getCause() instanceof P06_IACC_01_ParameterException);
+        assertTrue(ex.getCause().getMessage().contains("start date should be before the end date"));
+    }
+}
+
+
+
+
+@Test
+void test_extracted4_withFileName_shouldCallLevel2Execute() throws Exception {
+    try (MockedConstruction<P06_IACC_01_Level2> level2Mock = mockConstruction(P06_IACC_01_Level2.class,
+            (mock, context) -> doNothing().when(mock).execute())) {
+
+        // Simulate: level2 BEFOR 01/01/2025 00:00:00 report.txt
+        String[] args = {"level2", "BEFOR", "01/01/2025 00:00:00", "report.txt"};
+        Method setArgs = P06_IACC_01_Main.class.getDeclaredMethod("set_args", String[].class);
+        setArgs.setAccessible(true);
+        setArgs.invoke(null, (Object) args);
+
+        Method method = P06_IACC_01_Main.class.getDeclaredMethod("extracted4");
+        method.setAccessible(true);
+        method.invoke(null);
+
+        assertEquals("report.txt", P06_IACC_01_Main.getG_s_textFileName());
+        assertEquals(1, level2Mock.constructed().size());
+    }
+}
+
+@Test
+void test_extracted4_withoutFileName_shouldUseDefaultIndex1() throws Exception {
+    try (MockedConstruction<P06_IACC_01_Level2> level2Mock = mockConstruction(P06_IACC_01_Level2.class,
+            (mock, context) -> doNothing().when(mock).execute())) {
+
+        // Simulate: level2 BEFOR
+        String[] args = {"level2", "BEFOR"};
+        Method setArgs = P06_IACC_01_Main.class.getDeclaredMethod("set_args", String[].class);
+        setArgs.setAccessible(true);
+        setArgs.invoke(null, (Object) args);
+
+        Method method = P06_IACC_01_Main.class.getDeclaredMethod("extracted4");
+        method.setAccessible(true);
+        method.invoke(null);
+
+        assertEquals("BEFOR", P06_IACC_01_Main.getG_s_textFileName());
+        assertEquals(1, level2Mock.constructed().size());
+    }
+}
+
+@Test
+void test_extracted4_invalidArgCount_shouldThrowParameterException() throws Exception {
+    String[] args = {"level2"};
+    Method setArgs = P06_IACC_01_Main.class.getDeclaredMethod("set_args", String[].class);
+    setArgs.setAccessible(true);
+    setArgs.invoke(null, (Object) args);
+
+    Method method = P06_IACC_01_Main.class.getDeclaredMethod("extracted4");
+    method.setAccessible(true);
+
+    Executable exec = () -> method.invoke(null);
+    InvocationTargetException ex = assertThrows(InvocationTargetException.class, exec);
+    assertTrue(ex.getCause() instanceof P06_IACC_01_ParameterException);
+    assertTrue(ex.getCause().getMessage().contains("Wrong parameters number for level 2"));
+}
+
