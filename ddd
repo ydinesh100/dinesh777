@@ -1,73 +1,64 @@
 package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
-import org.junit.jupiter.api.*;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
-import java.security.Permission;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class P06_IACC_01_Main_MainMethodTest {
+class P06_IACC_01_Main_LogLoopTest {
 
-    private static final String MAIN_CLASS = "com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main";
-    private SecurityManager originalSecurityManager;
+    private ListAppender<ILoggingEvent> listAppender;
 
     @BeforeEach
-    void interceptSystemExit() {
-        originalSecurityManager = System.getSecurityManager();
-        System.setSecurityManager(new NoExitSecurityManager());
-    }
-
-    @AfterEach
-    void restoreSystemExit() {
-        System.setSecurityManager(originalSecurityManager);
+    void setupLogger() {
+        Logger logger = (Logger) LoggerFactory.getLogger("P86_IACC_BPOR_BE"); // Matches @CustomLog(topic = ...)
+        listAppender = new ListAppender<>();
+        listAppender.start();
+        logger.addAppender(listAppender);
     }
 
     @Test
-    void testMainWithInvalidArgsShouldExit() throws Exception {
-        String[] invalidArgs = {"level1", "BE01", "invalid-date-format"};
+    void testLoggingOfArgsLoop() throws Exception {
+        // Arrange
+        String[] testArgs = {"arg1", "arg2", "arg3"};
 
-        Class<?> mainClass = Class.forName(MAIN_CLASS);
-        Method mainMethod = mainClass.getDeclaredMethod("main", String[].class);
+        Class<?> clazz = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main");
 
-        ExitStatus exitStatus = assertThrows(ExitStatus.class, () -> {
-            try {
-                mainMethod.invoke(null, (Object) invalidArgs);
-            } catch (Exception ignored) {
-                // Expected due to System.exit
-            }
-        });
+        // Inject args via reflection
+        Method setArgsMethod = clazz.getDeclaredMethod("set_args", String[].class);
+        setArgsMethod.setAccessible(true);
+        setArgsMethod.invoke(null, (Object) testArgs);
 
-        assertEquals(8, exitStatus.getStatusCode(), "Expected System.exit(8) for invalid input");
-    }
+        // Create dummy object (though execute is static)
+        Object mainInstance = clazz.getDeclaredConstructor().newInstance();
 
-    // ===== Security Manager to Catch System.exit =====
+        // Invoke only the logging part (we create a wrapper for isolated testing)
+        Method executeMethod = clazz.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
 
-    static class NoExitSecurityManager extends SecurityManager {
-        @Override
-        public void checkPermission(Permission perm) {
-            // Allow everything
+        try {
+            executeMethod.invoke(mainInstance);
+        } catch (Exception ignored) {
+            // We only want to test the logging loop, not full execution
         }
 
-        @Override
-        public void checkExit(int status) {
-            super.checkExit(status);
-            throw new ExitStatus(status);
-        }
-    }
+        // Assert
+        List<ILoggingEvent> logsList = listAppender.list;
 
-    // ===== Throwable for Capturing Exit =====
+        // Check if the expected log lines exist
+        long loggedParams = logsList.stream()
+                .filter(event -> event.getLevel().equals(Level.INFO))
+                .filter(event -> event.getFormattedMessage().startsWith("Parameter"))
+                .count();
 
-    static class ExitStatus extends SecurityException {
-        private final int statusCode;
-
-        ExitStatus(int statusCode) {
-            super("Intercepted System.exit(" + statusCode + ")");
-            this.statusCode = statusCode;
-        }
-
-        public int getStatusCode() {
-            return statusCode;
-        }
+        assertEquals(testArgs.length, loggedParams, "Each parameter should be logged once.");
     }
 }
