@@ -2,73 +2,51 @@ package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
 import org.junit.jupiter.api.*;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.security.Permission;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class P06_IACC_01_MainTest {
+class P06_IACC_01_Main_MainMethodTest {
 
     private static final String MAIN_CLASS = "com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main";
+    private SecurityManager originalSecurityManager;
 
-    @BeforeAll
-    static void disableSystemExit() {
+    @BeforeEach
+    void interceptSystemExit() {
+        originalSecurityManager = System.getSecurityManager();
         System.setSecurityManager(new NoExitSecurityManager());
     }
 
-    @AfterAll
-    static void restoreSystemExit() {
-        System.setSecurityManager(null); // Restore default
+    @AfterEach
+    void restoreSystemExit() {
+        System.setSecurityManager(originalSecurityManager);
     }
 
     @Test
-    void testInvalidDateFormatTriggersSystemExit() throws Exception {
-        String[] testArgs = new String[]{"level1", "BE01", "invalid-date-format"};
-        setStaticField("args", testArgs);
+    void testMainWithInvalidArgsShouldExit() throws Exception {
+        String[] invalidArgs = {"level1", "BE01", "invalid-date-format"};
 
-        Method execute = getPrivateExecuteMethod();
+        Class<?> mainClass = Class.forName(MAIN_CLASS);
+        Method mainMethod = mainClass.getDeclaredMethod("main", String[].class);
 
         ExitStatus exitStatus = assertThrows(ExitStatus.class, () -> {
             try {
-                execute.invoke(null);
-            } catch (Exception e) {
-                // Ignore invocation exception caused by System.exit
+                mainMethod.invoke(null, (Object) invalidArgs);
+            } catch (Exception ignored) {
+                // Expected due to System.exit
             }
         });
 
-        assertEquals(8, exitStatus.getStatusCode(), "Expected System.exit(8) to be called");
+        assertEquals(8, exitStatus.getStatusCode(), "Expected System.exit(8) for invalid input");
     }
 
-    // ====== Reflection Utility Methods ======
+    // ===== Security Manager to Catch System.exit =====
 
-    private void setStaticField(String fieldName, Object value) throws Exception {
-        Class<?> clazz = Class.forName(MAIN_CLASS);
-        Field field = clazz.getDeclaredField(fieldName);
-        field.setAccessible(true);
-
-        // Remove final modifier if needed
-        Field modifiersField = Field.class.getDeclaredField("modifiers");
-        modifiersField.setAccessible(true);
-        modifiersField.setInt(field, field.getModifiers() & ~Modifier.FINAL);
-
-        field.set(null, value);
-    }
-
-    private Method getPrivateExecuteMethod() throws Exception {
-        Class<?> clazz = Class.forName(MAIN_CLASS);
-        Method method = clazz.getDeclaredMethod("execute");
-        method.setAccessible(true);
-        return method;
-    }
-
-    // ====== Custom SecurityManager ======
-
-    private static class NoExitSecurityManager extends SecurityManager {
+    static class NoExitSecurityManager extends SecurityManager {
         @Override
         public void checkPermission(Permission perm) {
-            // Allow everything else
+            // Allow everything
         }
 
         @Override
@@ -78,13 +56,13 @@ class P06_IACC_01_MainTest {
         }
     }
 
-    // ====== Exception to Capture Exit ======
+    // ===== Throwable for Capturing Exit =====
 
-    private static class ExitStatus extends SecurityException {
+    static class ExitStatus extends SecurityException {
         private final int statusCode;
 
-        public ExitStatus(int statusCode) {
-            super("System.exit(" + statusCode + ")");
+        ExitStatus(int statusCode) {
+            super("Intercepted System.exit(" + statusCode + ")");
             this.statusCode = statusCode;
         }
 
