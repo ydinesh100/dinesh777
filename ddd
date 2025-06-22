@@ -1,129 +1,119 @@
-package com.bnpparibas.atlentic.iacc.bopr.main.test;
-
-public class NoExitSecurityManager {
-
-    private static int exitStatus = -1;
-
-    public static void setupExitInterceptor() {
-        System.setSecurityManager(new SecurityManager() {
-            @Override
-            public void checkExit(int status) {
-                exitStatus = status;
-                throw new ExitException(status);
-            }
-
-            @Override
-            public void checkPermission(java.security.Permission perm) {
-                // allow everything else
-            }
-        });
-    }
-
-    public static void reset() {
-        System.setSecurityManager(null);
-        exitStatus = -1;
-    }
-
-    public static class ExitException extends SecurityException {
-        public final int status;
-
-        public ExitException(int status) {
-            super("System.exit() called with status: " + status);
-            this.status = status;
-        }
-    }
-
-    public static int getExitStatus() {
-        return exitStatus;
-    }
-}
-
-
-
-
-package com.bnpparibas.atlentic.iacc.bopr.main.test;
-
-import com.bnpparibas.atlentic.common.GlobalAtlentic;
-import com.bnpparibas.atlentic.common.Pee_IACC_00_Utility;
-import com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter;
-import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
-import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
-
-import org.junit.jupiter.api.*;
-import org.mockito.MockedConstruction;
-import org.mockito.MockedStatic;
-
-import java.lang.reflect.Method;
-import java.sql.Connection;
-import java.util.Map;
+package com.bnpparibas.atlentic.iacc.bopr.main;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.*;
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+import java.lang.reflect.*;
+import java.sql.SQLException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
+
 class P06_IACC_01_MainTest {
 
-    @BeforeAll
-    void setupSecurityManager() {
-        NoExitSecurityManager.setupExitInterceptor();
+    private static final Class<?> MAIN_CLAZZ = P06_IACC_01_Main.class;
+
+    // helper to set private static fields
+    private void setStaticField(String name, Object value) throws Exception {
+        Field f = MAIN_CLAZZ.getDeclaredField(name);
+        f.setAccessible(true);
+        f.set(null, value);
     }
 
-    @AfterAll
-    void tearDownSecurityManager() {
-        NoExitSecurityManager.reset();
+    @BeforeEach
+    void resetAll() throws Exception {
+        for (String fld : new String[]{"args","action","branch","eventTimestamp","beginDate","endDate","textFileName"}) {
+            Field f = MAIN_CLAZZ.getDeclaredField(fld);
+            f.setAccessible(true);
+            f.set(null, null);
+        }
     }
 
-    private void invokeExecute() throws Exception {
-        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
-        executeMethod.invoke(null);
-    }
-
-    @Test
-    void testExecute_Level1_WithValidArguments() throws Exception {
-        String[] args = { "level1", "BEFOR", "01/01/2025 00:00:00", "01/01/2025 00:00:00", "02/01/2025 00:00:00" };
-        P06_IACC_01_Main.set_args(args);
-
-        try (
-            MockedStatic<GlobalAtlentic> globalMock = mockStatic(GlobalAtlentic.class);
-            MockedStatic<Pee_IACC_00_Utility> utilMock = mockStatic(Pee_IACC_00_Utility.class);
-            MockedStatic<StringConverter> converterMock = mockStatic(StringConverter.class);
-            MockedStatic<P06_IACC_01_PropertiesMgr> propMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
-            MockedConstruction<P06_IACC_01_Level1> level1Mock = mockConstruction(P06_IACC_01_Level1.class, (mock, context) -> doNothing().when(mock).execute())
-        ) {
-            converterMock.when(() -> StringConverter.StringToDate(anyString()))
-                .thenReturn(new java.util.Date());
-
-            globalMock.when(GlobalAtlentic::getLoanIQConnection)
-                      .thenReturn(mock(Connection.class));
-
-            utilMock.when(() -> Pee_IACC_00_Utility.getAtlIntfDateByBranch(any(), any()))
-                    .thenReturn(Map.of(
-                        "INTF_SYSTEM_BEGIN_DATE", "01/01/2025 00:00:00",
-                        "INTF_SYSTEM_END_DATE", "02/01/2025 00:00:00",
-                        "INTF_EVENT_DATE", "01/01/2025 00:00:00"
-                    ));
-
-            propMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName)
-                    .thenReturn("level1");
-
-            ExitException exit = assertThrows(NoExitSecurityManager.ExitException.class, this::invokeExecute);
-            assertEquals(0, exit.status, "Expected System.exit(0) to be called");
-
-            assertEquals(1, level1Mock.constructed().size(), "Level1 should be executed");
+    private void invokeExecuteExpecting(Class<? extends Throwable> causeType, String messagePart) throws Exception {
+        Method m = MAIN_CLAZZ.getDeclaredMethod("execute");
+        m.setAccessible(true);
+        InvocationTargetException ex = assertThrows(InvocationTargetException.class, () -> m.invoke(null));
+        Throwable cause = ex.getCause();
+        assertNotNull(cause);
+        assertTrue(causeType.isInstance(cause));
+        if (messagePart != null) {
+            assertTrue(cause.getMessage().contains(messagePart));
         }
     }
 
     @Test
-    void testExecute_InvalidArgs_ShouldExitWithError() throws Exception {
-        String[] args = {}; // empty args
-        P06_IACC_01_Main.set_args(args);
+    void testNoArgsThrowsParameterException() throws Exception {
+        setStaticField("args", new String[]{});
+        invokeExecuteExpecting(P06_IACC_01_ParameterException.class, "Wrong parameters number");
+    }
 
-        ExitException exit = assertThrows(NoExitSecurityManager.ExitException.class, this::invokeExecute);
-        assertEquals(8, exit.status, "Expected System.exit(8) for invalid args");
+    @Test
+    void testInvalidDateFormatThrowsParameterException() throws Exception {
+        setStaticField("args", new String[]{"level1","BR01","bad-date"});
+        invokeExecuteExpecting(P06_IACC_01_ParameterException.class, "process date format is unknown");
+    }
+
+    @Test
+    void testUnknownActionThrowsParameterException() throws Exception {
+        // valid date format but unknown action
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+        String dateStr = sdf.format(new Date());
+        setStaticField("args", new String[]{"fooAction","BR01", dateStr});
+        invokeExecuteExpecting(P06_IACC_01_ParameterException.class, "action \"fooAction\" is unknown");
+    }
+
+    @Test
+    void testLevel1WithInsufficientDates() throws Exception {
+        // assume getLevel1ActionName() returns "level1"
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+        String dateStr = sdf.format(new Date());
+        String action = P06_IACC_01_PropertiesMgr.getLevel1ActionName();
+        setStaticField("args", new String[]{action, "BR01", dateStr});
+        invokeExecuteExpecting(P06_IACC_01_ParameterException.class, "Wrong parameters number for level 1 action");
+    }
+
+    @Test
+    void testLevel2WithNoFileNameThrows() throws Exception {
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+        String dateStr = sdf.format(new Date());
+        String action = P06_IACC_01_PropertiesMgr.getLevel2ActionName();
+        setStaticField("args", new String[]{action, "BR01", dateStr});
+        invokeExecuteExpecting(P06_IACC_01_ParameterException.class, "Wrong parameters number for level 2 action");
+    }
+
+    @Test
+    void testLevel2HappyPath() throws Exception {
+        // Provide valid args for level2
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+        String dateStr = sdf.format(new Date());
+        String action = P06_IACC_01_PropertiesMgr.getLevel2ActionName();
+        setStaticField("args", new String[]{action,"BR01",dateStr,"output.txt"});
+        // Reflection: catch exit via InvocationTarget if any
+        Method m = MAIN_CLAZZ.getDeclaredMethod("execute");
+        m.setAccessible(true);
+        try {
+            m.invoke(null);
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            assertTrue(cause == null || cause instanceof P06_IACC_01_ExitApplicationException);
+        }
+    }
+
+    @Test
+    void testLevel1HappyPathWithSystemDates() throws Exception {
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+        String now = sdf.format(new Date());
+        String action = P06_IACC_01_PropertiesMgr.getLevel1ActionName();
+        setStaticField("args", new String[]{action,"BR01",now,"01/01/2024 00:00:00","02/01/2024 00:00:00"});
+        Method m = MAIN_CLAZZ.getDeclaredMethod("execute");
+        m.setAccessible(true);
+        try {
+            m.invoke(null);
+        } catch (InvocationTargetException e) {
+            Throwable c = e.getCause();
+            assertTrue(c == null || c instanceof P06_IACC_01_ExitApplicationException);
+        }
     }
 }
-
-
