@@ -2,7 +2,6 @@ package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
 import org.junit.jupiter.api.*;
 import java.lang.reflect.*;
-import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -17,13 +16,12 @@ class P06_IACC_01_MainTest {
     }
 
     @AfterAll
-    void restoreSecurityManager() {
+    void restoreOriginalSecurityManager() {
         System.setSecurityManager(originalSecurityManager);
     }
 
     @BeforeEach
-    void setUp() throws Exception {
-        // Reset static fields if needed
+    void resetStaticFields() throws Exception {
         setStaticField("args", null);
         setStaticField("branch", null);
         setStaticField("eventTimestamp", null);
@@ -33,65 +31,83 @@ class P06_IACC_01_MainTest {
         setStaticField("action", null);
     }
 
-    /**
-     * Simulate invalid input date to trigger ParameterException
-     */
     @Test
-    void testInvalidDateFormatThrowsParameterException() throws Exception {
+    void testInvalidDateFormatThrowsParameterException() {
         String[] testArgs = new String[]{"level1", "BE01", "invalid-date"};
-
         setStaticField("args", testArgs);
 
         Method executeMethod = getPrivateExecuteMethod();
 
-        assertThrows(InvocationTargetException.class, () -> {
-            ExitTrapper.run(() -> executeMethod.invoke(null));
-        }, "Expected exception due to invalid date format");
+        ExitTrapper.run(() -> {
+            try {
+                executeMethod.invoke(null);
+                fail("Expected an exception due to invalid date format");
+            } catch (InvocationTargetException e) {
+                Throwable cause = e.getCause();
+                assertNotNull(cause);
+                assertTrue(cause.getMessage().toLowerCase().contains("date format"),
+                        "Expected date format exception, but got: " + cause.getMessage());
+            } catch (IllegalAccessException e) {
+                fail("Could not access execute() method: " + e.getMessage());
+            }
+        });
     }
 
-    /**
-     * Simulate System.exit by intercepting exit using a custom SecurityManager
-     */
     @Test
-    void testSystemExitTriggered() throws Exception {
-        String[] testArgs = new String[]{"invalidAction", "BE01", "01/01/2024 00:00:00"};
-
+    void testSystemExitOnInvalidArgs() {
+        String[] testArgs = new String[]{"invalidAction", "BE01", "01/01/2025 00:00:00"};
         setStaticField("args", testArgs);
 
         Method executeMethod = getPrivateExecuteMethod();
 
         SecurityException exception = assertThrows(SecurityException.class, () -> {
-            ExitTrapper.run(() -> executeMethod.invoke(null));
+            ExitTrapper.run(() -> {
+                try {
+                    executeMethod.invoke(null);
+                } catch (Exception e) {
+                    throw new RuntimeException("Invocation failed", e);
+                }
+            });
         });
 
-        assertTrue(exception.getMessage().contains("Intercepted System.exit"), "Expected System.exit interception");
+        assertTrue(exception.getMessage().contains("Intercepted System.exit"),
+                "Expected System.exit interception");
     }
 
-    // ----- Utility Methods Below -----
+    // ================= Utility Methods ===================
 
-    private Method getPrivateExecuteMethod() throws NoSuchMethodException {
-        Class<?> clazz = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main");
-        Method method = clazz.getDeclaredMethod("execute");
-        method.setAccessible(true);
-        return method;
+    private Method getPrivateExecuteMethod() {
+        try {
+            Class<?> clazz = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main");
+            Method method = clazz.getDeclaredMethod("execute");
+            method.setAccessible(true);
+            return method;
+        } catch (Exception e) {
+            throw new RuntimeException("Could not access execute() method", e);
+        }
     }
 
-    private void setStaticField(String fieldName, Object value) throws Exception {
-        Class<?> clazz = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main");
-        Field field = clazz.getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(null, value);
+    private void setStaticField(String fieldName, Object value) {
+        try {
+            Class<?> clazz = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main");
+            Field field = clazz.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            field.set(null, value);
+        } catch (Exception e) {
+            throw new RuntimeException("Could not set static field: " + fieldName, e);
+        }
     }
 
+    /**
+     * SecurityManager wrapper to trap System.exit()
+     */
     static class ExitTrapper extends SecurityManager {
         private static final SecurityManager original = System.getSecurityManager();
 
-        public static void run(Runnable testLogic) {
+        public static void run(Runnable runnable) {
             System.setSecurityManager(new ExitTrapper());
             try {
-                testLogic.run();
-            } catch (SecurityException e) {
-                throw new SecurityException("Intercepted System.exit", e);
+                runnable.run();
             } finally {
                 System.setSecurityManager(original);
             }
@@ -99,7 +115,7 @@ class P06_IACC_01_MainTest {
 
         @Override
         public void checkPermission(java.security.Permission perm) {
-            // Allow all
+            // Allow all other permissions
         }
 
         @Override
