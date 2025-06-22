@@ -1,119 +1,149 @@
-package com.bnpparibas.atlentic.iacc.bopr.main;
+package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
+import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
+import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
+
 import org.junit.jupiter.api.*;
 
 import java.lang.reflect.*;
-import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
+import static org.junit.jupiter.api.Assertions.*;
 
 class P06_IACC_01_MainTest {
 
-    private static final Class<?> MAIN_CLAZZ = P06_IACC_01_Main.class;
-
-    // helper to set private static fields
-    private void setStaticField(String name, Object value) throws Exception {
-        Field f = MAIN_CLAZZ.getDeclaredField(name);
-        f.setAccessible(true);
-        f.set(null, value);
-    }
+    private static final Class<?> MAIN_CLASS = P06_IACC_01_Main.class;
+    private static final SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
 
     @BeforeEach
-    void resetAll() throws Exception {
-        for (String fld : new String[]{"args","action","branch","eventTimestamp","beginDate","endDate","textFileName"}) {
-            Field f = MAIN_CLAZZ.getDeclaredField(fld);
+    void resetMainClassFields() throws Exception {
+        String[] fields = {"args", "action", "branch", "eventTimestamp", "beginDate", "endDate", "textFileName"};
+        for (String field : fields) {
+            Field f = MAIN_CLASS.getDeclaredField(field);
             f.setAccessible(true);
             f.set(null, null);
         }
     }
 
-    private void invokeExecuteExpecting(Class<? extends Throwable> causeType, String messagePart) throws Exception {
-        Method m = MAIN_CLAZZ.getDeclaredMethod("execute");
-        m.setAccessible(true);
-        InvocationTargetException ex = assertThrows(InvocationTargetException.class, () -> m.invoke(null));
-        Throwable cause = ex.getCause();
+    private void setStaticField(String fieldName, Object value) throws Exception {
+        Field field = MAIN_CLASS.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(null, value);
+    }
+
+    private void invokeExecuteExpectingException(Class<? extends Throwable> expectedException, String messagePart) throws Exception {
+        Method execute = MAIN_CLASS.getDeclaredMethod("execute");
+        execute.setAccessible(true);
+
+        InvocationTargetException thrown = assertThrows(InvocationTargetException.class, () -> execute.invoke(null));
+        Throwable cause = thrown.getCause();
+
         assertNotNull(cause);
-        assertTrue(causeType.isInstance(cause));
+        assertTrue(expectedException.isInstance(cause), "Unexpected exception type: " + cause.getClass().getName());
         if (messagePart != null) {
-            assertTrue(cause.getMessage().contains(messagePart));
+            assertTrue(cause.getMessage().contains(messagePart), "Expected message to contain: " + messagePart);
         }
     }
 
     @Test
-    void testNoArgsThrowsParameterException() throws Exception {
+    void testNoArgs_ThrowsParameterException() throws Exception {
         setStaticField("args", new String[]{});
-        invokeExecuteExpecting(P06_IACC_01_ParameterException.class, "Wrong parameters number");
+        invokeExecuteExpectingException(P06_IACC_01_ParameterException.class, "Wrong parameters number");
     }
 
     @Test
-    void testInvalidDateFormatThrowsParameterException() throws Exception {
-        setStaticField("args", new String[]{"level1","BR01","bad-date"});
-        invokeExecuteExpecting(P06_IACC_01_ParameterException.class, "process date format is unknown");
+    void testInvalidDateFormat_ThrowsParameterException() throws Exception {
+        setStaticField("args", new String[]{"level1", "BR01", "not-a-date"});
+        invokeExecuteExpectingException(P06_IACC_01_ParameterException.class, "process date format is unknown");
     }
 
     @Test
-    void testUnknownActionThrowsParameterException() throws Exception {
-        // valid date format but unknown action
-        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+    void testUnknownAction_ThrowsParameterException() throws Exception {
         String dateStr = sdf.format(new Date());
-        setStaticField("args", new String[]{"fooAction","BR01", dateStr});
-        invokeExecuteExpecting(P06_IACC_01_ParameterException.class, "action \"fooAction\" is unknown");
+        setStaticField("args", new String[]{"unknownAction", "BR01", dateStr});
+        invokeExecuteExpectingException(P06_IACC_01_ParameterException.class, "action \"unknownAction\" is unknown");
     }
 
     @Test
-    void testLevel1WithInsufficientDates() throws Exception {
-        // assume getLevel1ActionName() returns "level1"
-        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+    void testLevel1WithMissingDates_ThrowsParameterException() throws Exception {
         String dateStr = sdf.format(new Date());
         String action = P06_IACC_01_PropertiesMgr.getLevel1ActionName();
         setStaticField("args", new String[]{action, "BR01", dateStr});
-        invokeExecuteExpecting(P06_IACC_01_ParameterException.class, "Wrong parameters number for level 1 action");
+        invokeExecuteExpectingException(P06_IACC_01_ParameterException.class, "Wrong parameters number for level 1 action");
     }
 
     @Test
-    void testLevel2WithNoFileNameThrows() throws Exception {
-        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+    void testLevel2WithMissingFileName_ThrowsParameterException() throws Exception {
         String dateStr = sdf.format(new Date());
         String action = P06_IACC_01_PropertiesMgr.getLevel2ActionName();
         setStaticField("args", new String[]{action, "BR01", dateStr});
-        invokeExecuteExpecting(P06_IACC_01_ParameterException.class, "Wrong parameters number for level 2 action");
+        invokeExecuteExpectingException(P06_IACC_01_ParameterException.class, "Wrong parameters number for level 2 action");
     }
 
     @Test
-    void testLevel2HappyPath() throws Exception {
-        // Provide valid args for level2
-        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+    void testLevel2_HappyPath_WithFileName() throws Exception {
+        // Replace this test logic if execute() ends in System.exit()
         String dateStr = sdf.format(new Date());
         String action = P06_IACC_01_PropertiesMgr.getLevel2ActionName();
-        setStaticField("args", new String[]{action,"BR01",dateStr,"output.txt"});
-        // Reflection: catch exit via InvocationTarget if any
-        Method m = MAIN_CLAZZ.getDeclaredMethod("execute");
-        m.setAccessible(true);
-        try {
-            m.invoke(null);
-        } catch (InvocationTargetException e) {
-            Throwable cause = e.getCause();
-            assertTrue(cause == null || cause instanceof P06_IACC_01_ExitApplicationException);
+        setStaticField("args", new String[]{action, "BR01", dateStr, "output.txt"});
+
+        // Because execute calls System.exit(0), we must catch it
+        ExitTrappingSecurityManager.forTest(() -> {
+            Method execute = MAIN_CLASS.getDeclaredMethod("execute");
+            execute.setAccessible(true);
+            try {
+                execute.invoke(null);
+            } catch (InvocationTargetException e) {
+                // System.exit() expected
+            }
+        });
+    }
+
+    @Test
+    void testLevel1_HappyPath_WithBeginEndDates() throws Exception {
+        String dateStr = sdf.format(new Date());
+        String action = P06_IACC_01_PropertiesMgr.getLevel1ActionName();
+        String beginDate = "01/01/2024 00:00:00";
+        String endDate = "02/01/2024 00:00:00";
+
+        setStaticField("args", new String[]{action, "BR01", dateStr, beginDate, endDate});
+
+        ExitTrappingSecurityManager.forTest(() -> {
+            Method execute = MAIN_CLASS.getDeclaredMethod("execute");
+            execute.setAccessible(true);
+            try {
+                execute.invoke(null);
+            } catch (InvocationTargetException e) {
+                // System.exit() expected
+            }
+        });
+    }
+
+    // Utility class to trap System.exit
+    static class ExitTrappingSecurityManager extends SecurityManager {
+        private static final SecurityManager original = System.getSecurityManager();
+
+        public static void forTest(Runnable testCode) {
+            System.setSecurityManager(new ExitTrappingSecurityManager());
+            try {
+                testCode.run();
+            } catch (SecurityException e) {
+                // Expected due to System.exit
+            } finally {
+                System.setSecurityManager(original);
+            }
         }
-    }
 
-    @Test
-    void testLevel1HappyPathWithSystemDates() throws Exception {
-        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
-        String now = sdf.format(new Date());
-        String action = P06_IACC_01_PropertiesMgr.getLevel1ActionName();
-        setStaticField("args", new String[]{action,"BR01",now,"01/01/2024 00:00:00","02/01/2024 00:00:00"});
-        Method m = MAIN_CLAZZ.getDeclaredMethod("execute");
-        m.setAccessible(true);
-        try {
-            m.invoke(null);
-        } catch (InvocationTargetException e) {
-            Throwable c = e.getCause();
-            assertTrue(c == null || c instanceof P06_IACC_01_ExitApplicationException);
+        @Override
+        public void checkPermission(java.security.Permission perm) {
+            // allow everything
+        }
+
+        @Override
+        public void checkExit(int status) {
+            throw new SecurityException("Intercepted System.exit(" + status + ")");
         }
     }
 }
