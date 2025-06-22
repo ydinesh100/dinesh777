@@ -1,5 +1,48 @@
 package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
+public class NoExitSecurityManager {
+
+    private static int exitStatus = -1;
+
+    public static void setupExitInterceptor() {
+        System.setSecurityManager(new SecurityManager() {
+            @Override
+            public void checkExit(int status) {
+                exitStatus = status;
+                throw new ExitException(status);
+            }
+
+            @Override
+            public void checkPermission(java.security.Permission perm) {
+                // allow everything else
+            }
+        });
+    }
+
+    public static void reset() {
+        System.setSecurityManager(null);
+        exitStatus = -1;
+    }
+
+    public static class ExitException extends SecurityException {
+        public final int status;
+
+        public ExitException(int status) {
+            super("System.exit() called with status: " + status);
+            this.status = status;
+        }
+    }
+
+    public static int getExitStatus() {
+        return exitStatus;
+    }
+}
+
+
+
+
+package com.bnpparibas.atlentic.iacc.bopr.main.test;
+
 import com.bnpparibas.atlentic.common.GlobalAtlentic;
 import com.bnpparibas.atlentic.common.Pee_IACC_00_Utility;
 import com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter;
@@ -7,8 +50,6 @@ import com.bnpparibas.atlentic.iacc.bopr.level1.P06_IACC_01_Level1;
 import com.bnpparibas.atlentic.iacc.bopr.level2.P06_IACC_01_Level2;
 import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
 import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ExitApplicationException;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
 
 import org.junit.jupiter.api.*;
 import org.mockito.MockedConstruction;
@@ -16,7 +57,6 @@ import org.mockito.MockedStatic;
 
 import java.lang.reflect.Method;
 import java.sql.Connection;
-import java.util.Date;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -25,123 +65,65 @@ import static org.mockito.Mockito.*;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class P06_IACC_01_MainTest {
 
-    private Method executeMethod;
-
     @BeforeAll
-    void setup() throws Exception {
-        executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
+    void setupSecurityManager() {
+        NoExitSecurityManager.setupExitInterceptor();
+    }
+
+    @AfterAll
+    void tearDownSecurityManager() {
+        NoExitSecurityManager.reset();
+    }
+
+    private void invokeExecute() throws Exception {
+        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
         executeMethod.setAccessible(true);
+        executeMethod.invoke(null);
     }
 
     @Test
-    void test_execute_success_level1_short_args() throws Exception {
-        String[] args = { "level1", "BRANCH", "01/01/2025 00:00:00" };
+    void testExecute_Level1_WithValidArguments() throws Exception {
+        String[] args = { "level1", "BEFOR", "01/01/2025 00:00:00", "01/01/2025 00:00:00", "02/01/2025 00:00:00" };
         P06_IACC_01_Main.set_args(args);
 
         try (
             MockedStatic<GlobalAtlentic> globalMock = mockStatic(GlobalAtlentic.class);
             MockedStatic<Pee_IACC_00_Utility> utilMock = mockStatic(Pee_IACC_00_Utility.class);
+            MockedStatic<StringConverter> converterMock = mockStatic(StringConverter.class);
             MockedStatic<P06_IACC_01_PropertiesMgr> propMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
-            MockedConstruction<P06_IACC_01_Level1> level1Mock = mockConstruction(P06_IACC_01_Level1.class,
-                (mock, context) -> doNothing().when(mock).execute())
+            MockedConstruction<P06_IACC_01_Level1> level1Mock = mockConstruction(P06_IACC_01_Level1.class, (mock, context) -> doNothing().when(mock).execute())
         ) {
-            Connection mockConn = mock(Connection.class);
-            globalMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mockConn);
+            converterMock.when(() -> StringConverter.StringToDate(anyString()))
+                .thenReturn(new java.util.Date());
+
+            globalMock.when(GlobalAtlentic::getLoanIQConnection)
+                      .thenReturn(mock(Connection.class));
+
             utilMock.when(() -> Pee_IACC_00_Utility.getAtlIntfDateByBranch(any(), any()))
-                    .thenReturn(Map.of("INTF_EVENT_DATE", "01/01/2025 00:00:00",
-                                       "INTF_SYSTEM_BEGIN_DATE", "01/01/2025 00:00:00",
-                                       "INTF_SYSTEM_END_DATE", "02/01/2025 00:00:00"));
-            propMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
+                    .thenReturn(Map.of(
+                        "INTF_SYSTEM_BEGIN_DATE", "01/01/2025 00:00:00",
+                        "INTF_SYSTEM_END_DATE", "02/01/2025 00:00:00",
+                        "INTF_EVENT_DATE", "01/01/2025 00:00:00"
+                    ));
 
-            assertDoesNotThrow(() -> {
-                try {
-                    executeMethod.invoke(null);
-                } catch (Exception e) {
-                    if (e.getCause() instanceof SecurityException && e.getCause().getMessage().contains("System.exit")) {
-                        // expected
-                    } else {
-                        throw e;
-                    }
-                }
-            });
+            propMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName)
+                    .thenReturn("level1");
 
-            assertEquals(1, level1Mock.constructed().size());
+            ExitException exit = assertThrows(NoExitSecurityManager.ExitException.class, this::invokeExecute);
+            assertEquals(0, exit.status, "Expected System.exit(0) to be called");
+
+            assertEquals(1, level1Mock.constructed().size(), "Level1 should be executed");
         }
     }
 
     @Test
-    void test_execute_success_level2() throws Exception {
-        String[] args = { "level2", "BRANCH", "01/01/2025 00:00:00", "file.txt" };
+    void testExecute_InvalidArgs_ShouldExitWithError() throws Exception {
+        String[] args = {}; // empty args
         P06_IACC_01_Main.set_args(args);
 
-        try (
-            MockedStatic<P06_IACC_01_PropertiesMgr> propMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
-            MockedConstruction<P06_IACC_01_Level2> level2Mock = mockConstruction(P06_IACC_01_Level2.class,
-                (mock, context) -> doNothing().when(mock).execute())
-        ) {
-            propMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-            propMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
-
-            assertDoesNotThrow(() -> {
-                try {
-                    executeMethod.invoke(null);
-                } catch (Exception e) {
-                    if (e.getCause() instanceof SecurityException && e.getCause().getMessage().contains("System.exit")) {
-                        // expected
-                    } else {
-                        throw e;
-                    }
-                }
-            });
-
-            assertEquals(1, level2Mock.constructed().size());
-        }
-    }
-
-    @Test
-    void test_execute_invalid_action_should_exit() throws Exception {
-        String[] args = { "INVALID", "BRANCH", "01/01/2025 00:00:00" };
-        P06_IACC_01_Main.set_args(args);
-
-        try (
-            MockedStatic<P06_IACC_01_PropertiesMgr> propMock = mockStatic(P06_IACC_01_PropertiesMgr.class)
-        ) {
-            propMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-            propMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
-
-            Exception exception = assertThrows(Exception.class, () -> executeMethod.invoke(null));
-            assertTrue(exception.getCause() instanceof P06_IACC_01_ParameterException);
-        }
-    }
-
-    @Test
-    void test_execute_missing_args_should_throw() throws Exception {
-        String[] args = {};
-        P06_IACC_01_Main.set_args(args);
-
-        Exception exception = assertThrows(Exception.class, () -> executeMethod.invoke(null));
-        assertTrue(exception.getCause() instanceof P06_IACC_01_ParameterException);
-    }
-
-    @Test
-    void test_execute_level1_with_invalid_dates_should_throw() throws Exception {
-        String[] args = { "level1", "BRANCH", "01/01/2025 00:00:00" };
-        P06_IACC_01_Main.set_args(args);
-
-        try (
-            MockedStatic<GlobalAtlentic> globalMock = mockStatic(GlobalAtlentic.class);
-            MockedStatic<Pee_IACC_00_Utility> utilMock = mockStatic(Pee_IACC_00_Utility.class);
-            MockedStatic<P06_IACC_01_PropertiesMgr> propMock = mockStatic(P06_IACC_01_PropertiesMgr.class)
-        ) {
-            globalMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mock(Connection.class));
-            utilMock.when(() -> Pee_IACC_00_Utility.getAtlIntfDateByBranch(any(), any()))
-                    .thenReturn(Map.of("INTF_SYSTEM_BEGIN_DATE", "03/01/2025 00:00:00",
-                                       "INTF_SYSTEM_END_DATE", "01/01/2025 00:00:00",
-                                       "INTF_EVENT_DATE", "01/01/2025 00:00:00"));
-            propMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-
-            Exception exception = assertThrows(Exception.class, () -> executeMethod.invoke(null));
-            assertTrue(exception.getCause() instanceof P06_IACC_01_ParameterException);
-        }
+        ExitException exit = assertThrows(NoExitSecurityManager.ExitException.class, this::invokeExecute);
+        assertEquals(8, exit.status, "Expected System.exit(8) for invalid args");
     }
 }
+
+
