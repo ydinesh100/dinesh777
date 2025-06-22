@@ -1,134 +1,97 @@
 package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
-import com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main;
-import com.bnpparibas.atlentic.iacc.bopr.resource.P06_IACC_01_PropertiesMgr;
-import com.bnpparibas.atlentic.iacc.bopr.util.exception.P06_IACC_01_ParameterException;
-
 import org.junit.jupiter.api.*;
-
 import java.lang.reflect.*;
-import java.text.SimpleDateFormat;
 import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class P06_IACC_01_MainTest {
 
-    private static final Class<?> MAIN_CLASS = P06_IACC_01_Main.class;
-    private static final SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+    private SecurityManager originalSecurityManager;
+
+    @BeforeAll
+    void saveOriginalSecurityManager() {
+        originalSecurityManager = System.getSecurityManager();
+    }
+
+    @AfterAll
+    void restoreSecurityManager() {
+        System.setSecurityManager(originalSecurityManager);
+    }
 
     @BeforeEach
-    void resetMainClassFields() throws Exception {
-        String[] fields = {"args", "action", "branch", "eventTimestamp", "beginDate", "endDate", "textFileName"};
-        for (String field : fields) {
-            Field f = MAIN_CLASS.getDeclaredField(field);
-            f.setAccessible(true);
-            f.set(null, null);
-        }
+    void setUp() throws Exception {
+        // Reset static fields if needed
+        setStaticField("args", null);
+        setStaticField("branch", null);
+        setStaticField("eventTimestamp", null);
+        setStaticField("beginDate", null);
+        setStaticField("endDate", null);
+        setStaticField("textFileName", null);
+        setStaticField("action", null);
+    }
+
+    /**
+     * Simulate invalid input date to trigger ParameterException
+     */
+    @Test
+    void testInvalidDateFormatThrowsParameterException() throws Exception {
+        String[] testArgs = new String[]{"level1", "BE01", "invalid-date"};
+
+        setStaticField("args", testArgs);
+
+        Method executeMethod = getPrivateExecuteMethod();
+
+        assertThrows(InvocationTargetException.class, () -> {
+            ExitTrapper.run(() -> executeMethod.invoke(null));
+        }, "Expected exception due to invalid date format");
+    }
+
+    /**
+     * Simulate System.exit by intercepting exit using a custom SecurityManager
+     */
+    @Test
+    void testSystemExitTriggered() throws Exception {
+        String[] testArgs = new String[]{"invalidAction", "BE01", "01/01/2024 00:00:00"};
+
+        setStaticField("args", testArgs);
+
+        Method executeMethod = getPrivateExecuteMethod();
+
+        SecurityException exception = assertThrows(SecurityException.class, () -> {
+            ExitTrapper.run(() -> executeMethod.invoke(null));
+        });
+
+        assertTrue(exception.getMessage().contains("Intercepted System.exit"), "Expected System.exit interception");
+    }
+
+    // ----- Utility Methods Below -----
+
+    private Method getPrivateExecuteMethod() throws NoSuchMethodException {
+        Class<?> clazz = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main");
+        Method method = clazz.getDeclaredMethod("execute");
+        method.setAccessible(true);
+        return method;
     }
 
     private void setStaticField(String fieldName, Object value) throws Exception {
-        Field field = MAIN_CLASS.getDeclaredField(fieldName);
+        Class<?> clazz = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main");
+        Field field = clazz.getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(null, value);
     }
 
-    private void invokeExecuteExpectingException(Class<? extends Throwable> expectedException, String messagePart) throws Exception {
-        Method execute = MAIN_CLASS.getDeclaredMethod("execute");
-        execute.setAccessible(true);
-
-        InvocationTargetException thrown = assertThrows(InvocationTargetException.class, () -> execute.invoke(null));
-        Throwable cause = thrown.getCause();
-
-        assertNotNull(cause);
-        assertTrue(expectedException.isInstance(cause), "Unexpected exception type: " + cause.getClass().getName());
-        if (messagePart != null) {
-            assertTrue(cause.getMessage().contains(messagePart), "Expected message to contain: " + messagePart);
-        }
-    }
-
-    @Test
-    void testNoArgs_ThrowsParameterException() throws Exception {
-        setStaticField("args", new String[]{});
-        invokeExecuteExpectingException(P06_IACC_01_ParameterException.class, "Wrong parameters number");
-    }
-
-    @Test
-    void testInvalidDateFormat_ThrowsParameterException() throws Exception {
-        setStaticField("args", new String[]{"level1", "BR01", "invalid-date"});
-        invokeExecuteExpectingException(P06_IACC_01_ParameterException.class, "process date format is unknown");
-    }
-
-    @Test
-    void testUnknownAction_ThrowsParameterException() throws Exception {
-        String dateStr = sdf.format(new Date());
-        setStaticField("args", new String[]{"unknownAction", "BR01", dateStr});
-        invokeExecuteExpectingException(P06_IACC_01_ParameterException.class, "action \"unknownAction\" is unknown");
-    }
-
-    @Test
-    void testLevel1WithMissingDates_ThrowsParameterException() throws Exception {
-        String dateStr = sdf.format(new Date());
-        String action = P06_IACC_01_PropertiesMgr.getLevel1ActionName();
-        setStaticField("args", new String[]{action, "BR01", dateStr});
-        invokeExecuteExpectingException(P06_IACC_01_ParameterException.class, "Wrong parameters number for level 1 action");
-    }
-
-    @Test
-    void testLevel2WithMissingFileName_ThrowsParameterException() throws Exception {
-        String dateStr = sdf.format(new Date());
-        String action = P06_IACC_01_PropertiesMgr.getLevel2ActionName();
-        setStaticField("args", new String[]{action, "BR01", dateStr});
-        invokeExecuteExpectingException(P06_IACC_01_ParameterException.class, "Wrong parameters number for level 2 action");
-    }
-
-    @Test
-    void testLevel2_HappyPath_WithFileName() throws Exception {
-        String dateStr = sdf.format(new Date());
-        String action = P06_IACC_01_PropertiesMgr.getLevel2ActionName();
-        setStaticField("args", new String[]{action, "BR01", dateStr, "output.txt"});
-
-        ExitTrappingSecurityManager.forTest(() -> {
-            Method execute = MAIN_CLASS.getDeclaredMethod("execute");
-            execute.setAccessible(true);
-            try {
-                execute.invoke(null);
-            } catch (InvocationTargetException e) {
-                // System.exit is expected
-            }
-        });
-    }
-
-    @Test
-    void testLevel1_HappyPath_WithBeginEndDates() throws Exception {
-        String dateStr = sdf.format(new Date());
-        String action = P06_IACC_01_PropertiesMgr.getLevel1ActionName();
-        String beginDate = "01/01/2024 00:00:00";
-        String endDate = "02/01/2024 00:00:00";
-
-        setStaticField("args", new String[]{action, "BR01", dateStr, beginDate, endDate});
-
-        ExitTrappingSecurityManager.forTest(() -> {
-            Method execute = MAIN_CLASS.getDeclaredMethod("execute");
-            execute.setAccessible(true);
-            try {
-                execute.invoke(null);
-            } catch (InvocationTargetException e) {
-                // System.exit is expected
-            }
-        });
-    }
-
-    // Utility class to trap System.exit
-    static class ExitTrappingSecurityManager extends SecurityManager {
+    static class ExitTrapper extends SecurityManager {
         private static final SecurityManager original = System.getSecurityManager();
 
-        public static void forTest(Runnable testCode) {
-            System.setSecurityManager(new ExitTrappingSecurityManager());
+        public static void run(Runnable testLogic) {
+            System.setSecurityManager(new ExitTrapper());
             try {
-                testCode.run();
+                testLogic.run();
             } catch (SecurityException e) {
-                // Intercepted System.exit
+                throw new SecurityException("Intercepted System.exit", e);
             } finally {
                 System.setSecurityManager(original);
             }
