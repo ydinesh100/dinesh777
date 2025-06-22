@@ -11,54 +11,49 @@ import org.slf4j.LoggerFactory;
 import java.lang.reflect.Method;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class P06_IACC_01_Main_LogLoopTest {
+public class P06_IACC_01_MainTest {
 
-    private ListAppender<ILoggingEvent> listAppender;
+    private ListAppender<ILoggingEvent> logAppender;
 
     @BeforeEach
-    void setupLogger() {
-        Logger logger = (Logger) LoggerFactory.getLogger("P86_IACC_BPOR_BE"); // Matches @CustomLog(topic = ...)
-        listAppender = new ListAppender<>();
-        listAppender.start();
-        logger.addAppender(listAppender);
+    void setUpLogger() {
+        Logger logger = (Logger) LoggerFactory.getLogger("P86_IACC_BPOR_BE"); // from @CustomLog(topic = ...)
+        logAppender = new ListAppender<>();
+        logAppender.start();
+        logger.addAppender(logAppender);
     }
 
     @Test
-    void testLoggingOfArgsLoop() throws Exception {
-        // Arrange
-        String[] testArgs = {"arg1", "arg2", "arg3"};
+    void testParameterLoggingLoop() throws Exception {
+        // Arrange: provide dummy args
+        String[] testArgs = {"alpha", "beta", "gamma"};
 
+        // Use reflection to set static args
         Class<?> clazz = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main");
-
-        // Inject args via reflection
         Method setArgsMethod = clazz.getDeclaredMethod("set_args", String[].class);
         setArgsMethod.setAccessible(true);
         setArgsMethod.invoke(null, (Object) testArgs);
 
-        // Create dummy object (though execute is static)
-        Object mainInstance = clazz.getDeclaredConstructor().newInstance();
-
-        // Invoke only the logging part (we create a wrapper for isolated testing)
-        Method executeMethod = clazz.getDeclaredMethod("execute");
+        // Use reflection to get and invoke execute()
+        Method executeMethod = clazz.getDeclaredDeclaredMethod("execute");
         executeMethod.setAccessible(true);
-
         try {
-            executeMethod.invoke(mainInstance);
-        } catch (Exception ignored) {
-            // We only want to test the logging loop, not full execution
+            executeMethod.invoke(null); // since it's a static method
+        } catch (Exception e) {
+            // Swallow exception as execute may call System.exit()
         }
 
-        // Assert
-        List<ILoggingEvent> logsList = listAppender.list;
+        // Act: capture the logs
+        List<ILoggingEvent> logs = logAppender.list;
 
-        // Check if the expected log lines exist
-        long loggedParams = logsList.stream()
-                .filter(event -> event.getLevel().equals(Level.INFO))
-                .filter(event -> event.getFormattedMessage().startsWith("Parameter"))
+        // Assert: for-loop logged each parameter
+        long paramLogs = logs.stream()
+                .filter(log -> log.getLevel().equals(Level.INFO))
+                .filter(log -> log.getFormattedMessage().startsWith("Parameter"))
                 .count();
 
-        assertEquals(testArgs.length, loggedParams, "Each parameter should be logged once.");
+        assertEquals(testArgs.length, paramLogs, "Each parameter should be logged once.");
     }
 }
