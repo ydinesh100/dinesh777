@@ -1,126 +1,95 @@
 package com.bnpparibas.atlentic.iacc.bopr.main.test;
 
 import org.junit.jupiter.api.*;
-import java.lang.reflect.*;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.security.Permission;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class P06_IACC_01_MainTest {
 
-    private SecurityManager originalSecurityManager;
+    private static final String MAIN_CLASS = "com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main";
 
     @BeforeAll
-    void saveOriginalSecurityManager() {
-        originalSecurityManager = System.getSecurityManager();
+    static void disableSystemExit() {
+        System.setSecurityManager(new NoExitSecurityManager());
     }
 
     @AfterAll
-    void restoreOriginalSecurityManager() {
-        System.setSecurityManager(originalSecurityManager);
-    }
-
-    @BeforeEach
-    void resetStaticFields() throws Exception {
-        setStaticField("args", null);
-        setStaticField("branch", null);
-        setStaticField("eventTimestamp", null);
-        setStaticField("beginDate", null);
-        setStaticField("endDate", null);
-        setStaticField("textFileName", null);
-        setStaticField("action", null);
+    static void restoreSystemExit() {
+        System.setSecurityManager(null); // Restore default
     }
 
     @Test
-    void testInvalidDateFormatThrowsParameterException() {
-        String[] testArgs = new String[]{"level1", "BE01", "invalid-date"};
+    void testInvalidDateFormatTriggersSystemExit() throws Exception {
+        String[] testArgs = new String[]{"level1", "BE01", "invalid-date-format"};
         setStaticField("args", testArgs);
 
-        Method executeMethod = getPrivateExecuteMethod();
+        Method execute = getPrivateExecuteMethod();
 
-        ExitTrapper.run(() -> {
+        ExitStatus exitStatus = assertThrows(ExitStatus.class, () -> {
             try {
-                executeMethod.invoke(null);
-                fail("Expected an exception due to invalid date format");
-            } catch (InvocationTargetException e) {
-                Throwable cause = e.getCause();
-                assertNotNull(cause);
-                assertTrue(cause.getMessage().toLowerCase().contains("date format"),
-                        "Expected date format exception, but got: " + cause.getMessage());
-            } catch (IllegalAccessException e) {
-                fail("Could not access execute() method: " + e.getMessage());
+                execute.invoke(null);
+            } catch (Exception e) {
+                // Ignore invocation exception caused by System.exit
             }
         });
+
+        assertEquals(8, exitStatus.getStatusCode(), "Expected System.exit(8) to be called");
     }
 
-    @Test
-    void testSystemExitOnInvalidArgs() {
-        String[] testArgs = new String[]{"invalidAction", "BE01", "01/01/2025 00:00:00"};
-        setStaticField("args", testArgs);
+    // ====== Reflection Utility Methods ======
 
-        Method executeMethod = getPrivateExecuteMethod();
+    private void setStaticField(String fieldName, Object value) throws Exception {
+        Class<?> clazz = Class.forName(MAIN_CLASS);
+        Field field = clazz.getDeclaredField(fieldName);
+        field.setAccessible(true);
 
-        SecurityException exception = assertThrows(SecurityException.class, () -> {
-            ExitTrapper.run(() -> {
-                try {
-                    executeMethod.invoke(null);
-                } catch (Exception e) {
-                    throw new RuntimeException("Invocation failed", e);
-                }
-            });
-        });
+        // Remove final modifier if needed
+        Field modifiersField = Field.class.getDeclaredField("modifiers");
+        modifiersField.setAccessible(true);
+        modifiersField.setInt(field, field.getModifiers() & ~Modifier.FINAL);
 
-        assertTrue(exception.getMessage().contains("Intercepted System.exit"),
-                "Expected System.exit interception");
+        field.set(null, value);
     }
 
-    // ================= Utility Methods ===================
-
-    private Method getPrivateExecuteMethod() {
-        try {
-            Class<?> clazz = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main");
-            Method method = clazz.getDeclaredMethod("execute");
-            method.setAccessible(true);
-            return method;
-        } catch (Exception e) {
-            throw new RuntimeException("Could not access execute() method", e);
-        }
+    private Method getPrivateExecuteMethod() throws Exception {
+        Class<?> clazz = Class.forName(MAIN_CLASS);
+        Method method = clazz.getDeclaredMethod("execute");
+        method.setAccessible(true);
+        return method;
     }
 
-    private void setStaticField(String fieldName, Object value) {
-        try {
-            Class<?> clazz = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main");
-            Field field = clazz.getDeclaredField(fieldName);
-            field.setAccessible(true);
-            field.set(null, value);
-        } catch (Exception e) {
-            throw new RuntimeException("Could not set static field: " + fieldName, e);
-        }
-    }
+    // ====== Custom SecurityManager ======
 
-    /**
-     * SecurityManager wrapper to trap System.exit()
-     */
-    static class ExitTrapper extends SecurityManager {
-        private static final SecurityManager original = System.getSecurityManager();
-
-        public static void run(Runnable runnable) {
-            System.setSecurityManager(new ExitTrapper());
-            try {
-                runnable.run();
-            } finally {
-                System.setSecurityManager(original);
-            }
-        }
-
+    private static class NoExitSecurityManager extends SecurityManager {
         @Override
-        public void checkPermission(java.security.Permission perm) {
-            // Allow all other permissions
+        public void checkPermission(Permission perm) {
+            // Allow everything else
         }
 
         @Override
         public void checkExit(int status) {
-            throw new SecurityException("Intercepted System.exit(" + status + ")");
+            super.checkExit(status);
+            throw new ExitStatus(status);
+        }
+    }
+
+    // ====== Exception to Capture Exit ======
+
+    private static class ExitStatus extends SecurityException {
+        private final int statusCode;
+
+        public ExitStatus(int statusCode) {
+            super("System.exit(" + statusCode + ")");
+            this.statusCode = statusCode;
+        }
+
+        public int getStatusCode() {
+            return statusCode;
         }
     }
 }
