@@ -55,7 +55,7 @@ class P06_IACC_01_MainTest {
 
     @Test
     void testInvalidDateFormat_ThrowsParameterException() throws Exception {
-        setStaticField("args", new String[]{"level1", "BR01", "not-a-date"});
+        setStaticField("args", new String[]{"level1", "BR01", "invalid-date"});
         invokeExecuteExpectingException(P06_IACC_01_ParameterException.class, "process date format is unknown");
     }
 
@@ -84,19 +84,17 @@ class P06_IACC_01_MainTest {
 
     @Test
     void testLevel2_HappyPath_WithFileName() throws Exception {
-        // Replace this test logic if execute() ends in System.exit()
         String dateStr = sdf.format(new Date());
         String action = P06_IACC_01_PropertiesMgr.getLevel2ActionName();
         setStaticField("args", new String[]{action, "BR01", dateStr, "output.txt"});
 
-        // Because execute calls System.exit(0), we must catch it
         ExitTrappingSecurityManager.forTest(() -> {
             Method execute = MAIN_CLASS.getDeclaredMethod("execute");
             execute.setAccessible(true);
             try {
                 execute.invoke(null);
             } catch (InvocationTargetException e) {
-                // System.exit() expected
+                // System.exit is expected
             }
         });
     }
@@ -116,7 +114,7 @@ class P06_IACC_01_MainTest {
             try {
                 execute.invoke(null);
             } catch (InvocationTargetException e) {
-                // System.exit() expected
+                // System.exit is expected
             }
         });
     }
@@ -130,7 +128,7 @@ class P06_IACC_01_MainTest {
             try {
                 testCode.run();
             } catch (SecurityException e) {
-                // Expected due to System.exit
+                // Intercepted System.exit
             } finally {
                 System.setSecurityManager(original);
             }
@@ -138,7 +136,7 @@ class P06_IACC_01_MainTest {
 
         @Override
         public void checkPermission(java.security.Permission perm) {
-            // allow everything
+            // Allow all
         }
 
         @Override
