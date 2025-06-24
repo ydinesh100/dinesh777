@@ -1,9 +1,9 @@
 @Test
-void testUnknownAction_shouldThrowParameterException() throws Exception {
-    // Arrange
-    String[] args = { "UNKNOWN_ACTION", "branch", "01/01/2025 00:00:00" };
+void testExecute_withUnknownAction_shouldThrowParameterException() throws Exception {
+    // Set input args with unknown action
+    String[] args = { "UNKNOWN_ACTION", "branch1", "01/01/2025 00:00:00" };
 
-    // Set static args[] field using reflection
+    // Set args using reflection
     Method setArgsMethod = P06_IACC_01_Main.class.getDeclaredMethod("set_args", String[].class);
     setArgsMethod.setAccessible(true);
     setArgsMethod.invoke(null, (Object) args);
@@ -13,30 +13,31 @@ void testUnknownAction_shouldThrowParameterException() throws Exception {
         MockedStatic<GlobalAtlentic> globalMock = mockStatic(GlobalAtlentic.class);
         MockedStatic<P06_IACC_00_Utility> utilityMock = mockStatic(P06_IACC_00_Utility.class)
     ) {
-        propsMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
+        // Mock expected level1 and level2 action names
+        propsMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("levell");
         propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
 
+        // Mock DB and date configs
         globalMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mock(Connection.class));
         utilityMock.when(() -> P06_IACC_00_Utility.getAtlIntfDateByBranch(any(), any()))
                    .thenReturn(Map.of("INTF_EVENT_DATE", "01/01/2025 00:00:00"));
 
-        // Act & Assert
+        // Invoke private static execute method
         Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
         executeMethod.setAccessible(true);
 
-        P06_IACC_01_ParameterException exception = assertThrows(
+        // Verify the exception is thrown and contains correct message
+        Exception exception = assertThrows(
             P06_IACC_01_ParameterException.class,
             () -> {
                 try {
                     executeMethod.invoke(null);
                 } catch (InvocationTargetException e) {
-                    throw e.getCause(); // unwrap cause
+                    throw e.getCause(); // unwrap
                 }
             });
 
-        // Verify the message content
-        String expectedMessage = "The action \"UNKNOWN_ACTION\" is unknown, must be equals to \"level1\" or \"level2\"";
+        String expectedMessage = "The action \"UNKNOWN_ACTION\" is unknown, must be equals to \"levell\" or \"level2\"";
         assertEquals(expectedMessage, exception.getMessage());
     }
 }
-
