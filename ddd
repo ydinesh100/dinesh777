@@ -1,59 +1,42 @@
-package com.bnpparibas.atlentic.iacc.bopr.main.test;
+@Test
+void testUnknownAction_shouldThrowParameterException() throws Exception {
+    // Arrange
+    String[] args = { "UNKNOWN_ACTION", "branch", "01/01/2025 00:00:00" };
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
+    // Set static args[] field using reflection
+    Method setArgsMethod = P06_IACC_01_Main.class.getDeclaredMethod("set_args", String[].class);
+    setArgsMethod.setAccessible(true);
+    setArgsMethod.invoke(null, (Object) args);
 
-import java.lang.reflect.Method;
-import java.util.List;
+    try (
+        MockedStatic<P06_IACC_01_PropertiesMgr> propsMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
+        MockedStatic<GlobalAtlentic> globalMock = mockStatic(GlobalAtlentic.class);
+        MockedStatic<P06_IACC_00_Utility> utilityMock = mockStatic(P06_IACC_00_Utility.class)
+    ) {
+        propsMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
+        propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+        globalMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mock(Connection.class));
+        utilityMock.when(() -> P06_IACC_00_Utility.getAtlIntfDateByBranch(any(), any()))
+                   .thenReturn(Map.of("INTF_EVENT_DATE", "01/01/2025 00:00:00"));
 
-public class P06_IACC_01_MainTest {
-
-    private ListAppender<ILoggingEvent> logAppender;
-
-    @BeforeEach
-    void setUpLogger() {
-        Logger logger = (Logger) LoggerFactory.getLogger("P86_IACC_BPOR_BE"); // from @CustomLog(topic = ...)
-        logAppender = new ListAppender<>();
-        logAppender.start();
-        logger.addAppender(logAppender);
-    }
-
-    @Test
-    void testParameterLoggingLoop() throws Exception {
-        // Arrange: provide dummy args
-        String[] testArgs = {"alpha", "beta", "gamma"};
-
-        // Use reflection to set static args
-        Class<?> clazz = Class.forName("com.bnpparibas.atlentic.iacc.bopr.main.P06_IACC_01_Main");
-        Method setArgsMethod = clazz.getDeclaredMethod("set_args", String[].class);
-        setArgsMethod.setAccessible(true);
-        setArgsMethod.invoke(null, (Object) testArgs);
-
-        // Use reflection to get and invoke execute()
-        Method executeMethod = clazz.getDeclaredDeclaredMethod("execute");
+        // Act & Assert
+        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
         executeMethod.setAccessible(true);
-        try {
-            executeMethod.invoke(null); // since it's a static method
-        } catch (Exception e) {
-            // Swallow exception as execute may call System.exit()
-        }
 
-        // Act: capture the logs
-        List<ILoggingEvent> logs = logAppender.list;
+        P06_IACC_01_ParameterException exception = assertThrows(
+            P06_IACC_01_ParameterException.class,
+            () -> {
+                try {
+                    executeMethod.invoke(null);
+                } catch (InvocationTargetException e) {
+                    throw e.getCause(); // unwrap cause
+                }
+            });
 
-        // Assert: for-loop logged each parameter
-        long paramLogs = logs.stream()
-                .filter(log -> log.getLevel().equals(Level.INFO))
-                .filter(log -> log.getFormattedMessage().startsWith("Parameter"))
-                .count();
-
-        assertEquals(testArgs.length, paramLogs, "Each parameter should be logged once.");
+        // Verify the message content
+        String expectedMessage = "The action \"UNKNOWN_ACTION\" is unknown, must be equals to \"level1\" or \"level2\"";
+        assertEquals(expectedMessage, exception.getMessage());
     }
 }
+
