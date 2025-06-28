@@ -1,43 +1,100 @@
-@Test
-void testExecute_withUnknownAction_shouldThrowParameterException() throws Exception {
-    // Set input args with unknown action
-    String[] args = { "UNKNOWN_ACTION", "branch1", "01/01/2025 00:00:00" };
+package com.bnpparibas.atlentic.risk.utils;
 
-    // Set args using reflection
-    Method setArgsMethod = P06_IACC_01_Main.class.getDeclaredMethod("set_args", String[].class);
-    setArgsMethod.setAccessible(true);
-    setArgsMethod.invoke(null, (Object) args);
+import com.bnpparibas.atlentic.common.Connexion;
+import com.bnpparibas.atlentic.risk.ost.POO_IRSK_03_trace;
+import org.junit.jupiter.api.Test;
 
-    try (
-        MockedStatic<P06_IACC_01_PropertiesMgr> propsMock = mockStatic(P06_IACC_01_PropertiesMgr.class);
-        MockedStatic<GlobalAtlentic> globalMock = mockStatic(GlobalAtlentic.class);
-        MockedStatic<P06_IACC_00_Utility> utilityMock = mockStatic(P06_IACC_00_Utility.class)
-    ) {
-        // Mock expected level1 and level2 action names
-        propsMock.when(P06_IACC_01_PropertiesMgr::getLevel1ActionName).thenReturn("levell");
-        propsMock.when(P06_IACC_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.sql.SQLException;
 
-        // Mock DB and date configs
-        globalMock.when(GlobalAtlentic::getLoanIQConnection).thenReturn(mock(Connection.class));
-        utilityMock.when(() -> P06_IACC_00_Utility.getAtlIntfDateByBranch(any(), any()))
-                   .thenReturn(Map.of("INTF_EVENT_DATE", "01/01/2025 00:00:00"));
+import static com.github.stefanbirkner.systemlambda.SystemLambda.catchSystemExit;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
-        // Invoke private static execute method
-        Method executeMethod = P06_IACC_01_Main.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
+class POO_IRSK_01_ExceptionHandlingUtilTest {
 
-        // Verify the exception is thrown and contains correct message
-        Exception exception = assertThrows(
-            P06_IACC_01_ParameterException.class,
-            () -> {
-                try {
-                    executeMethod.invoke(null);
-                } catch (InvocationTargetException e) {
-                    throw e.getCause(); // unwrap
-                }
-            });
+    @Test
+    void testPrivateConstructor() throws Exception {
+        Constructor<POO_IRSK_01_ExceptionHandlingUtil> constructor =
+                POO_IRSK_01_ExceptionHandlingUtil.class.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        Object instance = constructor.newInstance();
+        assertNotNull(instance);
+    }
 
-        String expectedMessage = "The action \"UNKNOWN_ACTION\" is unknown, must be equals to \"levell\" or \"level2\"";
-        assertEquals(expectedMessage, exception.getMessage());
+    @Test
+    void testUnwrapExceptionWithoutCause() throws Exception {
+        Throwable input = new Exception("root");
+        Method unwrap = POO_IRSK_01_ExceptionHandlingUtil.class
+                .getDeclaredMethod("unwrapException", Throwable.class);
+        unwrap.setAccessible(true);
+
+        Throwable result = (Throwable) unwrap.invoke(null, input);
+        assertSame(input, result);
+    }
+
+    @Test
+    void testUnwrapExceptionWithNestedCause() throws Exception {
+        Throwable root = new RuntimeException("root");
+        Throwable middle = new Exception("middle", root);
+        Throwable top = new Exception("top", middle);
+
+        Method unwrap = POO_IRSK_01_ExceptionHandlingUtil.class
+                .getDeclaredMethod("unwrapException", Throwable.class);
+        unwrap.setAccessible(true);
+
+        Throwable result = (Throwable) unwrap.invoke(null, top);
+        assertSame(root, result);
+    }
+
+    @Test
+    void testLogExceptions_WithSQLException_TriggersExit() throws Exception {
+        // Arrange mocks
+        POO_IRSK_03_trace trace = mock(POO_IRSK_03_trace.class);
+        Connexion connection = mock(Connexion.class);
+        SQLException sqlEx = new SQLException("DB error", "42000", 105);
+
+        Method logMethod = POO_IRSK_01_ExceptionHandlingUtil.class.getDeclaredMethod(
+                "logExceptions",
+                POO_IRSK_03_trace.class,
+                String.class,
+                String.class,
+                Exception.class,
+                Connexion.class
+        );
+        logMethod.setAccessible(true);
+
+        // Act: Catch System.exit
+        int status = catchSystemExit(() ->
+                logMethod.invoke(null, trace, "Message1", "Message2", sqlEx, connection));
+
+        // Assert
+        assertEquals(8, status);
+        verify(connection).rollback();
+    }
+
+    @Test
+    void testLogExceptions_WithGenericException_TriggersExit() throws Exception {
+        POO_IRSK_03_trace trace = mock(POO_IRSK_03_trace.class);
+        Connexion connection = mock(Connexion.class);
+        Exception genericEx = new RuntimeException("Some error");
+
+        Method logMethod = POO_IRSK_01_ExceptionHandlingUtil.class.getDeclaredMethod(
+                "logExceptions",
+                POO_IRSK_03_trace.class,
+                String.class,
+                String.class,
+                Exception.class,
+                Connexion.class
+        );
+        logMethod.setAccessible(true);
+
+        int exitCode = catchSystemExit(() ->
+                logMethod.invoke(null, trace, "LOG1", "LOG2", genericEx, connection));
+
+        assertEquals(8, exitCode);
+        verify(trace, atLeastOnce()).Add_log(eq(2), isNull(), eq("Fatal"), contains("LOG2"));
+        verify(connection).rollback();
     }
 }
