@@ -88,4 +88,3 @@ class POO_IRSK_traceTest {
         assertTrue(logContent.contains("Something went wrong"));
     }
 }
-
