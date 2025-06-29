@@ -4,33 +4,29 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import com.bnpparibas.atlentic.common.Connexion;
 import com.bnpparibas.atlentic.risk.ost.POB_IRSK_03_trace;
 import com.bnpparibas.atlentic.risk.utils.P00_IRSK_81_ExceptionHandlingUtil;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import java.sql.SQLException;
+
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 class P00_IRSK_81_ExceptionHandlingUtilTest {
 
     @Test
     void testSystemExitCode8() throws Exception {
-        // Arrange: Prepare mocks
+        // Arrange
         POB_IRSK_03_trace mockTrace = Mockito.mock(POB_IRSK_03_trace.class);
         Connexion mockConnection = Mockito.mock(Connexion.class);
+        SQLException sqlException = new SQLException("Simulated error", "42000", 999);
 
-        SQLException sqlException = new SQLException("DB error", "42000", 999);
-
-        // Act & Assert: Capture System.exit call
+        // Act
         int exitCode = catchSystemExit(() -> {
             P00_IRSK_81_ExceptionHandlingUtil.logExceptions(
-                mockTrace,
-                "Log1",
-                "Log2",
-                sqlException,
-                mockConnection
+                mockTrace, "Log1", "Log2", sqlException, mockConnection
             );
         });
 
-        // Assert exit code
+        // Assert
         assertEquals(8, exitCode);
     }
 }
