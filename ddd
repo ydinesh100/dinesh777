@@ -3,7 +3,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
 
 import com.bnpparibas.atlentic.common.Connexion;
-import com.bnpparibas.atlentic.risk.ost.P00_IRSK_01E00_TraitementDataost;
+import com.bnpparibas.atlentic.risk.ost.P00_IRSK_01E00_TraitementDataOst;
 import com.bnpparibas.atlentic.risk.ost.P00_IRSK_03_trace;
 
 import java.sql.Connection;
@@ -12,18 +12,17 @@ import java.sql.Statement;
 
 import org.junit.jupiter.api.Test;
 
-class P00_IRSK_01E00_TraitementDataostTest {
+class P00_IRSK_01E00_TraitementDataOstTest {
 
     @Test
-    void testConstructorSystemExitOnException() throws Exception {
+    void testConstructorTriggersSystemExit() throws Exception {
         // Arrange
         Connexion mockConnexion = mock(Connexion.class);
-        Connection mockJdbc = mock(Connection.class);
-        when(mockConnexion.getConnection()).thenThrow(new SQLException("DB error"));
+        when(mockConnexion.getConnection()).thenThrow(new SQLException("DB failure"));
 
         // Act
         int exitCode = catchSystemExit(() -> {
-            new P00_IRSK_01E00_TraitementDataost(mockConnexion, 1);
+            new P00_IRSK_01E00_TraitementDataOst(mockConnexion, 123);
         });
 
         // Assert
@@ -31,22 +30,22 @@ class P00_IRSK_01E00_TraitementDataostTest {
     }
 
     @Test
-    void testExecuteDeleteStatement_SystemExitOnSQLException() throws Exception {
+    void testExecuteDeleteStatement_TriggersSystemExit() throws Exception {
         // Arrange
         Connexion mockConnexion = mock(Connexion.class);
-        Connection mockJdbc = mock(Connection.class);
+        Connection mockConnection = mock(Connection.class);
         Statement mockStatement = mock(Statement.class);
 
-        when(mockConnexion.getConnection()).thenReturn(mockJdbc);
-        when(mockJdbc.createStatement()).thenReturn(mockStatement);
-        doThrow(new SQLException("DELETE FAIL", "42000", 999)).when(mockStatement).executeUpdate(anyString());
+        when(mockConnexion.getConnection()).thenReturn(mockConnection);
+        when(mockConnection.createStatement()).thenReturn(mockStatement);
+        doThrow(new SQLException("Delete failed", "42000", 1234)).when(mockStatement).executeUpdate(anyString());
 
-        P00_IRSK_01E00_TraitementDataost traitement = new P00_IRSK_01E00_TraitementDataost(mockConnexion, 1);
+        P00_IRSK_01E00_TraitementDataOst traitement = new P00_IRSK_01E00_TraitementDataOst(mockConnexion, 123);
         P00_IRSK_03_trace mockLogger = mock(P00_IRSK_03_trace.class);
 
         // Act
         int exitCode = catchSystemExit(() -> {
-            traitement.executeDeleteStatement(mockLogger, mockConnexion, "DELETE FROM dummy", "DELETE FAIL");
+            traitement.executeDeleteStatement(mockLogger, mockConnexion, "DELETE FROM dummy_table", "Error occurred");
         });
 
         // Assert
@@ -54,19 +53,19 @@ class P00_IRSK_01E00_TraitementDataostTest {
     }
 
     @Test
-    void testTraitementDataOst_SystemExitOnException() throws Exception {
+    void testTraitementDataOst_TriggersSystemExit() throws Exception {
         // Arrange
         Connexion mockConnexion = mock(Connexion.class);
-        Connection mockJdbc = mock(Connection.class);
-        when(mockConnexion.getConnection()).thenReturn(mockJdbc);
-        Statement mockStmt = mock(Statement.class);
-        when(mockJdbc.createStatement()).thenThrow(new SQLException("traiterTableDataOst failure"));
+        Connection mockConnection = mock(Connection.class);
+        when(mockConnexion.getConnection()).thenReturn(mockConnection);
+        when(mockConnection.createStatement()).thenThrow(new SQLException("Statement error"));
 
-        P00_IRSK_01E00_TraitementDataost traitement = new P00_IRSK_01E00_TraitementDataost(mockConnexion, 1);
+        P00_IRSK_01E00_TraitementDataOst traitement = new P00_IRSK_01E00_TraitementDataOst(mockConnexion, 123);
+        P00_IRSK_03_trace mockLogger = mock(P00_IRSK_03_trace.class);
 
         // Act
         int exitCode = catchSystemExit(() -> {
-            traitement.traiterTableDataOst(mock(P00_IRSK_03_trace.class), mockConnexion);
+            traitement.traiterTableDataOst(mockLogger, mockConnexion);
         });
 
         // Assert
@@ -74,18 +73,19 @@ class P00_IRSK_01E00_TraitementDataostTest {
     }
 
     @Test
-    void testTraitementAccrual_SystemExitOnException() throws Exception {
+    void testTraitementAccrual_TriggersSystemExit() throws Exception {
         // Arrange
         Connexion mockConnexion = mock(Connexion.class);
-        Connection mockJdbc = mock(Connection.class);
-        when(mockConnexion.getConnection()).thenReturn(mockJdbc);
-        when(mockJdbc.createStatement()).thenThrow(new SQLException("traiterTableAccrual failure"));
+        Connection mockConnection = mock(Connection.class);
+        when(mockConnexion.getConnection()).thenReturn(mockConnection);
+        when(mockConnection.createStatement()).thenThrow(new SQLException("Accrual error"));
 
-        P00_IRSK_01E00_TraitementDataost traitement = new P00_IRSK_01E00_TraitementDataost(mockConnexion, 1);
+        P00_IRSK_01E00_TraitementDataOst traitement = new P00_IRSK_01E00_TraitementDataOst(mockConnexion, 123);
+        P00_IRSK_03_trace mockLogger = mock(P00_IRSK_03_trace.class);
 
         // Act
         int exitCode = catchSystemExit(() -> {
-            traitement.traiterTableAccrual(mock(P00_IRSK_03_trace.class), mockConnexion);
+            traitement.traiterTableAccrual(mockLogger, mockConnexion);
         });
 
         // Assert
@@ -93,18 +93,19 @@ class P00_IRSK_01E00_TraitementDataostTest {
     }
 
     @Test
-    void testTraitementSchedule_SystemExitOnException() throws Exception {
+    void testTraitementSchedule_TriggersSystemExit() throws Exception {
         // Arrange
         Connexion mockConnexion = mock(Connexion.class);
-        Connection mockJdbc = mock(Connection.class);
-        when(mockConnexion.getConnection()).thenReturn(mockJdbc);
-        when(mockJdbc.createStatement()).thenThrow(new SQLException("traiterTableSchedule failure"));
+        Connection mockConnection = mock(Connection.class);
+        when(mockConnexion.getConnection()).thenReturn(mockConnection);
+        when(mockConnection.createStatement()).thenThrow(new SQLException("Schedule error"));
 
-        P00_IRSK_01E00_TraitementDataost traitement = new P00_IRSK_01E00_TraitementDataost(mockConnexion, 1);
+        P00_IRSK_01E00_TraitementDataOst traitement = new P00_IRSK_01E00_TraitementDataOst(mockConnexion, 123);
+        P00_IRSK_03_trace mockLogger = mock(P00_IRSK_03_trace.class);
 
         // Act
         int exitCode = catchSystemExit(() -> {
-            traitement.traiterTableSchedule(mock(P00_IRSK_03_trace.class), mockConnexion);
+            traitement.traiterTableSchedule(mockLogger, mockConnexion);
         });
 
         // Assert
