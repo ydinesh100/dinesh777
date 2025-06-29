@@ -1,38 +1,89 @@
 import static com.github.stefanbirkner.systemlambda.SystemLambda.catchSystemExit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.*;
 
 import com.bnpparibas.atlentic.common.Connexion;
 import com.bnpparibas.atlentic.risk.ost.POB_IRSK_03_trace;
 import com.bnpparibas.atlentic.risk.utils.P00_IRSK_81_ExceptionHandlingUtil;
-
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
+
+import java.sql.SQLException;
 
 class P00_IRSK_81_ExceptionHandlingUtilTest {
 
     @Test
-    void testElseBlockWhenNonSQLExceptionIsThrown() throws Exception {
-        // Arrange: create mocks
-        POB_IRSK_03_trace traceMock = Mockito.mock(POB_IRSK_03_trace.class);
-        Connexion connectionMock = Mockito.mock(Connexion.class);
-        RuntimeException nonSqlException = new RuntimeException("General failure");
+    void testIfBlock_whenSQLException() throws Exception {
+        // Arrange
+        POB_IRSK_03_trace traceMock = mock(POB_IRSK_03_trace.class);
+        Connexion connectionMock = mock(Connexion.class);
 
-        // Act: run the method and catch System.exit
+        SQLException sqlException = new SQLException("SQL failure", "08006", 999);
+
+        // Act
         int exitCode = catchSystemExit(() -> {
             P00_IRSK_81_ExceptionHandlingUtil.logExceptions(
                 traceMock,
-                "TestLog1",
-                "TestLog2",
-                nonSqlException,
+                "Log1",
+                "Log2",
+                sqlException,
                 connectionMock
             );
         });
 
-        // Assert: System.exit should be called with 8
+        // Assert
         assertEquals(8, exitCode);
-        
-        // You can also verify interactions if needed (optional)
-        Mockito.verify(traceMock).Add_log(Mockito.eq(2), Mockito.isNull(), Mockito.anyString(), Mockito.contains("Reason ="));
-        Mockito.verify(connectionMock).rollback();
+        verify(traceMock).Add_log(eq(2), isNull(), anyString(), contains("SQL failure"));
+        verify(connectionMock).rollback();
+    }
+
+    @Test
+    void testElseBlock_whenNonSQLException() throws Exception {
+        // Arrange
+        POB_IRSK_03_trace traceMock = mock(POB_IRSK_03_trace.class);
+        Connexion connectionMock = mock(Connexion.class);
+
+        RuntimeException runtimeException = new RuntimeException("Non-SQL error");
+
+        // Act
+        int exitCode = catchSystemExit(() -> {
+            P00_IRSK_81_ExceptionHandlingUtil.logExceptions(
+                traceMock,
+                "Log1",
+                "Log2",
+                runtimeException,
+                connectionMock
+            );
+        });
+
+        // Assert
+        assertEquals(8, exitCode);
+        verify(traceMock).Add_log(eq(2), isNull(), anyString(), contains("Non-SQL error"));
+        verify(connectionMock).rollback();
+    }
+
+    @Test
+    void testUnwrapException_withNestedSQLException() throws Exception {
+        // Arrange
+        POB_IRSK_03_trace traceMock = mock(POB_IRSK_03_trace.class);
+        Connexion connectionMock = mock(Connexion.class);
+
+        SQLException inner = new SQLException("Nested SQL", "42000", 101);
+        Exception wrapper = new Exception(new Exception(inner));  // simulate nested causes
+
+        // Act
+        int exitCode = catchSystemExit(() -> {
+            P00_IRSK_81_ExceptionHandlingUtil.logExceptions(
+                traceMock,
+                "Log1",
+                "Log2",
+                wrapper,
+                connectionMock
+            );
+        });
+
+        // Assert
+        assertEquals(8, exitCode);
+        verify(traceMock).Add_log(eq(2), isNull(), anyString(), contains("Nested SQL"));
+        verify(connectionMock).rollback();
     }
 }
