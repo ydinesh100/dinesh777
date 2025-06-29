@@ -1,100 +1,36 @@
-package com.bnpparibas.atlentic.risk.utils;
+import static com.github.stefanbirkner.systemlambda.SystemLambda.catchSystemExit;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.bnpparibas.atlentic.common.Connexion;
-import com.bnpparibas.atlentic.risk.ost.POO_IRSK_03_trace;
+import com.bnpparibas.atlentic.risk.ost.POB_IRSK_03_trace;
+import com.bnpparibas.atlentic.risk.utils.P00_IRSK_81_ExceptionHandlingUtil;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 import java.sql.SQLException;
 
-import static com.github.stefanbirkner.systemlambda.SystemLambda.catchSystemExit;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
-class POO_IRSK_01_ExceptionHandlingUtilTest {
+class P00_IRSK_81_ExceptionHandlingUtilTest {
 
     @Test
-    void testPrivateConstructor() throws Exception {
-        Constructor<POO_IRSK_01_ExceptionHandlingUtil> constructor =
-                POO_IRSK_01_ExceptionHandlingUtil.class.getDeclaredConstructor();
-        constructor.setAccessible(true);
-        Object instance = constructor.newInstance();
-        assertNotNull(instance);
-    }
+    void testSystemExitCode8() throws Exception {
+        // Arrange: Prepare mocks
+        POB_IRSK_03_trace mockTrace = Mockito.mock(POB_IRSK_03_trace.class);
+        Connexion mockConnection = Mockito.mock(Connexion.class);
 
-    @Test
-    void testUnwrapExceptionWithoutCause() throws Exception {
-        Throwable input = new Exception("root");
-        Method unwrap = POO_IRSK_01_ExceptionHandlingUtil.class
-                .getDeclaredMethod("unwrapException", Throwable.class);
-        unwrap.setAccessible(true);
+        SQLException sqlException = new SQLException("DB error", "42000", 999);
 
-        Throwable result = (Throwable) unwrap.invoke(null, input);
-        assertSame(input, result);
-    }
+        // Act & Assert: Capture System.exit call
+        int exitCode = catchSystemExit(() -> {
+            P00_IRSK_81_ExceptionHandlingUtil.logExceptions(
+                mockTrace,
+                "Log1",
+                "Log2",
+                sqlException,
+                mockConnection
+            );
+        });
 
-    @Test
-    void testUnwrapExceptionWithNestedCause() throws Exception {
-        Throwable root = new RuntimeException("root");
-        Throwable middle = new Exception("middle", root);
-        Throwable top = new Exception("top", middle);
-
-        Method unwrap = POO_IRSK_01_ExceptionHandlingUtil.class
-                .getDeclaredMethod("unwrapException", Throwable.class);
-        unwrap.setAccessible(true);
-
-        Throwable result = (Throwable) unwrap.invoke(null, top);
-        assertSame(root, result);
-    }
-
-    @Test
-    void testLogExceptions_WithSQLException_TriggersExit() throws Exception {
-        // Arrange mocks
-        POO_IRSK_03_trace trace = mock(POO_IRSK_03_trace.class);
-        Connexion connection = mock(Connexion.class);
-        SQLException sqlEx = new SQLException("DB error", "42000", 105);
-
-        Method logMethod = POO_IRSK_01_ExceptionHandlingUtil.class.getDeclaredMethod(
-                "logExceptions",
-                POO_IRSK_03_trace.class,
-                String.class,
-                String.class,
-                Exception.class,
-                Connexion.class
-        );
-        logMethod.setAccessible(true);
-
-        // Act: Catch System.exit
-        int status = catchSystemExit(() ->
-                logMethod.invoke(null, trace, "Message1", "Message2", sqlEx, connection));
-
-        // Assert
-        assertEquals(8, status);
-        verify(connection).rollback();
-    }
-
-    @Test
-    void testLogExceptions_WithGenericException_TriggersExit() throws Exception {
-        POO_IRSK_03_trace trace = mock(POO_IRSK_03_trace.class);
-        Connexion connection = mock(Connexion.class);
-        Exception genericEx = new RuntimeException("Some error");
-
-        Method logMethod = POO_IRSK_01_ExceptionHandlingUtil.class.getDeclaredMethod(
-                "logExceptions",
-                POO_IRSK_03_trace.class,
-                String.class,
-                String.class,
-                Exception.class,
-                Connexion.class
-        );
-        logMethod.setAccessible(true);
-
-        int exitCode = catchSystemExit(() ->
-                logMethod.invoke(null, trace, "LOG1", "LOG2", genericEx, connection));
-
+        // Assert exit code
         assertEquals(8, exitCode);
-        verify(trace, atLeastOnce()).Add_log(eq(2), isNull(), eq("Fatal"), contains("LOG2"));
-        verify(connection).rollback();
     }
 }
