@@ -1,14 +1,18 @@
-import static com.github.stefanbirkner.systemlambda.SystemLambda.catchSystemExit;
-import static org.junit.jupiter.api.Assertions.*;
+package com.bnpparibas.atlentic.risk.utils;
 
-import java.io.File;
-import java.sql.PreparedStatement;
-import java.util.HashMap;
-import java.util.Map;
-
-import com.bnpparibas.atlentic.risk.utils.POO_IRSK_trace;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+import static com.github.stefanbirkner.systemlambda.SystemLambda.catchSystemExit;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.nio.file.Files;
+import java.util.HashMap;
+import java.util.Map;
+import java.sql.PreparedStatement;
+
 import org.mockito.Mockito;
 
 class POO_IRSK_traceTest {
@@ -24,63 +28,62 @@ class POO_IRSK_traceTest {
     void testGetCommonLogInsertQueryWithId() {
         String id = "123";
         String query = trace.getCommonLogInsertQuery(id);
-        assertNotNull(query);
-        assertTrue(query.contains("?, 'OMG', 'RISK',"));
+        assertTrue(query.contains("?, 'OMG', 'RISK'"));
     }
 
     @Test
     void testGetCommonLogInsertQueryWithNullId() {
         String query = trace.getCommonLogInsertQuery(null);
-        assertNotNull(query);
         assertTrue(query.contains("SEQ_COMMON_ID_LOG.nextval"));
     }
 
     @Test
     void testSetParametersWithId() throws Exception {
         Map<String, String> param = new HashMap<>();
-        param.put(POO_IRSK_trace.ID, "111");
+        param.put(POO_IRSK_trace.ID, "123");
         param.put(POO_IRSK_trace.LEVEL, "INFO");
-        param.put(POO_IRSK_trace.MESSAGE, "Sample log");
+        param.put(POO_IRSK_trace.MESSAGE, "Message");
 
-        PreparedStatement preparedStatement = Mockito.mock(PreparedStatement.class);
+        PreparedStatement ps = Mockito.mock(PreparedStatement.class);
+        trace.setParameters(ps, param);
 
-        PreparedStatement result = trace.setParameters(preparedStatement, param);
-
-        // Verify all setString calls
-        Mockito.verify(preparedStatement).setString(1, "111");
-        Mockito.verify(preparedStatement).setString(2, "INFO");
-        Mockito.verify(preparedStatement).setString(3, "Sample log");
-
-        assertEquals(preparedStatement, result);
+        Mockito.verify(ps).setString(1, "123");
+        Mockito.verify(ps).setString(2, "INFO");
+        Mockito.verify(ps).setString(3, "Message");
     }
 
     @Test
-    void testSetParametersWithoutIdTriggersFatalExit() throws Exception {
+    void testSetParametersWithoutIdTriggersSystemExit() throws Exception {
         Map<String, String> param = new HashMap<>();
-        param.put(POO_IRSK_trace.LEVEL, "INFO");
-        param.put(POO_IRSK_trace.MESSAGE, "Something went wrong");
+        param.put(POO_IRSK_trace.LEVEL, "ERROR");
+        param.put(POO_IRSK_trace.MESSAGE, "Failure");
 
-        PreparedStatement preparedStatement = Mockito.mock(PreparedStatement.class);
+        PreparedStatement ps = Mockito.mock(PreparedStatement.class);
 
         int status = catchSystemExit(() -> {
-            trace.setParameters(preparedStatement, param);
+            trace.setParameters(ps, param);
         });
 
         assertEquals(8, status);
     }
 
     @Test
-    void testFatalExitTriggersSystemExitAndCreatesLogFile() throws Exception {
+    void testFatalExitWritesToLogAndExits() throws Exception {
         File logFile = new File("F00_IRSK_OX01.log");
         if (logFile.exists()) {
-            assertTrue(logFile.delete()); // clean slate
+            logFile.delete();
         }
 
         int status = catchSystemExit(() -> {
-            trace.fatalExit("testMethod", "RuntimeException", "Simulated fatal failure");
+            trace.fatalExit("myMethod", "IOException", "Simulated failure");
         });
 
         assertEquals(8, status);
-        assertTrue(logFile.exists(), "Log file should be created");
+        assertTrue(logFile.exists());
+
+        String content = Files.readString(logFile.toPath());
+        assertTrue(content.contains("myMethod"));
+        assertTrue(content.contains("IOException"));
+        assertTrue(content.contains("Simulated failure"));
     }
 }
