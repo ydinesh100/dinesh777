@@ -1,59 +1,45 @@
-package com.bnpparibas.atlentic.risk.utils;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static com.github.stefanbirkner.systemlambda.SystemLambda.catchSystemExit;
-
-import java.io.File;
-import java.nio.file.Files;
-import java.sql.PreparedStatement;
-import java.util.HashMap;
-import java.util.Map;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-
 class POO_IRSK_traceTest {
 
     private POO_IRSK_trace trace;
 
     @BeforeEach
-    void setUp() {
+    void setup() {
         trace = new POO_IRSK_trace();
     }
 
     @Test
-    void testGetCommonLogInsertQueryWithId() {
+    void testGetCommonLogInsertQuery_WithId() {
         String id = "123";
         String query = trace.getCommonLogInsertQuery(id);
         assertNotNull(query);
-        assertTrue(query.contains("?, 'OMG', 'RISK'"));
+        assertTrue(query.contains("(?, ?, 'OMG', 'RISK', ?, sysdate)"), "Unexpected SQL when ID is provided");
     }
 
     @Test
-    void testGetCommonLogInsertQueryWithNullId() {
+    void testGetCommonLogInsertQuery_NullId() {
         String query = trace.getCommonLogInsertQuery(null);
         assertNotNull(query);
-        assertTrue(query.contains("SEQ_COMMON_ID_LOG.nextval"));
+        assertTrue(query.contains("SEQ_COMMON_ID_LOG.nextval"), "Expected sequence usage when ID is null");
     }
 
     @Test
-    void testSetParametersWithId() throws Exception {
+    void testSetParameters_WithId() throws Exception {
         Map<String, String> param = new HashMap<>();
         param.put(POO_IRSK_trace.ID, "123");
         param.put(POO_IRSK_trace.LEVEL, "INFO");
-        param.put(POO_IRSK_trace.MESSAGE, "This is a test message");
+        param.put(POO_IRSK_trace.MESSAGE, "Test message");
 
         PreparedStatement ps = Mockito.mock(PreparedStatement.class);
-        trace.setParameters(ps, param);
+        PreparedStatement result = trace.setParameters(ps, param);
 
+        assertNotNull(result);
         Mockito.verify(ps).setString(1, "123");
         Mockito.verify(ps).setString(2, "INFO");
-        Mockito.verify(ps).setString(3, "This is a test message");
+        Mockito.verify(ps).setString(3, "Test message");
     }
 
     @Test
-    void testSetParametersWithoutIdTriggersSystemExit() throws Exception {
+    void testSetParameters_WithoutId_TriggersFatalExit() throws Exception {
         Map<String, String> param = new HashMap<>();
         param.put(POO_IRSK_trace.LEVEL, "ERROR");
         param.put(POO_IRSK_trace.MESSAGE, "Missing ID test");
@@ -68,23 +54,23 @@ class POO_IRSK_traceTest {
     }
 
     @Test
-    void testFatalExitLogsAndCallsSystemExit() throws Exception {
-        // Delete the log file before running
+    void testFatalExit_WritesToFileAndExits() throws Exception {
+        // Clean up log file before running test
         File logFile = new File("F00_IRSK_OX01.log");
         if (logFile.exists()) {
             logFile.delete();
         }
 
         int status = catchSystemExit(() -> {
-            trace.fatalExit("testFatalExit", "IOException", "Something went wrong");
+            trace.fatalExit("testMethod", "IOException", "Something bad happened");
         });
 
         assertEquals(8, status);
         assertTrue(logFile.exists());
 
-        String logContent = Files.readString(logFile.toPath());
-        assertTrue(logContent.contains("testFatalExit"));
-        assertTrue(logContent.contains("IOException"));
-        assertTrue(logContent.contains("Something went wrong"));
+        String content = Files.readString(logFile.toPath());
+        assertTrue(content.contains("testMethod"));
+        assertTrue(content.contains("IOException"));
+        assertTrue(content.contains("Something bad happened"));
     }
 }
