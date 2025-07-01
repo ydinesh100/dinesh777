@@ -1,10 +1,12 @@
 package com.bnpparibas.atlentic.irep.ecb.levell;
 
-import com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
+import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
 import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
+import com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
 import com.bnpparibas.atlentic.irep.ecb.transaction.P06_IREP_01_Level1DBTransaction;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -25,41 +27,41 @@ class Pe6_IREP_01_LevellTest {
         instance = new Pe6_IREP_01_Levell();
         mockTxn = mock(P06_IREP_01_Level1DBTransaction.class);
 
-        // Inject mock into superclass
+        // Inject mock DB transaction
         Field txnField = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
         txnField.setAccessible(true);
         txnField.set(instance, mockTxn);
 
-        // Inject mock record bean list
+        // Inject mocked record bean list with correct type
         Field recordListField = P06_IREP_01_Level.class.getDeclaredField("g_o_recordBeansList");
         recordListField.setAccessible(true);
-        recordListField.set(instance, Collections.singletonList(new Object()));
+        recordListField.set(instance, Collections.singletonList(mock(P06_IREP_01_EcbRecordBean.class)));
 
-        // Set static fields in Main class
-        Field branchField = P06_IREP_01_Main.class.getDeclaredField("gs_branch");
+        // Inject static fields in P06_IREP_01_Main
+        Field branchField = P06_IREP_01_Main.class.getDeclaredField("g_s_branch");
         branchField.setAccessible(true);
         branchField.set(null, "TEST_BRANCH");
 
-        Field eventField = P06_IREP_01_Main.class.getDeclaredField("g_o_eventTimestamp");
-        eventField.setAccessible(true);
-        eventField.set(null, new Timestamp(System.currentTimeMillis()));
+        Field eventTsField = P06_IREP_01_Main.class.getDeclaredField("g_o_eventTimestamp");
+        eventTsField.setAccessible(true);
+        eventTsField.set(null, new Timestamp(System.currentTimeMillis()));
     }
 
     @Test
     void testInnerExecute() throws Exception {
-        // Setup
-        when(mockTxn.insertRecordsBeansList(anyList())).thenReturn(5);
+        // Arrange
+        when(mockTxn.insertRecordsBeansList(ArgumentMatchers.<P06_IREP_01_EcbRecordBean>anyList())).thenReturn(5);
         doNothing().when(mockTxn).deleteConcurrentRecords(anyString(), any());
 
         Method method = Pe6_IREP_01_Levell.class.getDeclaredMethod("innerExecute");
         method.setAccessible(true);
 
-        // Execute
+        // Act
         method.invoke(instance);
 
-        // Verify
+        // Assert
         verify(mockTxn).deleteConcurrentRecords(eq("TEST_BRANCH"), any());
-        verify(mockTxn).insertRecordsBeansList(anyList());
+        verify(mockTxn).insertRecordsBeansList(ArgumentMatchers.<P06_IREP_01_EcbRecordBean>anyList());
     }
 
     @Test
@@ -81,16 +83,17 @@ class Pe6_IREP_01_LevellTest {
     @Test
     void testInitializeDataBaseTransaction() throws Exception {
         Connection mockConnection = mock(Connection.class);
-
         Method method = Pe6_IREP_01_Levell.class.getDeclaredMethod("initializeDataBaseTransaction", Connection.class);
         method.setAccessible(true);
+
+        // Act
         method.invoke(instance, mockConnection);
 
+        // Assert DB transaction is initialized
         Field txnField = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
         txnField.setAccessible(true);
-        Object value = txnField.get(instance);
-
-        assertNotNull(value);
-        assertTrue(value instanceof P06_IREP_01_Level1DBTransaction);
+        Object txnValue = txnField.get(instance);
+        assertNotNull(txnValue);
+        assertTrue(txnValue instanceof P06_IREP_01_Level1DBTransaction);
     }
 }
