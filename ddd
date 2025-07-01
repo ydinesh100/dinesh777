@@ -1,76 +1,102 @@
-class POO_IRSK_traceTest {
+package com.bnpparibas.atlentic.irep.ecb.levell;
 
-    private POO_IRSK_trace trace;
+import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
+import com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
+import com.bnpparibas.atlentic.irep.ecb.transaction.P06_IREP_01_Level1DBTransaction;
+import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.sql.Connection;
+import java.sql.Timestamp;
+import java.util.Collections;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+class P06_IREP_01_Level1Test {
+
+    private Pe6_IREP_01_Levell instance;
+    private P06_IREP_01_Level1DBTransaction mockedTransaction;
 
     @BeforeEach
-    void setup() {
-        trace = new POO_IRSK_trace();
+    void setUp() throws Exception {
+        instance = new Pe6_IREP_01_Levell();
+
+        // Create mock transaction
+        mockedTransaction = mock(P06_IREP_01_Level1DBTransaction.class);
+
+        // Inject mock into g_o_dataBaseTransaction
+        Field dbTxnField = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
+        dbTxnField.setAccessible(true);
+        dbTxnField.set(instance, mockedTransaction);
+
+        // Inject dummy record beans list
+        Field recordListField = P06_IREP_01_Level.class.getDeclaredField("g_o_recordBeansList");
+        recordListField.setAccessible(true);
+        recordListField.set(instance, Collections.singletonList(new Object()));
+
+        // Set static fields of P06_IREP_01_Main
+        Field branchField = P06_IREP_01_Main.class.getDeclaredField("gs_branch");
+        branchField.setAccessible(true);
+        branchField.set(null, "TEST_BRANCH");
+
+        Field eventTsField = P06_IREP_01_Main.class.getDeclaredField("g_o_eventTimestamp");
+        eventTsField.setAccessible(true);
+        eventTsField.set(null, new Timestamp(System.currentTimeMillis()));
     }
 
     @Test
-    void testGetCommonLogInsertQuery_WithId() {
-        String id = "123";
-        String query = trace.getCommonLogInsertQuery(id);
-        assertNotNull(query);
-        assertTrue(query.contains("(?, ?, 'OMG', 'RISK', ?, sysdate)"), "Unexpected SQL when ID is provided");
+    void testInnerExecute() throws Exception {
+        // Arrange
+        when(mockedTransaction.insertRecordsBeansList(anyList())).thenReturn(1);
+        doNothing().when(mockedTransaction).deleteConcurrentRecords(anyString(), any());
+
+        // Act (use reflection to call protected method)
+        Method method = Pe6_IREP_01_Levell.class.getDeclaredMethod("innerExecute");
+        method.setAccessible(true);
+        method.invoke(instance);
+
+        // Assert
+        verify(mockedTransaction).deleteConcurrentRecords(eq("TEST_BRANCH"), any());
+        verify(mockedTransaction).insertRecordsBeansList(anyList());
     }
 
     @Test
-    void testGetCommonLogInsertQuery_NullId() {
-        String query = trace.getCommonLogInsertQuery(null);
-        assertNotNull(query);
-        assertTrue(query.contains("SEQ_COMMON_ID_LOG.nextval"), "Expected sequence usage when ID is null");
+    void testGetLevelNumber() throws Exception {
+        Method method = Pe6_IREP_01_Levell.class.getDeclaredMethod("getLevelNumber");
+        method.setAccessible(true);
+        int level = (int) method.invoke(instance);
+        assertEquals(1, level);
     }
 
     @Test
-    void testSetParameters_WithId() throws Exception {
-        Map<String, String> param = new HashMap<>();
-        param.put(POO_IRSK_trace.ID, "123");
-        param.put(POO_IRSK_trace.LEVEL, "INFO");
-        param.put(POO_IRSK_trace.MESSAGE, "Test message");
-
-        PreparedStatement ps = Mockito.mock(PreparedStatement.class);
-        PreparedStatement result = trace.setParameters(ps, param);
-
-        assertNotNull(result);
-        Mockito.verify(ps).setString(1, "123");
-        Mockito.verify(ps).setString(2, "INFO");
-        Mockito.verify(ps).setString(3, "Test message");
+    void testApplyCommit() throws Exception {
+        Method method = Pe6_IREP_01_Levell.class.getDeclaredMethod("applyCommit");
+        method.setAccessible(true);
+        boolean commit = (boolean) method.invoke(instance);
+        assertTrue(commit);
     }
 
     @Test
-    void testSetParameters_WithoutId_TriggersFatalExit() throws Exception {
-        Map<String, String> param = new HashMap<>();
-        param.put(POO_IRSK_trace.LEVEL, "ERROR");
-        param.put(POO_IRSK_trace.MESSAGE, "Missing ID test");
+    void testInitializeDataBaseTransaction() throws Exception {
+        // Arrange
+        Connection mockedConnection = mock(Connection.class);
 
-        PreparedStatement ps = Mockito.mock(PreparedStatement.class);
+        // Act
+        Method method = Pe6_IREP_01_Levell.class.getDeclaredMethod("initializeDataBaseTransaction", Connection.class);
+        method.setAccessible(true);
+        method.invoke(instance, mockedConnection);
 
-        int status = catchSystemExit(() -> {
-            trace.setParameters(ps, param);
-        });
-
-        assertEquals(8, status);
-    }
-
-    @Test
-    void testFatalExit_WritesToFileAndExits() throws Exception {
-        // Clean up log file before running test
-        File logFile = new File("F00_IRSK_OX01.log");
-        if (logFile.exists()) {
-            logFile.delete();
-        }
-
-        int status = catchSystemExit(() -> {
-            trace.fatalExit("testMethod", "IOException", "Something bad happened");
-        });
-
-        assertEquals(8, status);
-        assertTrue(logFile.exists());
-
-        String content = Files.readString(logFile.toPath());
-        assertTrue(content.contains("testMethod"));
-        assertTrue(content.contains("IOException"));
-        assertTrue(content.contains("Something bad happened"));
+        // Assert
+        Field field = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
+        field.setAccessible(true);
+        Object txn = field.get(instance);
+        assertNotNull(txn);
+        assertTrue(txn instanceof P06_IREP_01_Level1DBTransaction);
     }
 }
