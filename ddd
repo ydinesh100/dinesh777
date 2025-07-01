@@ -1,9 +1,8 @@
 package com.bnpparibas.atlentic.irep.ecb.levell;
 
-import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
 import com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
 import com.bnpparibas.atlentic.irep.ecb.transaction.P06_IREP_01_Level1DBTransaction;
-import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
+import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -13,34 +12,32 @@ import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.Timestamp;
 import java.util.Collections;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class P06_IREP_01_Level1Test {
+class Pe6_IREP_01_LevellTest {
 
     private Pe6_IREP_01_Levell instance;
-    private P06_IREP_01_Level1DBTransaction mockedTransaction;
+    private P06_IREP_01_Level1DBTransaction mockTransaction;
 
     @BeforeEach
     void setUp() throws Exception {
         instance = new Pe6_IREP_01_Levell();
 
-        // Create mock transaction
-        mockedTransaction = mock(P06_IREP_01_Level1DBTransaction.class);
+        mockTransaction = mock(P06_IREP_01_Level1DBTransaction.class);
 
-        // Inject mock into g_o_dataBaseTransaction
+        // Inject mocked transaction into superclass field
         Field dbTxnField = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
         dbTxnField.setAccessible(true);
-        dbTxnField.set(instance, mockedTransaction);
+        dbTxnField.set(instance, mockTransaction);
 
-        // Inject dummy record beans list
+        // Inject dummy record list
         Field recordListField = P06_IREP_01_Level.class.getDeclaredField("g_o_recordBeansList");
         recordListField.setAccessible(true);
         recordListField.set(instance, Collections.singletonList(new Object()));
 
-        // Set static fields of P06_IREP_01_Main
+        // Set static fields in P06_IREP_01_Main
         Field branchField = P06_IREP_01_Main.class.getDeclaredField("gs_branch");
         branchField.setAccessible(true);
         branchField.set(null, "TEST_BRANCH");
@@ -52,18 +49,15 @@ class P06_IREP_01_Level1Test {
 
     @Test
     void testInnerExecute() throws Exception {
-        // Arrange
-        when(mockedTransaction.insertRecordsBeansList(anyList())).thenReturn(1);
-        doNothing().when(mockedTransaction).deleteConcurrentRecords(anyString(), any());
+        when(mockTransaction.insertRecordsBeansList(anyList())).thenReturn(3);
+        doNothing().when(mockTransaction).deleteConcurrentRecords(anyString(), any());
 
-        // Act (use reflection to call protected method)
         Method method = Pe6_IREP_01_Levell.class.getDeclaredMethod("innerExecute");
         method.setAccessible(true);
         method.invoke(instance);
 
-        // Assert
-        verify(mockedTransaction).deleteConcurrentRecords(eq("TEST_BRANCH"), any());
-        verify(mockedTransaction).insertRecordsBeansList(anyList());
+        verify(mockTransaction).deleteConcurrentRecords(eq("TEST_BRANCH"), any());
+        verify(mockTransaction).insertRecordsBeansList(anyList());
     }
 
     @Test
@@ -84,18 +78,16 @@ class P06_IREP_01_Level1Test {
 
     @Test
     void testInitializeDataBaseTransaction() throws Exception {
-        // Arrange
-        Connection mockedConnection = mock(Connection.class);
+        Connection mockConnection = mock(Connection.class);
 
-        // Act
         Method method = Pe6_IREP_01_Levell.class.getDeclaredMethod("initializeDataBaseTransaction", Connection.class);
         method.setAccessible(true);
-        method.invoke(instance, mockedConnection);
+        method.invoke(instance, mockConnection);
 
-        // Assert
-        Field field = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
-        field.setAccessible(true);
-        Object txn = field.get(instance);
+        Field txnField = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
+        txnField.setAccessible(true);
+        Object txn = txnField.get(instance);
+
         assertNotNull(txn);
         assertTrue(txn instanceof P06_IREP_01_Level1DBTransaction);
     }
