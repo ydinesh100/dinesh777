@@ -44,24 +44,27 @@ class P06_IREP_01_Level1DBTransactionTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        // Mock static method from P06_IREP_01_PropertiesMgr
+        // Static mocking for properties
         propertiesMgrMock = mockStatic(P06_IREP_01_PropertiesMgr.class);
 
-        // Mock property used during superclass constructor
+        // Property used in constructor
         propertiesMgrMock.when(() ->
             P06_IREP_01_PropertiesMgr.getQueryFromPropertiesFile("select.facrisk.records")
-        ).thenReturn("SELECT * FROM dummy_facrisk");
+        ).thenReturn("SELECT * FROM dummy");
 
-        // Handle prepareStatement for that constructor query
+        // PrepareStatement and ResultSet for constructor
         when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
         when(mockConnection.prepareStatement(isNull())).thenReturn(mockPreparedStatement);
         when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
 
-        // Instantiate the class via reflection
+        // Reflectively construct the test object
         Constructor<P06_IREP_01_Level1DBTransaction> constructor =
             P06_IREP_01_Level1DBTransaction.class.getDeclaredConstructor(Connection.class);
         constructor.setAccessible(true);
         dbTransaction = constructor.newInstance(mockConnection);
+
+        // ✅ Reset to avoid counting constructor's close() calls
+        reset(mockPreparedStatement);
     }
 
     @AfterEach
@@ -79,16 +82,13 @@ class P06_IREP_01_Level1DBTransactionTest {
         Timestamp expectedTimestamp = Outils.getSqlTimestamp(eventDate);
         String query = "DELETE FROM concurrent_records WHERE cde_branch = ? AND dte_event = ?";
 
-        // Mock property for delete query
         propertiesMgrMock.when(() ->
             P06_IREP_01_PropertiesMgr.getQueryFromPropertiesFile("delete.concurrent.records")
         ).thenReturn(query);
 
-        // Stub DB logic
         when(mockConnection.prepareStatement(query)).thenReturn(mockPreparedStatement);
         when(mockPreparedStatement.executeUpdate()).thenReturn(1);
 
-        // Reflectively invoke deleteConcurrentRecords
         Method method = P06_IREP_01_Level1DBTransaction.class.getDeclaredMethod(
             "deleteConcurrentRecords", String.class, Date.class);
         method.setAccessible(true);
@@ -100,7 +100,7 @@ class P06_IREP_01_Level1DBTransactionTest {
         verify(mockPreparedStatement).setString(1, branchCode);
         verify(mockPreparedStatement).setTimestamp(2, expectedTimestamp);
         verify(mockPreparedStatement).executeUpdate();
-        verify(mockPreparedStatement).close(); // closed via DBUtils.closeConnexion
+        verify(mockPreparedStatement).close(); // Only one invocation now
     }
 
     @Test
