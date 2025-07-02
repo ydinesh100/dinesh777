@@ -1,25 +1,94 @@
-@Test
-void testInnerFeedingRecordBean_setsRiskType() throws Exception {
-    // Arrange
-    Map<String, String> facRiskTypeMapObj = new HashMap<>();
-    facRiskTypeMapObj.put("FAC_TYPE_X", "RISK_TYPE_Y");
+package com.bnpparibas.atlentic.irep.ecb.level1.test;
 
-    when(mockResultSet.getString("cde_fac_type")).thenReturn("FAC_TYPE_X");
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
-    P06_IREP_01_EcbRecordBean mockRecordBean = mock(P06_IREP_01_EcbRecordBean.class);
+import java.lang.reflect.Field;
+import java.sql.Connection;
+import java.util.Arrays;
+import java.util.Collections;
 
-    Method method = P06_IREP_01_Level1DBTransaction.class.getDeclaredMethod(
-        "innerFeedingRecordBean",
-        P06_IREP_01_EcbRecordBean.class,
-        ResultSet.class,
-        Map.class
-    );
-    method.setAccessible(true);
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-    // Act
-    method.invoke(dbTransaction, mockRecordBean, mockResultSet, facRiskTypeMapObj);
+import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
+import com.bnpparibas.atlentic.irep.ecb.level1.P06_IREP_01_Levell;
+import com.bnpparibas.atlentic.irep.ecb.level1.P06_IREP_01_Level1DBTransaction;
+import com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
+import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
 
-    // Assert
-    verify(mockResultSet, times(2)).getString("cde_fac_type"); // called twice
-    verify(mockRecordBean).setRiskType("RISK_TYPE_Y");
+@ExtendWith(MockitoExtension.class)
+class P06_IREP_01_LevellTest {
+
+    private P06_IREP_01_Levell level1;
+
+    @Mock
+    private P06_IREP_01_Level1DBTransaction mockTransaction;
+
+    @Mock
+    private Connection mockConnection;
+
+    @Mock
+    private P06_IREP_01_EcbRecordBean mockRecordBean;
+
+    private MockedStatic<P06_IREP_01_Main> mainStaticMock;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        level1 = new P06_IREP_01_Levell();
+
+        // Inject mockTransaction into superclass field `g_o_dataBaseTransaction`
+        Field transactionField = level1.getClass().getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
+        transactionField.setAccessible(true);
+        transactionField.set(level1, mockTransaction);
+
+        // Inject mock record bean list into superclass field `g_o_recordBeansList`
+        Field listField = level1.getClass().getSuperclass().getDeclaredField("g_o_recordBeansList");
+        listField.setAccessible(true);
+        listField.set(level1, Arrays.asList(mockRecordBean));
+
+        // Mock static fields of Main
+        mainStaticMock = mockStatic(P06_IREP_01_Main.class);
+        mainStaticMock.when(() -> P06_IREP_01_Main.get_s_branch()).thenReturn("BR001");
+        mainStaticMock.when(() -> P06_IREP_01_Main.get_e_eventTimestamp()).thenReturn(new java.util.Date());
+    }
+
+    @Test
+    void testInnerExecute_success() throws Exception {
+        // Arrange
+        when(mockTransaction.insertRecordsBeansList(anyList())).thenReturn(1);
+
+        // Act
+        level1.innerExecute();
+
+        // Assert
+        verify(mockTransaction).deleteConcurrentRecords(eq("BR001"), any());
+        verify(mockTransaction).insertRecordsBeansList(anyList());
+    }
+
+    @Test
+    void testGetLevelNumber_returns1() {
+        assertEquals(1, level1.getLevelNumber());
+    }
+
+    @Test
+    void testInitializeDataBaseTransaction_setsTransaction() throws Exception {
+        P06_IREP_01_Levell testInstance = new P06_IREP_01_Levell();
+        testInstance.initializeDataBaseTransaction(mockConnection);
+
+        Field field = testInstance.getClass().getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
+        field.setAccessible(true);
+        Object actual = field.get(testInstance);
+        assertNotNull(actual);
+        assertTrue(actual instanceof P06_IREP_01_Level1DBTransaction);
+    }
+
+    @Test
+    void testApplyCommit_returnsTrue() {
+        assertTrue(level1.applyCommit());
+    }
 }
