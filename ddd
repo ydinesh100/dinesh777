@@ -1,155 +1,25 @@
-package com.bnpparibas.atlentic.irep.ecb.levell.test;
+@Test
+void testInnerFeedingRecordBean_setsRiskType() throws Exception {
+    // Arrange
+    Map<String, String> facRiskTypeMapObj = new HashMap<>();
+    facRiskTypeMapObj.put("FAC_TYPE_X", "RISK_TYPE_Y");
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+    when(mockResultSet.getString("cde_fac_type")).thenReturn("FAC_TYPE_X");
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Timestamp;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+    P06_IREP_01_EcbRecordBean mockRecordBean = mock(P06_IREP_01_EcbRecordBean.class);
 
-import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.junit.jupiter.MockitoExtension;
+    Method method = P06_IREP_01_Level1DBTransaction.class.getDeclaredMethod(
+        "innerFeedingRecordBean",
+        P06_IREP_01_EcbRecordBean.class,
+        ResultSet.class,
+        Map.class
+    );
+    method.setAccessible(true);
 
-import com.bnpparibas.atlentic.common.Outils;
-import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
-import com.bnpparibas.atlentic.irep.ecb.levell.P06_IREP_01_Level1DBTransaction;
-import com.bnpparibas.atlentic.irep.ecb.resource.P06_IREP_01_PropertiesMgr;
-import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
+    // Act
+    method.invoke(dbTransaction, mockRecordBean, mockResultSet, facRiskTypeMapObj);
 
-@ExtendWith(MockitoExtension.class)
-class P06_IREP_01_Level1DBTransactionTest {
-
-    @Mock
-    private Connection mockConnection;
-
-    @Mock
-    private PreparedStatement mockPreparedStatement;
-
-    @Mock
-    private ResultSet mockResultSet;
-
-    @Mock
-    private P06_IREP_01_EcbRecordBean mockRecordBean;
-
-    private P06_IREP_01_Level1DBTransaction dbTransaction;
-    private MockedStatic<P06_IREP_01_PropertiesMgr> propertiesMgrMock;
-
-    @BeforeEach
-    void setUp() throws Exception {
-        propertiesMgrMock = mockStatic(P06_IREP_01_PropertiesMgr.class);
-
-        // Used in constructor
-        propertiesMgrMock.when(() -> P06_IREP_01_PropertiesMgr.getQueryFromPropertiesFile("select.facrisk.records"))
-                .thenReturn("SELECT * FROM dummy");
-
-        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
-
-        Constructor<P06_IREP_01_Level1DBTransaction> constructor =
-                P06_IREP_01_Level1DBTransaction.class.getDeclaredConstructor(Connection.class);
-        constructor.setAccessible(true);
-        dbTransaction = constructor.newInstance(mockConnection);
-
-        reset(mockPreparedStatement); // avoid counting constructor stubbing
-    }
-
-    @AfterEach
-    void tearDown() {
-        if (propertiesMgrMock != null) {
-            propertiesMgrMock.close();
-        }
-    }
-
-    @Test
-    void testDeleteConcurrentRecords_success() throws Exception {
-        // Arrange
-        String branchCode = "BR001";
-        Date eventDate = new Date();
-        Timestamp expectedTimestamp = Outils.getSqlTimestamp(eventDate);
-        String query = "DELETE FROM concurrent_records WHERE cde_branch=? AND dte_event=?";
-
-        propertiesMgrMock.when(() ->
-                P06_IREP_01_PropertiesMgr.getQueryFromPropertiesFile("delete.concurrent.records"))
-                .thenReturn(query);
-
-        when(mockConnection.prepareStatement(query)).thenReturn(mockPreparedStatement);
-        when(mockPreparedStatement.executeUpdate()).thenReturn(1);
-
-        Method method = P06_IREP_01_Level1DBTransaction.class.getDeclaredMethod(
-                "deleteConcurrentRecords", String.class, Date.class);
-        method.setAccessible(true);
-
-        // Act
-        method.invoke(dbTransaction, branchCode, eventDate);
-
-        // Assert
-        verify(mockPreparedStatement).setString(1, branchCode);
-        verify(mockPreparedStatement).setTimestamp(2, expectedTimestamp);
-        verify(mockPreparedStatement).executeUpdate();
-        verify(mockPreparedStatement).close();
-    }
-
-    @Test
-    void testDeleteConcurrentRecords_sqlException() throws Exception {
-        // Arrange
-        String branchCode = "BR001";
-        Date eventDate = new Date();
-        String query = "DELETE FROM concurrent_records WHERE cde_branch=? AND dte_event=?";
-
-        propertiesMgrMock.when(() ->
-                P06_IREP_01_PropertiesMgr.getQueryFromPropertiesFile("delete.concurrent.records"))
-                .thenReturn(query);
-
-        when(mockConnection.prepareStatement(query)).thenThrow(new SQLException("DB error"));
-
-        Method method = P06_IREP_01_Level1DBTransaction.class.getDeclaredMethod(
-                "deleteConcurrentRecords", String.class, Date.class);
-        method.setAccessible(true);
-
-        // Act & Assert
-        InvocationTargetException exception = assertThrows(InvocationTargetException.class,
-                () -> method.invoke(dbTransaction, branchCode, eventDate));
-
-        Throwable cause = exception.getCause();
-        assertNotNull(cause);
-        assertTrue(cause instanceof P06_IREP_01_SQLException);
-        assertEquals("Application exception: An error occurred while deleting concurrent records in database !",
-                cause.getMessage());
-    }
-
-    @Test
-    void testInnerFeedingRecordBean_setsRiskType() throws Exception {
-        // Arrange
-        Map<String, String> facRiskTypeMapObj = new HashMap<>();
-        facRiskTypeMapObj.put("FAC_TYPE", "RISK_TYPE");
-
-        when(mockResultSet.getString("cde_fac_type")).thenReturn("FAC_TYPE");
-
-        Method method = P06_IREP_01_Level1DBTransaction.class.getDeclaredMethod(
-                "innerFeedingRecordBean", P06_IREP_01_EcbRecordBean.class, ResultSet.class, Map.class);
-        method.setAccessible(true);
-
-        // Act
-        method.invoke(dbTransaction, mockRecordBean, mockResultSet, facRiskTypeMapObj);
-
-        // Assert
-        verify(mockRecordBean).setRiskType("RISK_TYPE");
-    }
-
-    @Test
-    void testConstructor() {
-        assertNotNull(dbTransaction);
-    }
+    // Assert
+    verify(mockResultSet).getString("cde_fac_type");
+    verify(mockRecordBean).setRiskType("RISK_TYPE_Y");
 }
-
