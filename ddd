@@ -20,6 +20,6 @@ void testInnerFeedingRecordBean_setsRiskType() throws Exception {
     method.invoke(dbTransaction, mockRecordBean, mockResultSet, facRiskTypeMapObj);
 
     // Assert
-    verify(mockResultSet).getString("cde_fac_type");
+    verify(mockResultSet, times(2)).getString("cde_fac_type"); // called twice
     verify(mockRecordBean).setRiskType("RISK_TYPE_Y");
 }
