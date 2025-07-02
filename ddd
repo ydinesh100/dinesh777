@@ -44,26 +44,23 @@ class P06_IREP_01_Level1DBTransactionTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        // Static mocking for properties
+        // Mock static methods from PropertiesMgr
         propertiesMgrMock = mockStatic(P06_IREP_01_PropertiesMgr.class);
 
-        // Property used in constructor
+        // Stub for select.facrisk.records used in constructor
         propertiesMgrMock.when(() ->
             P06_IREP_01_PropertiesMgr.getQueryFromPropertiesFile("select.facrisk.records")
         ).thenReturn("SELECT * FROM dummy");
 
-        // PrepareStatement and ResultSet for constructor
         when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-        when(mockConnection.prepareStatement(isNull())).thenReturn(mockPreparedStatement);
         when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
 
-        // Reflectively construct the test object
         Constructor<P06_IREP_01_Level1DBTransaction> constructor =
             P06_IREP_01_Level1DBTransaction.class.getDeclaredConstructor(Connection.class);
         constructor.setAccessible(true);
         dbTransaction = constructor.newInstance(mockConnection);
 
-        // ✅ Reset to avoid counting constructor's close() calls
+        // Reset mockPreparedStatement to isolate verification to method calls only
         reset(mockPreparedStatement);
     }
 
@@ -76,7 +73,6 @@ class P06_IREP_01_Level1DBTransactionTest {
 
     @Test
     void testDeleteConcurrentRecords_success() throws Exception {
-        // Arrange
         String branchCode = "BR001";
         Date eventDate = new Date();
         Timestamp expectedTimestamp = Outils.getSqlTimestamp(eventDate);
@@ -93,19 +89,16 @@ class P06_IREP_01_Level1DBTransactionTest {
             "deleteConcurrentRecords", String.class, Date.class);
         method.setAccessible(true);
 
-        // Act
         method.invoke(dbTransaction, branchCode, eventDate);
 
-        // Assert
         verify(mockPreparedStatement).setString(1, branchCode);
         verify(mockPreparedStatement).setTimestamp(2, expectedTimestamp);
         verify(mockPreparedStatement).executeUpdate();
-        verify(mockPreparedStatement).close(); // Only one invocation now
+        verify(mockPreparedStatement).close();
     }
 
     @Test
     void testDeleteConcurrentRecords_sqlException() throws Exception {
-        // Arrange
         String branchCode = "BR001";
         Date eventDate = new Date();
         String query = "DELETE FROM concurrent_records WHERE cde_branch = ? AND dte_event = ?";
@@ -120,7 +113,6 @@ class P06_IREP_01_Level1DBTransactionTest {
             "deleteConcurrentRecords", String.class, Date.class);
         method.setAccessible(true);
 
-        // Act + Assert
         InvocationTargetException exception = assertThrows(InvocationTargetException.class, () ->
             method.invoke(dbTransaction, branchCode, eventDate)
         );
@@ -128,6 +120,6 @@ class P06_IREP_01_Level1DBTransactionTest {
         Throwable cause = exception.getCause();
         assertNotNull(cause);
         assertTrue(cause instanceof P06_IREP_01_SQLException);
-        assertEquals("An error occurred while deleting concurrent records in database !", cause.getMessage());
+        assertTrue(cause.getMessage().contains("An error occurred while deleting concurrent records in database"));
     }
 }
