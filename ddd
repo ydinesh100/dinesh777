@@ -1,99 +1,31 @@
-package com.bnpparibas.atlentic.irep.ecb.levell;
+@Test
+void testDeleteConcurrentRecords() throws Exception {
+    // Arrange
+    String branchCode = "BR001";
+    Date eventDate = new Date();
+    Timestamp sqlTimestamp = Outils.getSqlTimestamp(eventDate);
 
-import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
-import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
-import com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
-import com.bnpparibas.atlentic.irep.ecb.transaction.P06_IREP_01_Level1DBTransaction;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
+    // Mock the property and the prepared statement
+    String expectedSql = "DELETE FROM TABLE WHERE cde_branch = ? AND dte_event = ?";
+    mockStatic(P06_IREP_01_PropertiesMgr.class).when(() ->
+        P06_IREP_01_PropertiesMgr.getProperty("delete.concurrent.records")
+    ).thenReturn(expectedSql);
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.sql.Connection;
-import java.sql.Timestamp;
-import java.util.Collections;
+    when(mockConnection.prepareStatement(expectedSql)).thenReturn(mockPreparedStatement);
+    when(mockPreparedStatement.executeUpdate()).thenReturn(1);
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+    // Get method using reflection
+    Method method = P06_IREP_01_Level1DBTransaction.class.getDeclaredMethod(
+        "deleteConcurrentRecords", String.class, Date.class
+    );
+    method.setAccessible(true);
 
-class Pe6_IREP_01_LevellTest {
+    // Act
+    method.invoke(dbTransaction, branchCode, eventDate);
 
-    private Pe6_IREP_01_Levell instance;
-    private P06_IREP_01_Level1DBTransaction mockTxn;
-
-    @BeforeEach
-    void setUp() throws Exception {
-        instance = new Pe6_IREP_01_Levell();
-        mockTxn = mock(P06_IREP_01_Level1DBTransaction.class);
-
-        // Inject mock DB transaction
-        Field txnField = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
-        txnField.setAccessible(true);
-        txnField.set(instance, mockTxn);
-
-        // Inject mocked record bean list with correct type
-        Field recordListField = P06_IREP_01_Level.class.getDeclaredField("g_o_recordBeansList");
-        recordListField.setAccessible(true);
-        recordListField.set(instance, Collections.singletonList(mock(P06_IREP_01_EcbRecordBean.class)));
-
-        // Inject static fields in P06_IREP_01_Main
-        Field branchField = P06_IREP_01_Main.class.getDeclaredField("g_s_branch");
-        branchField.setAccessible(true);
-        branchField.set(null, "TEST_BRANCH");
-
-        Field eventTsField = P06_IREP_01_Main.class.getDeclaredField("g_o_eventTimestamp");
-        eventTsField.setAccessible(true);
-        eventTsField.set(null, new Timestamp(System.currentTimeMillis()));
-    }
-
-    @Test
-    void testInnerExecute() throws Exception {
-        // Arrange
-        when(mockTxn.insertRecordsBeansList(ArgumentMatchers.<P06_IREP_01_EcbRecordBean>anyList())).thenReturn(5);
-        doNothing().when(mockTxn).deleteConcurrentRecords(anyString(), any());
-
-        Method method = Pe6_IREP_01_Levell.class.getDeclaredMethod("innerExecute");
-        method.setAccessible(true);
-
-        // Act
-        method.invoke(instance);
-
-        // Assert
-        verify(mockTxn).deleteConcurrentRecords(eq("TEST_BRANCH"), any());
-        verify(mockTxn).insertRecordsBeansList(ArgumentMatchers.<P06_IREP_01_EcbRecordBean>anyList());
-    }
-
-    @Test
-    void testGetLevelNumber() throws Exception {
-        Method method = Pe6_IREP_01_Levell.class.getDeclaredMethod("getLevelNumber");
-        method.setAccessible(true);
-        int result = (int) method.invoke(instance);
-        assertEquals(1, result);
-    }
-
-    @Test
-    void testApplyCommit() throws Exception {
-        Method method = Pe6_IREP_01_Levell.class.getDeclaredMethod("applyCommit");
-        method.setAccessible(true);
-        boolean result = (boolean) method.invoke(instance);
-        assertTrue(result);
-    }
-
-    @Test
-    void testInitializeDataBaseTransaction() throws Exception {
-        Connection mockConnection = mock(Connection.class);
-        Method method = Pe6_IREP_01_Levell.class.getDeclaredMethod("initializeDataBaseTransaction", Connection.class);
-        method.setAccessible(true);
-
-        // Act
-        method.invoke(instance, mockConnection);
-
-        // Assert DB transaction is initialized
-        Field txnField = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
-        txnField.setAccessible(true);
-        Object txnValue = txnField.get(instance);
-        assertNotNull(txnValue);
-        assertTrue(txnValue instanceof P06_IREP_01_Level1DBTransaction);
-    }
+    // Assert
+    verify(mockPreparedStatement).setString(1, branchCode);
+    verify(mockPreparedStatement).setTimestamp(2, sqlTimestamp);
+    verify(mockPreparedStatement).executeUpdate();
+    verify(mockPreparedStatement).close(); // optional depending on DBUtils.closeConnexion
 }
