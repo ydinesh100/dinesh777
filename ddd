@@ -1,94 +1,102 @@
-package com.bnpparibas.atlentic.irep.ecb.level1.test;
+package com.bnpparibas.atlentic.irep.ecb.levell;
+
+import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
+import com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
+import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.sql.Connection;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import java.lang.reflect.Field;
-import java.sql.Connection;
-import java.util.Arrays;
-import java.util.Collections;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
-import com.bnpparibas.atlentic.irep.ecb.level1.P06_IREP_01_Levell;
-import com.bnpparibas.atlentic.irep.ecb.level1.P06_IREP_01_Level1DBTransaction;
-import com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
-import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_SQLException;
-
-@ExtendWith(MockitoExtension.class)
 class P06_IREP_01_LevellTest {
 
     private P06_IREP_01_Levell level1;
-
-    @Mock
-    private P06_IREP_01_Level1DBTransaction mockTransaction;
-
-    @Mock
-    private Connection mockConnection;
-
-    @Mock
-    private P06_IREP_01_EcbRecordBean mockRecordBean;
-
-    private MockedStatic<P06_IREP_01_Main> mainStaticMock;
+    private P96_IREP_01_Level1D8Transaction mockTransaction;
 
     @BeforeEach
     void setUp() throws Exception {
         level1 = new P06_IREP_01_Levell();
 
-        // Inject mockTransaction into superclass field `g_o_dataBaseTransaction`
-        Field transactionField = level1.getClass().getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
-        transactionField.setAccessible(true);
-        transactionField.set(level1, mockTransaction);
+        // Mock the DBTransaction
+        mockTransaction = mock(P96_IREP_01_Level1D8Transaction.class);
 
-        // Inject mock record bean list into superclass field `g_o_recordBeansList`
-        Field listField = level1.getClass().getSuperclass().getDeclaredField("g_o_recordBeansList");
+        // Set super.g_o_dataBaseTransaction
+        Field txField = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
+        txField.setAccessible(true);
+        txField.set(level1, mockTransaction);
+
+        // Set super.g_o_recordBeansList
+        List<Object> mockBeans = new ArrayList<>();
+        mockBeans.add(new Object());  // add dummy record
+        Field listField = P06_IREP_01_Level.class.getDeclaredField("g_o_recordBeansList");
         listField.setAccessible(true);
-        listField.set(level1, Arrays.asList(mockRecordBean));
+        listField.set(level1, mockBeans);
 
-        // Mock static fields of Main
-        mainStaticMock = mockStatic(P06_IREP_01_Main.class);
-        mainStaticMock.when(() -> P06_IREP_01_Main.get_s_branch()).thenReturn("BR001");
-        mainStaticMock.when(() -> P06_IREP_01_Main.get_e_eventTimestamp()).thenReturn(new java.util.Date());
+        // Mock static fields from P06_IREP_01_Main
+        Field branchField = P06_IREP_01_Main.class.getDeclaredField("g_s_branch");
+        branchField.setAccessible(true);
+        branchField.set(null, "BR001");
+
+        Field timestampField = P06_IREP_01_Main.class.getDeclaredField("g_o_eventTimestamp");
+        timestampField.setAccessible(true);
+        timestampField.set(null, new Timestamp(System.currentTimeMillis()));
     }
 
     @Test
-    void testInnerExecute_success() throws Exception {
-        // Arrange
+    void testInnerExecute() throws Exception {
+        // Mock insertRecordsBeansList to return a number
         when(mockTransaction.insertRecordsBeansList(anyList())).thenReturn(1);
 
-        // Act
-        level1.innerExecute();
+        Method method = P06_IREP_01_Levell.class.getDeclaredMethod("innerExecute");
+        method.setAccessible(true);
+        method.invoke(level1);
 
-        // Assert
-        verify(mockTransaction).deleteConcurrentRecords(eq("BR001"), any());
-        verify(mockTransaction).insertRecordsBeansList(anyList());
+        // Verify delete and insert are called
+        verify(mockTransaction, times(1))
+                .deleteConcurrentRecords(eq("BR001"), any(Timestamp.class));
+
+        verify(mockTransaction, times(1))
+                .insertRecordsBeansList(anyList());
     }
 
     @Test
-    void testGetLevelNumber_returns1() {
-        assertEquals(1, level1.getLevelNumber());
+    void testGetLevelNumber() throws Exception {
+        Method method = P06_IREP_01_Levell.class.getDeclaredMethod("getLevelNumber");
+        method.setAccessible(true);
+        int level = (int) method.invoke(level1);
+        assertEquals(1, level);
     }
 
     @Test
-    void testInitializeDataBaseTransaction_setsTransaction() throws Exception {
-        P06_IREP_01_Levell testInstance = new P06_IREP_01_Levell();
-        testInstance.initializeDataBaseTransaction(mockConnection);
-
-        Field field = testInstance.getClass().getSuperclass().getDeclaredField("g_o_dataBaseTransaction");
-        field.setAccessible(true);
-        Object actual = field.get(testInstance);
-        assertNotNull(actual);
-        assertTrue(actual instanceof P06_IREP_01_Level1DBTransaction);
+    void testApplyCommit() throws Exception {
+        Method method = P06_IREP_01_Levell.class.getDeclaredMethod("applyCommit");
+        method.setAccessible(true);
+        boolean result = (boolean) method.invoke(level1);
+        assertTrue(result);
     }
 
     @Test
-    void testApplyCommit_returnsTrue() {
-        assertTrue(level1.applyCommit());
+    void testInitializeDataBaseTransaction() throws Exception {
+        Connection mockConnection = mock(Connection.class);
+
+        Method method = P06_IREP_01_Levell.class.getDeclaredMethod("initializeDataBaseTransaction", Connection.class);
+        method.setAccessible(true);
+        method.invoke(level1, mockConnection);
+
+        Field txField = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
+        txField.setAccessible(true);
+        Object txInstance = txField.get(level1);
+
+        assertNotNull(txInstance);
+        assertEquals("P06_IREP_01_Level1DBTransaction", txInstance.getClass().getSimpleName());
     }
 }
