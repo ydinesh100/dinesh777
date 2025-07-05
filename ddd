@@ -1,116 +1,139 @@
-package com.bnpparibas.atlentic.irep.ecb.levell.teststub;
+package com.bnpparibas.atlentic.irep.ecb.main.test;
 
-import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
-import com.bnpparibas.atlentic.irep.ecb.level1.P06_IREP_01_Level1DBTransaction;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
-import java.sql.Connection;
-import java.util.Date;
-import java.util.List;
-
-public class TestLevel1DBTransaction extends P06_IREP_01_Level1DBTransaction {
-
-    public TestLevel1DBTransaction() throws Exception {
-        super((Connection) null); // null is fine if Connection not used
-    }
-
-    @Override
-    public void deleteConcurrentRecords(String branch, Date timestamp) {
-        // no-op for test
-    }
-
-    @Override
-    public int insertRecordsBeansList(List<P06_IREP_01_EcbRecordBean> beans) {
-        return beans != null ? beans.size() : 0;
-    }
-}
-
-
-
-package com.bnpparibas.atlentic.irep.ecb.levell;
-
-import com.bnpparibas.atlentic.irep.ecb.bean.P06_IREP_01_EcbRecordBean;
-import com.bnpparibas.atlentic.irep.ecb.levell.teststub.TestLevel1DBTransaction;
+import com.bnpparibas.atlentic.common.GlobalAtlentic;
+import com.bnpparibas.atlentic.common.P00_IACC_00_Utility;
+import com.bnpparibas.atlentic.irep.ecb.level1.P06_IREP_01_Level1;
+import com.bnpparibas.atlentic.irep.ecb.level2.P06_IREP_01_Level2;
 import com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
-import com.bnpparibas.atlentic.irep.ecb.level.P06_IREP_01_Level;
+import com.bnpparibas.atlentic.irep.ecb.resource.P06_IREP_01_PropertiesMgr;
+import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_ParameterException;
+import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_ExitApplicationException;
+import com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedConstruction;
+import org.mockito.MockedStatic;
 
-import java.lang.reflect.Field;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
-import java.sql.Timestamp;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class P06_IREP_01_LevellTest {
+class P06_IREP_01_MainExecuteTest {
 
-    private P06_IREP_01_Levell levell;
+    Method executeMethod;
 
     @BeforeEach
     void setUp() throws Exception {
-        levell = new P06_IREP_01_Levell();
-
-        // Set static fields in Main
-        Field branchField = P06_IREP_01_Main.class.getDeclaredField("g_s_branch");
-        branchField.setAccessible(true);
-        branchField.set(null, "BR001");
-
-        Field timestampField = P06_IREP_01_Main.class.getDeclaredField("g_o_eventTimestamp");
-        timestampField.setAccessible(true);
-        timestampField.set(null, new Timestamp(System.currentTimeMillis()));
-
-        // Set recordBeansList
-        List<P06_IREP_01_EcbRecordBean> records = new ArrayList<>();
-        records.add(new P06_IREP_01_EcbRecordBean("BR001", new Date()));
-
-        Field listField = P06_IREP_01_Level.class.getDeclaredField("g_o_recordBeansList");
-        listField.setAccessible(true);
-        listField.set(levell, records);
-
-        // Inject stub transaction
-        Field txField = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
-        txField.setAccessible(true);
-        txField.set(levell, new TestLevel1DBTransaction());
+        executeMethod = P06_IREP_01_Main.class.getDeclaredMethod("execute");
+        executeMethod.setAccessible(true);
     }
 
     @Test
-    void testInnerExecute_shouldRunSuccessfully() throws Exception {
-        Method method = P06_IREP_01_Levell.class.getDeclaredMethod("innerExecute");
-        method.setAccessible(true);
-        method.invoke(levell);
-        // No exception = success
+    void testInvalidArgumentLengthThrowsParameterException() throws Exception {
+        String[] args = {};
+        Object mainInstance = createMainInstance(args);
+
+        Exception ex = assertThrows(P06_IREP_01_ParameterException.class, () -> executeMethod.invoke(mainInstance));
+        assertTrue(ex.getCause().getMessage().contains("Wrong parameters number"));
     }
 
     @Test
-    void testGetLevelNumber() throws Exception {
-        Method method = P06_IREP_01_Levell.class.getDeclaredMethod("getLevelNumber");
-        method.setAccessible(true);
-        int level = (int) method.invoke(levell);
-        assertEquals(1, level);
+    void testNullEventTimestampThrowsParameterException() throws Exception {
+        String[] args = { "level1", "BR", "01/01/2024 10:00:00" };
+        Object mainInstance = createMainInstance(args);
+
+        try (
+            MockedStatic<P06_IREP_01_PropertiesMgr> propsMgr = mockStatic(P06_IREP_01_PropertiesMgr.class)
+        ) {
+            propsMgr.when(P06_IREP_01_PropertiesMgr::getLevellActionName).thenReturn("level1");
+
+            // force event timestamp to null
+            setStaticField(P06_IREP_01_Main.class, "g_o_eventTimestamp", null);
+            setStaticField(P06_IREP_01_Main.class, "l_s_action", "level1");
+
+            Exception ex = assertThrows(P06_IREP_01_ParameterException.class, () -> executeMethod.invoke(mainInstance));
+            assertTrue(ex.getCause().getMessage().contains("The process date format is unknown"));
+        }
     }
 
     @Test
-    void testApplyCommit() throws Exception {
-        Method method = P06_IREP_01_Levell.class.getDeclaredMethod("applyCommit");
-        method.setAccessible(true);
-        boolean result = (boolean) method.invoke(levell);
-        assertTrue(result);
+    void testExecuteLevel1Success() throws Exception {
+        String[] args = { "level1", "BR", "01/01/2024 10:00:00" };
+        Object mainInstance = createMainInstance(args);
+
+        try (
+            MockedStatic<P06_IREP_01_PropertiesMgr> propsMgr = mockStatic(P06_IREP_01_PropertiesMgr.class);
+            MockedStatic<StringConverter> stringConverter = mockStatic(StringConverter.class);
+            MockedConstruction<P06_IREP_01_Level1> mockedLevel1 = mockConstruction(P06_IREP_01_Level1.class,
+                (mock, context) -> doNothing().when(mock).execute())
+        ) {
+            propsMgr.when(P06_IREP_01_PropertiesMgr::getLevellActionName).thenReturn("level1");
+            stringConverter.when(() -> StringConverter.StringToDate("01/01/2024 10:00:00")).thenReturn(new Date());
+
+            executeMethod.invoke(mainInstance);
+            assertTrue(mockedLevel1.constructed().size() > 0);
+        }
     }
 
     @Test
-    void testInitializeDataBaseTransaction_setsCorrectClass() throws Exception {
-        Method method = P06_IREP_01_Levell.class.getDeclaredMethod("initializeDataBaseTransaction", java.sql.Connection.class);
-        method.setAccessible(true);
-        method.invoke(levell, (Connection) null);
+    void testExecuteLevel2Success_WithXmlFile() throws Exception {
+        String[] args = { "level2", "BR", "01/01/2024 10:00:00", "report.xml" };
+        Object mainInstance = createMainInstance(args);
 
-        Field txField = P06_IREP_01_Level.class.getDeclaredField("g_o_dataBaseTransaction");
-        txField.setAccessible(true);
-        Object tx = txField.get(levell);
+        try (
+            MockedStatic<P06_IREP_01_PropertiesMgr> propsMgr = mockStatic(P06_IREP_01_PropertiesMgr.class);
+            MockedStatic<StringConverter> stringConverter = mockStatic(StringConverter.class);
+            MockedConstruction<P06_IREP_01_Level2> mockedLevel2 = mockConstruction(P06_IREP_01_Level2.class,
+                (mock, context) -> doNothing().when(mock).execute())
+        ) {
+            propsMgr.when(P06_IREP_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
+            stringConverter.when(() -> StringConverter.StringToDate("01/01/2024 10:00:00")).thenReturn(new Date());
 
-        assertNotNull(tx);
-        assertEquals("com.bnpparibas.atlentic.irep.ecb.level1.P06_IREP_01_Level1DBTransaction", tx.getClass().getName());
+            executeMethod.invoke(mainInstance);
+            assertTrue(mockedLevel2.constructed().size() > 0);
+        }
+    }
+
+    @Test
+    void testUnknownActionThrowsParameterException() throws Exception {
+        String[] args = { "invalidAction", "BR", "01/01/2024 10:00:00" };
+        Object mainInstance = createMainInstance(args);
+
+        try (
+            MockedStatic<P06_IREP_01_PropertiesMgr> propsMgr = mockStatic(P06_IREP_01_PropertiesMgr.class)
+        ) {
+            propsMgr.when(P06_IREP_01_PropertiesMgr::getLevellActionName).thenReturn("level1");
+            propsMgr.when(P06_IREP_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
+
+            setStaticField(P06_IREP_01_Main.class, "l_s_action", "invalidAction");
+            setStaticField(P06_IREP_01_Main.class, "g_o_eventTimestamp", new Date());
+
+            Exception ex = assertThrows(P06_IREP_01_ParameterException.class, () -> executeMethod.invoke(mainInstance));
+            assertTrue(ex.getCause().getMessage().contains("is unknown"));
+        }
+    }
+
+    // ======================
+    // Utility helper methods
+    // ======================
+    private Object createMainInstance(String[] args) throws Exception {
+        Constructor<P06_IREP_01_Main> ctor = P06_IREP_01_Main.class.getDeclaredConstructor(String[].class);
+        ctor.setAccessible(true);
+        Object mainInstance = ctor.newInstance((Object) args);
+        return mainInstance;
+    }
+
+    private void setStaticField(Class<?> clazz, String fieldName, Object value) throws Exception {
+        Field field = clazz.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(null, value);
     }
 }
