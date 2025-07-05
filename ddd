@@ -1,163 +1,20 @@
-package com.bnpparibas.atlentic.irep.ecb.main.test;
+@Test
+void testNullEventTimestampThrowsParameterException() throws Exception {
+    String[] args = { "level1", "BR", "01/01/2024 10:00:00" };
+    Object mainInstance = createMainInstance(args);
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+    try (MockedStatic<P06_IREP_01_PropertiesMgr> props = mockStatic(P06_IREP_01_PropertiesMgr.class)) {
+        props.when(P06_IREP_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
 
-import com.bnpparibas.atlentic.common.gen.string.utilities.StringConverter;
-import com.bnpparibas.atlentic.irep.ecb.level1.P06_IREP_01_Level1;
-import com.bnpparibas.atlentic.irep.ecb.level2.P06_IREP_01_Level2;
-import com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main;
-import com.bnpparibas.atlentic.irep.ecb.resource.P06_IREP_01_PropertiesMgr;
-import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_ExitApplicationException;
-import com.bnpparibas.atlentic.irep.ecb.util.exception.P06_IREP_01_ParameterException;
-import com.github.stefanbirkner.systemlambda.SystemLambda;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.MockedConstruction;
-import org.mockito.MockedStatic;
+        setStaticField(P06_IREP_01_Main.class, "l_s_action", "level1");
+        setStaticField(P06_IREP_01_Main.class, "g_o_eventTimestamp", null);
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.util.Date;
-
-class P06_IREP_01_MainExecuteTest {
-
-    private Method executeMethod;
-
-    @BeforeEach
-    void setUp() throws Exception {
-        executeMethod = P06_IREP_01_Main.class.getDeclaredMethod("execute");
-        executeMethod.setAccessible(true);
-    }
-
-    @Test
-    void testInvalidArgumentsLengthTriggersUsage() throws Exception {
-        String[] args = {};
-        Object mainInstance = createMainInstance(args);
-
-        Exception ex = assertThrows(P06_IREP_01_ParameterException.class, () -> {
+        InvocationTargetException ex = assertThrows(InvocationTargetException.class, () -> {
             executeMethod.invoke(mainInstance);
         });
-        assertTrue(ex.getCause().getMessage().contains("Wrong parameters number"));
-    }
 
-    @Test
-    void testNullEventTimestampThrowsParameterException() throws Exception {
-        String[] args = { "level1", "BR", "01/01/2024 10:00:00" };
-        Object mainInstance = createMainInstance(args);
-
-        try (MockedStatic<P06_IREP_01_PropertiesMgr> props = mockStatic(P06_IREP_01_PropertiesMgr.class)) {
-            props.when(P06_IREP_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-
-            setStaticField(P06_IREP_01_Main.class, "l_s_action", "level1");
-            setStaticField(P06_IREP_01_Main.class, "g_o_eventTimestamp", null);
-
-            Exception ex = assertThrows(P06_IREP_01_ParameterException.class, () -> {
-                executeMethod.invoke(mainInstance);
-            });
-            assertTrue(ex.getCause().getMessage().contains("process date format is unknown"));
-        }
-    }
-
-    @Test
-    void testLevel1ExecutionSuccess() throws Exception {
-        String[] args = { "level1", "BR", "01/01/2024 10:00:00" };
-        Object mainInstance = createMainInstance(args);
-
-        try (
-            MockedStatic<P06_IREP_01_PropertiesMgr> props = mockStatic(P06_IREP_01_PropertiesMgr.class);
-            MockedStatic<StringConverter> converter = mockStatic(StringConverter.class);
-            MockedConstruction<P06_IREP_01_Level1> level1 = mockConstruction(P06_IREP_01_Level1.class,
-                (mock, context) -> doNothing().when(mock).execute())
-        ) {
-            props.when(P06_IREP_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-            converter.when(() -> StringConverter.StringToDate("01/01/2024 10:00:00")).thenReturn(new Date());
-
-            setStaticField(P06_IREP_01_Main.class, "l_s_action", "level1");
-
-            executeMethod.invoke(mainInstance);
-            assertEquals(1, level1.constructed().size());
-        }
-    }
-
-    @Test
-    void testLevel2ExecutionWithXmlFile() throws Exception {
-        String[] args = { "level2", "BR", "01/01/2024 10:00:00", "report.xml" };
-        Object mainInstance = createMainInstance(args);
-
-        try (
-            MockedStatic<P06_IREP_01_PropertiesMgr> props = mockStatic(P06_IREP_01_PropertiesMgr.class);
-            MockedStatic<StringConverter> converter = mockStatic(StringConverter.class);
-            MockedConstruction<P06_IREP_01_Level2> level2 = mockConstruction(P06_IREP_01_Level2.class,
-                (mock, context) -> doNothing().when(mock).execute())
-        ) {
-            props.when(P06_IREP_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
-            converter.when(() -> StringConverter.StringToDate("01/01/2024 10:00:00")).thenReturn(new Date());
-
-            setStaticField(P06_IREP_01_Main.class, "l_s_action", "level2");
-            setStaticField(P06_IREP_01_Main.class, "g_o_eventTimestamp", new Date());
-
-            executeMethod.invoke(mainInstance);
-            assertEquals(1, level2.constructed().size());
-        }
-    }
-
-    @Test
-    void testUnknownActionThrowsParameterException() throws Exception {
-        String[] args = { "invalid", "BR", "01/01/2024 10:00:00" };
-        Object mainInstance = createMainInstance(args);
-
-        try (MockedStatic<P06_IREP_01_PropertiesMgr> props = mockStatic(P06_IREP_01_PropertiesMgr.class)) {
-            props.when(P06_IREP_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-            props.when(P06_IREP_01_PropertiesMgr::getLevel2ActionName).thenReturn("level2");
-
-            setStaticField(P06_IREP_01_Main.class, "l_s_action", "invalid");
-            setStaticField(P06_IREP_01_Main.class, "g_o_eventTimestamp", new Date());
-
-            Exception ex = assertThrows(P06_IREP_01_ParameterException.class, () -> {
-                executeMethod.invoke(mainInstance);
-            });
-
-            assertTrue(ex.getCause().getMessage().contains("unknown"));
-        }
-    }
-
-    @Test
-    void testSystemExit8OnExitApplicationException() throws Exception {
-        String[] args = { "level1", "BR", "01/01/2024 10:00:00" };
-        Object mainInstance = createMainInstance(args);
-
-        try (
-            MockedStatic<P06_IREP_01_PropertiesMgr> props = mockStatic(P06_IREP_01_PropertiesMgr.class);
-            MockedStatic<StringConverter> converter = mockStatic(StringConverter.class);
-            MockedConstruction<P06_IREP_01_Level1> level1 = mockConstruction(P06_IREP_01_Level1.class,
-                (mock, context) -> doThrow(new P06_IREP_01_ExitApplicationException("forced")).when(mock).execute())
-        ) {
-            props.when(P06_IREP_01_PropertiesMgr::getLevel1ActionName).thenReturn("level1");
-            converter.when(() -> StringConverter.StringToDate("01/01/2024 10:00:00")).thenReturn(new Date());
-
-            setStaticField(P06_IREP_01_Main.class, "l_s_action", "level1");
-
-            int status = SystemLambda.catchSystemExit(() -> {
-                executeMethod.invoke(mainInstance);
-            });
-
-            assertEquals(8, status);
-        }
-    }
-
-    // Utility methods
-
-    private Object createMainInstance(String[] args) throws Exception {
-        Constructor<P06_IREP_01_Main> ctor = P06_IREP_01_Main.class.getDeclaredConstructor(String[].class);
-        ctor.setAccessible(true);
-        return ctor.newInstance((Object) args);
-    }
-
-    private void setStaticField(Class<?> clazz, String fieldName, Object value) throws Exception {
-        Field field = clazz.getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(null, value);
+        Throwable cause = ex.getCause();
+        assertTrue(cause instanceof P06_IREP_01_ParameterException);
+        assertTrue(cause.getMessage().contains("process date format is unknown"));
     }
 }
