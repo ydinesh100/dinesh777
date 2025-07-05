@@ -8,25 +8,26 @@ import java.lang.reflect.Method;
 
 import org.junit.jupiter.api.Test;
 
-public class P06_IREP_01_MainSystemExitTest {
+public class P06_IREP_01_MainTest {
 
     @Test
-    void testSystemExitOnExitApplicationException() throws Exception {
+    void testSystemExitWhenExitApplicationExceptionThrown() throws Exception {
         int statusCode = catchSystemExit(() -> {
-            // Prepare args that cause ExitApplicationException to be thrown
-            String[] args = { "invalidAction" };
+            // Simulate args that cause ExitApplicationException → System.exit(8)
+            String[] args = {}; // or invalid args like {"invalid"}
 
             Constructor<?> constructor = Class.forName("com.bnpparibas.atlentic.irep.ecb.main.P06_IREP_01_Main")
-                .getDeclaredConstructor(String[].class);
+                    .getDeclaredConstructor(String[].class);
             constructor.setAccessible(true);
             Object mainInstance = constructor.newInstance((Object) args);
 
-            // Access and invoke the private execute() method
             Method executeMethod = mainInstance.getClass().getDeclaredMethod("execute");
             executeMethod.setAccessible(true);
-
-            // You must throw ExitApplicationException in your mock or stub for this to hit the System.exit(8)
-            executeMethod.invoke(mainInstance); // This should cause System.exit(8)
+            try {
+                executeMethod.invoke(mainInstance);
+            } catch (Exception e) {
+                // ignore or log if needed
+            }
         });
 
         assertEquals(8, statusCode);
